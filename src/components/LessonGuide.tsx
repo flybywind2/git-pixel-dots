@@ -60,10 +60,21 @@ export function LessonGuide() {
               ? '이제 팀 저장소의 문서를 고치고 변경을 기록한 뒤, GitHub에서 검토를 요청하고 합친 내용을 내 컴퓨터로 가져올 수 있어요.'
               : lesson.takeaway}
           </p>
-          {lesson.id === 'docs' && (
-            <p className="mt-1.5 text-xs text-[#715A43]">이 브라우저 안의 연습 저장소에서 진행해요.</p>
-          )}
+          <p className="mt-1.5 text-xs text-[#715A43]">이 브라우저 안의 가상 실습이에요. 실제 GitHub에는 반영되지 않아요.</p>
           {(lesson.id === 'docs' || lesson.id === 'ch4') && <GitHubWebGuide />}
+          {lesson.terms.length > 0 && (
+            <details open className="mt-2 max-w-[68ch] rounded-md border border-[#DED1B8] bg-[#F9F3E8] px-2.5 text-xs">
+              <summary className="cursor-pointer py-1.5 font-semibold text-[#166447]">이 장에서 쓰는 용어</summary>
+              <dl className="mb-2 space-y-1 leading-relaxed text-[#59483B]">
+                {lesson.terms.map(({ name, meaning }) => (
+                  <div key={name} className="break-keep">
+                    <dt className="inline font-semibold text-[#14694F]">{name}</dt>
+                    <dd className="inline"> — {meaning}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          )}
         </div>
         <div className="min-w-0 border-l-[3px] border-[#D69724] pl-3.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-[#715A43]" aria-live="polite">
@@ -142,6 +153,9 @@ function GitHubWebGuide() {
         <li><strong>Commit changes</strong>에서 변경 이유를 적고 새 브랜치에 기록해요. 쓰기 권한이 없는 저장소에서는 포크를 만들어 <strong>Propose changes</strong>로 변경을 제안할 수 있어요.</li>
         <li><strong>Compare &amp; pull request</strong>에서 변경을 확인하고 <strong>Create pull request</strong>로 팀에 검토를 요청해요.</li>
       </ol>
+      <p className="mb-2 break-keep leading-relaxed text-[#715A43]">
+        Preview·Commit changes·Compare &amp; pull request는 실제 GitHub 화면의 버튼이에요. 이 실습에서는 명령으로 같은 일을 해요.
+      </p>
       <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 font-medium text-[#166447]">
         <a className="underline" target="_blank" rel="noopener noreferrer"
           href="https://docs.github.com/ko/repositories/working-with-files/managing-files/editing-files">

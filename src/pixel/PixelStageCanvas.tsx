@@ -269,6 +269,29 @@ export function PixelStageCanvas() {
           );
         })}
       </div>
+      {sim.conflict && sim.conflict.resolvedChoice === 'none' && !sim.conflict.revert && (
+        <div className="order-2 mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="conflict-preview">
+          <div className="rounded-xl border border-[#D69B61] bg-[#FFFDF8] p-3">
+            <h2 className="break-keep text-sm font-bold text-[#2F241D]">{sim.conflict.file}에서 겹친 내용이에요</h2>
+            <p className="mt-1 break-keep text-xs leading-relaxed text-[#59483B]">두 브랜치가 같은 줄을 다르게 고쳤어요. 아래 내용을 보고 남길 것을 골라 주세요.</p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-md border border-[#3292CE] bg-[#F0F8FE] p-2">
+                <p className="text-xs font-semibold text-[#174669]">내 브랜치 ({sim.conflict.oursLabel})</p>
+                <code className="font-mono-code mt-1 block whitespace-pre-wrap text-xs text-[#2F241D]">{sim.conflict.oursCode}</code>
+              </div>
+              <div className="rounded-md border border-[#9B72CF] bg-[#F6F0FC] p-2">
+                <p className="text-xs font-semibold text-[#623AA8]">상대 브랜치 ({sim.conflict.theirsLabel})</p>
+                <code className="font-mono-code mt-1 block whitespace-pre-wrap text-xs text-[#2F241D]">{sim.conflict.theirsCode}</code>
+              </div>
+            </div>
+            <ul className="mt-2 space-y-1 break-keep text-xs leading-relaxed text-[#59483B]">
+              <li>· 현재 브랜치 내용 유지 → 내 브랜치 줄만 남아요.</li>
+              <li>· 상대 브랜치 내용 사용 → 상대 브랜치 줄만 남아요.</li>
+              <li>· 두 내용 함께 담기 → 두 줄을 모두 남해요.</li>
+            </ul>
+          </div>
+        </div>
+      )}
       {visibleHistory && (
         <ol aria-label="최근 커밋" className="order-2 mx-auto mt-3 flex w-full max-w-5xl flex-wrap justify-center gap-2 px-3 pb-2 text-sm">
           {visibleHistory.map(({ commit, rewound }) => (

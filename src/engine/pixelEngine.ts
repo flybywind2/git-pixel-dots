@@ -722,6 +722,38 @@ function stageSeed(id: StageId): StageSeed {
   }
 }
 
+function editDistance(a: string, b: string): number {
+  const dp: number[][] = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+function closestCommand(sub: string, candidates: Iterable<string>): string | null {
+  let best: string | null = null;
+  let bestDistance = 3;
+  for (const candidate of candidates) {
+    const distance = editDistance(sub, candidate);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+// 파일명·변수명 뒤 조사(을/를)는 마지막 글자의 받침 여부로 골라요.
+function objectParticle(word: string): string {
+  const last = word.charCodeAt(word.length - 1);
+  if (last >= 0xac00 && last <= 0xd7a3) return (last - 0xac00) % 28 > 0 ? '을' : '를';
+  return '를';
+}
+
 function commandNotice(
   state: PixelSimState,
   command: string,
@@ -793,7 +825,7 @@ export function savePracticeDocument(
       { text: `${DOCUMENT_COMPARISONS.working.command}로 바뀐 줄을 확인할 수 있어요.`, tone: 'muted' },
     ],
     makeBubble(`document-save-${state.lastAnim.seq + 1}`, 'buddy', 32, 54, '작업 파일에 저장했어요',
-      '현재 문서와 스테이징 영역을 비교해 바뀐 줄을 확인해 보세요.'),
+      '작업 파일에 저장했을 뿐 아직 기록(커밋)은 아니에요. 기록 남기기를 눌러야 커밋이 돼요. 바뀐 줄은 비교에서 확인할 수 있어요.'),
   );
 }
 
@@ -956,7 +988,8 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         text: `  • ${item.cmd}  —  ${item.desc}`,
         tone: 'default' as const,
       })),
-      { text: '  • reset / clear — 스테이지 초기화 / 터미널 비우기', tone: 'muted' },
+      { text: '  • clear — 터미널 화면 비우기', tone: 'muted' },
+      { text: '  • reset — 현재 장을 처음부터 다시 (진행 상태가 사라지니 주의)', tone: 'amber' },
     ];
     return finalizeTransition(
       state,
@@ -988,6 +1021,21 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
     const sub = tokens[1]?.toLowerCase();
     const resolveConflict = state.conflict && lower.startsWith('resolve ');
     if (!resolveConflict && (tokens[0].toLowerCase() !== 'git' || !sub || !DOCUMENT_GIT_COMMANDS.has(sub))) {
+      if (tokens[0].toLowerCase() === 'git' && sub) {
+        const suggestion = closestCommand(sub, DOCUMENT_GIT_COMMANDS);
+        if (suggestion) {
+          return finalizeTransition(
+            state, state, 'IDLE', '명령어 오타 안내', undefined, cmd,
+            [{ text: `어라, 'git ${sub}'는 아직 모르는 말이에요. git ${suggestion}를 찾으셨나요?`, tone: 'amber' }],
+            makeBubble(
+              `docs-typo-${seqNext}`, 'buddy', 38, 54, '어라, 모르는 명령어예요! 🤔',
+              `git ${sub}는 아직 모르는 말이에요. git ${suggestion}를 찾으셨나요? 아래 추천 버튼을 누르거나 help를 입력해 보세요.`,
+              undefined,
+              [{ label: `git ${suggestion}`, command: `git ${suggestion}`, tone: 'primary' }],
+            ),
+          );
+        }
+      }
       return commandNotice(state, cmd, '문서 실습 명령어', '회의록 편집과 비교에 쓰는 명령은 명령어 사전에서 확인할 수 있어요.');
     }
   }
@@ -1100,7 +1148,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       cmd,
       [
         { text: `🧩 ${conflictFile} 충돌 해결: ${choiceLabel}`, tone: 'mint' },
-        { text: `✓ 해결된 ${conflictFile}을 스테이징 영역에 담았어요.`, tone: 'sky' },
+        { text: `✓ 해결된 ${conflictFile}${objectParticle(conflictFile)} 스테이징 영역에 담았어요.`, tone: 'sky' },
         { text: `${finish}로 해결한 내용을 기록하세요.`, tone: 'muted' },
       ],
       makeBubble(
@@ -1627,7 +1675,8 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         'HITL_MERGED',
         cmd,
         [
-          { text: `👤 Reviewed & Approved by @${state.ghUser} (Human-in-the-Loop)`, tone: 'mint' },
+          { text: '🔍 변경 확인: buggy.ts  a - b → a + b (빼기를 더하기로 고침)', tone: 'sky' },
+          { text: `👤 Reviewed & Approved by @${state.ghUser} (리뷰어 역할, Human-in-the-Loop)`, tone: 'mint' },
           { text: `🎉 PR #${prNum} 이 기본 브랜치(main)에 합쳐졌어요. (${mergeCommit.hash})`, tone: 'mint' },
         ],
         makeBubble(
@@ -1636,7 +1685,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           64,
           50,
           '사람이 승인한 변경을 합쳤어요',
-          '사람이 덧셈 수정과 테스트 결과를 확인했어요. 승인한 변경을 main에 합쳤어요.',
+          '리뷰어(팀원) 역할로 덧셈 수정과 테스트 결과를 확인하고 승인했어요. 작성자(AI)와 다른 사람이 승인해야 main에 들어갈 수 있어요.',
           'AI 협업 실습을 마쳤어요. 상단에서 다시 연습할 장을 고를 수 있어요.',
         ),
       );
@@ -1756,7 +1805,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       const draft = updateWorkspace(state, working, index);
       if (changedPaths(state.index, index).length === 0 || draft.staged.length === 0) {
         const message = draft.staged.length > 0
-          ? '현재 문서와 스테이징 영역의 내용이 이미 같아요.'
+          ? '현재 문서와 스테이징 영역의 내용이 이미 같아요. 고친 내용이 사라진 게 아니라 똑같이 담겨 있어요.'
           : '다음 커밋에 들어갈 변경이 없어요.';
         return finalizeTransition(
           state, draft, 'IDLE', '스테이징 영역 확인', undefined, cmd,
@@ -1765,11 +1814,13 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         );
       }
 
+      // 담은 직후에는 스테이징 비교를 바로 보여 줘서 "고친 게 사라졌나?" 하는 오해를 줄여요.
+      if (state.document) draft.document = { comparison: 'staged' };
       return finalizeTransition(
         state, draft, 'ADD', '다음 기록에 담기', draft.staged.join(', '), cmd,
         [{ text: `스테이징: ${draft.staged.join(', ')}`, tone: 'mint' }],
         makeBubble(`add-${seqNext}`, 'buddy', 38, 54, '다음 기록에 담았어요',
-          '선택한 파일의 현재 내용을 복사해 두었어요. 커밋하기 전에 비교해 볼 수 있어요.'),
+          '고친 내용을 그대로 복사해 담았어요. 작업 문서와 스테이징 영역이 같아진 건 사라져서가 아니라 똑같이 담겨서예요. 아래 비교에서 스테이징 탭으로 확인할 수 있어요.'),
       );
     }
 
@@ -1867,12 +1918,16 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       if (remoteHead === localHead) {
         return commandNotice(state, cmd, '이미 같은 커밋이에요', '로컬 브랜치와 원격 브랜치가 같은 커밋을 가리켜요.');
       }
+      if (remoteHead && reachableCommits(state, remoteHead).has(localHead)) {
+        return commandNotice(state, cmd, '올릴 새 커밋이 없어요',
+          '아직 올릴 새 커밋이 없어요. 고친 내용이 있다면 git add → git commit으로 먼저 기록을 남겨 보세요.', 'amber');
+      }
       if (remoteHead && !reachableCommits(state, localHead).has(remoteHead)) {
         return commandNotice(state, cmd, '원격 기록을 먼저 확인하세요', '원격 브랜치에 현재 이력에 없는 커밋이 있어 푸시가 거절됐어요.', 'amber');
       }
 
       const draft = { ...state, remoteBranches: { ...state.remoteBranches, [remoteBranch]: localHead } };
-      const message = `원격 저장소의 ${remoteBranch} 브랜치가 ${branch}의 새 커밋을 가리켜요.`;
+      const message = `이제 GitHub(원격)에 있는 ${remoteBranch} 브랜치에 내 ${branch}의 새 커밋이 올라갔어요.`;
       return finalizeTransition(
         state, draft, 'PUSH', '변경 공유', `origin/${remoteBranch}`, cmd,
         [{ text: `${branch} → origin/${remoteBranch}`, tone: 'mint' }, { text: message, tone: 'sky' }],
@@ -2119,7 +2174,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         state, draft, 'STASH', '작업 임시 보관하기', 'stash@{0}', cmd,
         [{ text: `수정 내용을 보관했어요. 보관 항목 ${stashes.length}개.`, tone: 'mint' }],
         makeBubble(`stash-${seqNext}`, 'buddy', 34, 54, '하던 작업을 잠시 보관했어요',
-          '추적 중인 작업 파일이 최근 커밋 상태로 돌아왔어요. 이제 급한 수정을 먼저 할 수 있어요.'),
+          '고치던 파일이 최근 커밋 상태로 돌아왔어요. 이제 급한 수정을 먼저 할 수 있어요.'),
       );
     }
 
@@ -2212,6 +2267,10 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       const target = revisions.length === 1 ? resolveRevision(state, revision) : undefined;
       if (!target || !headCommit(state)) {
         return commandNotice(state, cmd, '취소할 커밋을 확인하세요', 'git revert HEAD 또는 git revert 뒤에 취소할 커밋 ID 하나를 적으세요.', 'amber');
+      }
+      if (target.parents.length === 0) {
+        return commandNotice(state, cmd, '첫 기록은 취소할 수 없어요',
+          '이 문서의 첫 커밋이라 되돌리면 내용이 모두 사라져요. 첫 기록 이후의 변경만 취소할 수 있어요.', 'amber');
       }
       if (state.conflict || (!noCommit && state.staged.length > 0)) {
         return commandNotice(state, cmd, '먼저 진행 중인 변경을 정리하세요', '스테이징한 변경을 기록하거나 임시 보관한 다음 다시 시도하세요.', 'amber');
@@ -2391,6 +2450,18 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       if (!target || !local) {
         return commandNotice(state, cmd, '합칠 브랜치를 찾을 수 없어요', 'git branch로 브랜치 이름을 확인하세요.', 'amber');
       }
+      if (state.stageId === 'ch3' && !state.completedActions.includes('BRANCH')) {
+        return finalizeTransition(
+          state, state, 'IDLE', '브랜치 먼저 만들기', undefined, cmd,
+          [{ text: '이 실습은 새 브랜치를 만든 뒤 그 위에서 합쳐요. 먼저 git switch -c feat/dark를 실행하세요.', tone: 'amber' }],
+          makeBubble(
+            `merge-need-branch-${seqNext}`, 'buddy', 40, 52, '먼저 새 브랜치를 만들어 주세요',
+            'main에서 바로 합치면 기본 기록이 섞여요. 새 브랜치를 만들고 그 위에서 합치는 것이 이 장의 핵심이에요.',
+            'git switch -c feat/dark 로 새 브랜치를 만들어 보세요!',
+            [{ label: '새 브랜치 만들기', command: 'git switch -c feat/dark', tone: 'primary' }],
+          ),
+        );
+      }
       if (state.conflict || state.staged.length > 0) {
         return commandNotice(state, cmd, '현재 변경을 먼저 정리하세요', '스테이징한 변경을 커밋하거나 진행 중인 합치기를 마무리하세요.', 'amber');
       }
@@ -2537,7 +2608,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           66,
           52,
           `AI 작업 폴더(${dirName})를 열었어요`,
-          `${dirName}에서 ${branchName} 브랜치의 파일을 편집할 수 있어요. 두 작업 폴더는 같은 저장소의 커밋 기록을 공유해요.`,
+          `${dirName}에서 ${branchName} 브랜치의 파일을 편집할 수 있어요. 이제 아래 프롬프트가 ${dirName} $로 바뀌는데, 그 폴더에서 작업 중이라는 뜻이에요. 두 작업 폴더는 같은 저장소의 커밋 기록을 공유해요.`,
           'ai code 를 입력해서 AI가 코드를 수정하도록 시켜 보세요!',
           [{ label: '덧셈 오류 고치기', command: 'ai code', tone: 'mint' }],
         ),

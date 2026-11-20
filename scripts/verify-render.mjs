@@ -210,6 +210,11 @@ async function terminalAndScenes(page, url) {
   await page.getByRole('button', { name: '상대 브랜치 내용 사용', exact: true }).waitFor();
   const bubble = page.getByTestId('speech-bubble');
   assert.match(await bubble.innerText(), /아래 버튼에서 남길 내용을 고르세요/);
+  // 충돌 전에 양쪽 실제 내용을 보여 줘요.
+  const preview = page.getByTestId('conflict-preview');
+  await preview.waitFor();
+  assert.match(await preview.innerText(), /dark-midnight/);
+  assert.match(await preview.innerText(), /sunset-coral/);
   const lastMessage = await bubble.innerText();
   await page.reload();
   assert.equal(await bubble.innerText(), lastMessage);

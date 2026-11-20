@@ -11,10 +11,10 @@ const SESSION_KEY = 'gitdots.practice.v3';
 const LEGACY_KEYS = ['gitdots.practice.v2', 'gitdots.practice.v1'] as const;
 const DRAFT_SAVE_DELAY_MS = 250;
 type LegacyVersion = 'v2' | 'v1';
-// v2→v3에서는 4장 협업 예제가 바뀌었어요. v1→v3은 이전 회의록 전환까지 포함해요.
+// v2→v3에서는 4장 협업 예제와 5장 브랜치 이름(feat/ui)이 바뀌었어요. v1→v3은 이전 회의록 전환까지 포함해요.
 const replacedExamples: Record<LegacyVersion, ReadonlySet<StageId>> = {
-  v2: new Set<StageId>(['ch4']),
-  v1: new Set<StageId>(['ch1', 'ch2', 'ch4']),
+  v2: new Set<StageId>(['ch3', 'ch4']),
+  v1: new Set<StageId>(['ch1', 'ch2', 'ch3', 'ch4']),
 };
 
 export interface PracticeSession {
@@ -190,9 +190,11 @@ export function readPracticeSessions() {
     if (raw === null) continue;
     try {
       const session = decodeSession(raw, id, legacyVersion);
+      // 이미 v3으로 옮겨졌더라도 옛 브랜치 이름이 남아 있으면 새 예제로 안내해요.
+      const staleExample = id === 'ch3' && session !== null && 'feature/ui' in session.sim.branches;
       if (!session) {
         issues[id] = 'invalid';
-      } else if (legacyVersion !== null && replacedExamples[legacyVersion].has(id)) {
+      } else if (staleExample || (legacyVersion !== null && replacedExamples[legacyVersion].has(id))) {
         issues[id] = 'example-updated';
       } else {
         sessions[id] = session;

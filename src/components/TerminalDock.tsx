@@ -34,6 +34,7 @@ export function TerminalDock() {
 
   const scenario = STAGE_MAP[sim.stageId];
   const next = scenario.steps.find((step) => !isStepCompleted(sim, step));
+  const promptLabel = sim.stageId === 'ch8' && sim.ai.worktreeActive ? 'wt-ai' : sim.headBranch;
   const options = useMemo(() => {
     if (cycle) return cycle.options;
     return input.trim() ? getCommandAutocomplete(input, sim).slice(0, 5) : [];
@@ -172,7 +173,7 @@ export function TerminalDock() {
                 ))}
               </ul>
             )}
-            <span aria-hidden="true" className="font-mono-code max-w-[25%] truncate text-xs font-bold text-[#126549]">{sim.headBranch} $</span>
+            <span aria-hidden="true" className="font-mono-code max-w-[25%] truncate text-xs font-bold text-[#126549]">{promptLabel} $</span>
             <input
               ref={prompt}
               data-testid="terminal-input"

@@ -520,6 +520,41 @@ describe('Full stage walkthroughs', () => {
   });
 });
 
+describe('Beginner guardrails and feedback', () => {
+  it('Ch3: blocks merging before creating the lesson branch', () => {
+    const initial = createStageState('ch3');
+    const blocked = executePixelCommand(initial, 'git merge feat/ui');
+    expect(blocked.lastAnim.kind).toBe('IDLE');
+    expect(blocked.conflict).toBeNull();
+    expect(blocked.completedActions).not.toContain('CONFLICT');
+    expect(blocked.bubbles[0]?.actions?.some((action) => action.command === 'git switch -c feat/dark')).toBe(true);
+    expect(getNextPendingStep(blocked)?.id).toBe('ch3-branch');
+  });
+
+  it('Ch4: pushing with nothing new to upload guides toward committing', () => {
+    const initial = createStageState('ch4');
+    const pushed = executePixelCommand(initial, 'git push');
+    expect(pushed.lastAnim.kind).toBe('IDLE');
+    expect(pushed.completedActions).not.toContain('PUSH');
+    expect(pushed.bubbles[0]?.message).toContain('올릴 새 커밋이 없어요');
+  });
+
+  it('Docs: suggests the closest command for a git typo', () => {
+    const initial = createStageState('docs');
+    const typo = executePixelCommand(initial, 'git stauts');
+    expect(typo.bubbles[0]?.message).toContain('git status');
+    expect(typo.bubbles[0]?.actions?.some((action) => action.command === 'git status')).toBe(true);
+  });
+
+  it('Docs: refuses to revert the root commit so the document never empties', () => {
+    const initial = createStageState('docs');
+    const reverted = executePixelCommand(initial, 'git revert HEAD');
+    expect(reverted.lastAnim.kind).toBe('IDLE');
+    expect(reverted.files[0]?.content).toBe(initial.files[0]?.content);
+    expect(reverted.bubbles[0]?.title).toContain('첫 기록은 취소할 수 없어요');
+  });
+});
+
 describe('Document editing and comparison', () => {
   it('only credits a comparison when it is the next document task', () => {
     let state = executePixelCommand(createStageState('docs'), 'edit 회의록.md');
