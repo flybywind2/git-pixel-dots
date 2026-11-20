@@ -286,7 +286,7 @@ describe('Full stage walkthroughs', () => {
       'git pull origin main',
     ]);
     expect(s.completedActions).toEqual(
-      expect.arrayContaining(['BRANCH', 'ADD', 'COMMIT', 'PUSH', 'PR_CREATE', 'PR_REVIEW', 'PR_MERGE', 'SWITCH', 'PULL']),
+      expect.arrayContaining(['BRANCH', 'ADD', 'COMMIT', 'PUSH', 'PR_CREATE', 'PR_REVIEW', 'PR_MERGE', 'RETURN_MAIN', 'SYNC_MAIN']),
     );
     expect(s.headBranch).toBe('main');
     expect(s.prs).toHaveLength(1);
@@ -324,6 +324,45 @@ describe('Full stage walkthroughs', () => {
     const merged = executePixelCommand(reviewed, 'gh pr merge');
     expect(merged.lastAnim.kind).toBe('PR_MERGE');
     expect(merged.prs[0]?.status).toBe('merged');
+  });
+
+  it('Ch4: finishing steps only count after the merge and on main', () => {
+    let s = deepFreeze(createStageState('ch4'));
+    const run = (cmd: string) => { s = deepFreeze(executePixelCommand(s, cmd)); };
+    run(`git switch -c ${MEETING_PR_BRANCH}`);
+    run('git add 회의록.md');
+    run(`git commit -m "${MEETING_PR_TITLE}"`);
+
+    // 병합 전에 main으로 이동해도 마무리 단계는 완료되지 않아요.
+    run('git switch main');
+    expect(s.completedActions).not.toContain('RETURN_MAIN');
+    expect(isStepCompleted(s, STAGE_MAP.ch4.steps[7])).toBe(false);
+
+    run(`git switch ${MEETING_PR_BRANCH}`);
+    run(`git push -u origin ${MEETING_PR_BRANCH}`);
+    run(`gh pr create --title "${MEETING_PR_TITLE}"`);
+    run('gh pr view');
+    run('gh pr merge');
+
+    // 병합을 마친 뒤 main으로 이동하면 그때 인정돼요.
+    run('git switch main');
+    expect(s.completedActions).toContain('RETURN_MAIN');
+    expect(isStepCompleted(s, STAGE_MAP.ch4.steps[7])).toBe(true);
+
+    // 작업 브랜치에서 pull하면 내 main은 그대로라 장이 완료되지 않아요.
+    run(`git switch ${MEETING_PR_BRANCH}`);
+    run('git pull origin main');
+    expect(s.completedActions).not.toContain('SYNC_MAIN');
+    expect(isStepCompleted(s, STAGE_MAP.ch4.steps[8])).toBe(false);
+    expect(getNextPendingStep(s)?.id).toBe('ch4-pull');
+    expect(s.commits.find((commit) => commit.id === s.branches.main)?.tree[DOCUMENT_PATH]).not.toContain('2층 모임방');
+
+    // main에서 pull해야 비로소 내 컴퓨터에 반영되고 장이 완료돼요.
+    run('git switch main');
+    run('git pull origin main');
+    expect(s.completedActions).toContain('SYNC_MAIN');
+    expect(getNextPendingStep(s)).toBeNull();
+    expect(s.commits.find((commit) => commit.id === s.branches.main)?.tree[DOCUMENT_PATH]).toContain('2층 모임방');
   });
 
   it('Ch5: gh CLI full walkthrough (auth, repo, pr, issue, run watch, api)', () => {

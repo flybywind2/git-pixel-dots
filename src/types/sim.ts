@@ -199,6 +199,8 @@ export const LESSON_ACTIONS = [
   'ISSUE_CREATE',
   'RUN_WATCH',
   'REPO_API',
+  'RETURN_MAIN',
+  'SYNC_MAIN',
   'FIREWALL_TEST',
   'DOCUMENT_WORKING_DIFF',
   'DOCUMENT_STAGED_DIFF',
@@ -232,6 +234,7 @@ export interface StageScenario {
   steps: StageStep[];
   chips: CommandChip[];
   cheatSheet: { cmd: string; desc: string }[];
+  phases?: { label: string; steps: number }[];
 }
 
 export interface PixelSimState {

@@ -25,6 +25,12 @@ export function LessonGuide() {
       : lesson.track === 'basic' ? '심화 실습 보기' : '1장으로 돌아가기';
   const finishedBasic = lesson.id === 'ch4' && !nextStep && !unfinishedBasic;
   const doneCount = lesson.steps.filter((step) => isStepCompleted(sim, step)).length;
+  let phaseOffset = 0;
+  const phaseGroups = lesson.phases?.map((phase) => {
+    const steps = lesson.steps.slice(phaseOffset, phaseOffset + phase.steps);
+    phaseOffset += phase.steps;
+    return { label: phase.label, steps, done: steps.every((step) => isStepCompleted(sim, step)) };
+  });
   const editDocument = lesson.id === 'docs' && nextStep?.doneAction === 'EDIT';
   const saveDraft = draft !== null;
   const ButtonIcon = saveDraft ? Save : editDocument ? Pencil : Play;
@@ -60,12 +66,27 @@ export function LessonGuide() {
           {(lesson.id === 'docs' || lesson.id === 'ch4') && <GitHubWebGuide />}
         </div>
         <div className="min-w-0 border-l-[3px] border-[#D69724] pl-3.5">
-          <div className="flex items-center gap-2 text-xs font-medium text-[#715A43]" aria-live="polite">
-            <span aria-hidden="true" className="flex gap-1">
-              {lesson.steps.map((step) => (
-                <span key={step.id} className={`h-2 w-2 rounded-[2px] ${isStepCompleted(sim, step) ? 'bg-[#198361]' : 'bg-[#DED1B8]'}`} />
-              ))}
-            </span>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-[#715A43]" aria-live="polite">
+            {phaseGroups ? (
+              <span aria-hidden="true" className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                {phaseGroups.map((group) => (
+                  <span key={group.label} className="flex items-center gap-1.5">
+                    <span className="flex gap-1">
+                      {group.steps.map((step) => (
+                        <span key={step.id} className={`h-2 w-2 rounded-[2px] ${isStepCompleted(sim, step) ? 'bg-[#198361]' : 'bg-[#DED1B8]'}`} />
+                      ))}
+                    </span>
+                    <span className={group.done ? 'font-semibold text-[#198361]' : undefined}>{group.label}</span>
+                  </span>
+                ))}
+              </span>
+            ) : (
+              <span aria-hidden="true" className="flex gap-1">
+                {lesson.steps.map((step) => (
+                  <span key={step.id} className={`h-2 w-2 rounded-[2px] ${isStepCompleted(sim, step) ? 'bg-[#198361]' : 'bg-[#DED1B8]'}`} />
+                ))}
+              </span>
+            )}
             <span data-testid="stage-step-badge">실습 {doneCount}/{lesson.steps.length} 완료</span>
           </div>
           {label ? (

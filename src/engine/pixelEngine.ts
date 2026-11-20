@@ -1944,10 +1944,13 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         message: `Merge origin/${branch} into ${state.headBranch}`, branch: state.headBranch,
         parents: [local.id, remote.id], tree: merged.tree, isMerge: true,
       };
+      // 합친 내용을 내 컴퓨터의 main에 가져올 때만 마무리 단계로 인정해요.
+      const syncingMain = state.headBranch === 'main' && state.completedActions.includes('PR_MERGE');
       const draft = updateWorkspace({
         ...state,
         commits: fastForward ? state.commits : [...state.commits, commit],
         branches: { ...state.branches, [state.headBranch]: commit.id },
+        completedActions: syncingMain ? withCompletedAction(state.completedActions, 'SYNC_MAIN') : state.completedActions,
       }, checkout.working, checkout.index);
       const message = `origin/${branch}의 변경을 현재 브랜치에 적용했어요.`;
       return finalizeTransition(
@@ -2360,11 +2363,14 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         return commandNotice(state, cmd, '브랜치를 바꾸면 작업 내용이 덮어쓰여요',
           `${checkout.blocked.join(', ')}의 변경을 먼저 커밋하거나 임시 보관하세요.`, 'amber');
       }
+      // 마무리 단계는 병합을 마친 뒤 main으로 돌아올 때만 인정해요.
+      const returningToMain = !isCreate && targetBranch === 'main' && state.completedActions.includes('PR_MERGE');
       const draft = updateWorkspace({
         ...state,
         branches: isCreate ? { ...state.branches, [targetBranch]: target.id } : state.branches,
         headBranch: targetBranch,
         previousBranch: state.headBranch === targetBranch ? state.previousBranch : state.headBranch,
+        completedActions: returningToMain ? withCompletedAction(state.completedActions, 'RETURN_MAIN') : state.completedActions,
       }, checkout.working, checkout.index);
       const message = `${targetBranch} 브랜치의 커밋 ${target.hash}에 맞게 작업 파일이 열렸어요.`;
       return finalizeTransition(
@@ -3011,8 +3017,8 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           'cloud',
           68,
           48,
-          '자동 검사(CI) 전원 통과! ✅',
-          'gh run watch 로 자동 검사(빌드·테스트) 과정을 터미널에서 실시간으로 지켜봤어요!',
+          '자동 검사(CI) 모두 통과! ✅',
+          'gh run watch로 GitHub에 올라간 변경의 자동 검사(빌드·테스트) 과정을 실시간으로 지켜봤어요!',
           nextStepHintText(draft),
         ),
       );

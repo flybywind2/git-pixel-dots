@@ -220,14 +220,14 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         label: '기본 브랜치로 이동하기',
         goal: '합친 내용을 가져올 main 브랜치로 돌아가기',
         command: 'git switch main',
-        doneAction: 'SWITCH',
+        doneAction: 'RETURN_MAIN',
       },
       {
         id: 'ch4-pull',
         label: '합친 내용 가져오기',
         goal: 'GitHub에서 합친 변경을 내 컴퓨터의 main에 반영하기',
         command: 'git pull origin main',
-        doneAction: 'PULL',
+        doneAction: 'SYNC_MAIN',
       },
     ],
     chips: [
@@ -253,6 +253,11 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       { cmd: 'gh pr merge', desc: '팀원 승인을 확인한 PR을 기본 브랜치(main)에 합쳐요.' },
       { cmd: 'git switch main', desc: '팀의 기본 브랜치로 이동해요. 합친 내용을 내 컴퓨터에 가져오려면 먼저 main으로 이동해요.' },
       { cmd: 'git pull origin main', desc: '원격 최신 커밋을 가져와 내 브랜치에 바로 합쳐요. PR을 합친 뒤 main에서 실행하면 내 컴퓨터에도 반영돼요.' },
+    ],
+    phases: [
+      { label: '내 컴퓨터에서', steps: 3 },
+      { label: 'GitHub에서', steps: 4 },
+      { label: '다시 내 컴퓨터로', steps: 2 },
     ],
   },
   ch3: {
@@ -345,7 +350,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       {
         id: 'ch5-run',
         label: '자동 검사 지켜보기',
-        goal: '빌드·테스트 자동 검사가 도는 과정 확인하기',
+        goal: 'GitHub에 올라간 다크 모드 변경의 자동 검사(빌드·테스트) 과정 확인하기',
         command: 'gh run watch',
         doneAction: 'RUN_WATCH',
       },
