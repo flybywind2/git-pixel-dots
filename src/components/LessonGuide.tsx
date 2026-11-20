@@ -1,5 +1,6 @@
 import { ArrowRight, Pencil, Play, Save } from 'lucide-react';
 import { getNextPendingStep, isPracticeCommand, isStepCompleted, STAGE_MAP, STAGE_TRACKS } from '../engine';
+import { DOCUMENT_REVERT } from '../engine/documentDiff';
 import { usePixelStore } from '../store/usePixelStore';
 
 export function LessonGuide() {
@@ -98,9 +99,9 @@ export function LessonGuide() {
                 <ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0" />
               </button>
               {lesson.id === 'docs' && !sim.completedActions.includes('REVERT') && (
-                <button type="button" onClick={() => runCommand('git revert HEAD')}
+                <button type="button" onClick={() => runCommand(DOCUMENT_REVERT.command)}
                   className="rounded-md border border-[#CDBCA3] px-3 py-1.5 text-sm font-semibold">
-                  마지막 변경 취소해 보기
+                  {DOCUMENT_REVERT.label}
                 </button>
               )}
             </div>
@@ -121,8 +122,14 @@ function GitHubWebGuide() {
         <li><strong>Compare &amp; pull request</strong>에서 변경을 확인하고 <strong>Create pull request</strong>로 팀에 검토를 요청해요.</li>
       </ol>
       <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 font-medium text-[#166447]">
-        <a className="underline" href="https://docs.github.com/ko/repositories/working-with-files/managing-files/editing-files">GitHub 문서 편집 도움말</a>
-        <a className="underline" href="https://docs.github.com/ko/pull-requests/how-tos/create-pull-requests/creating-a-pull-request">GitHub 검토 요청 도움말</a>
+        <a className="underline" target="_blank" rel="noopener noreferrer"
+          href="https://docs.github.com/ko/repositories/working-with-files/managing-files/editing-files">
+          GitHub 문서 편집 도움말<span className="sr-only"> (새 탭)</span>
+        </a>
+        <a className="underline" target="_blank" rel="noopener noreferrer"
+          href="https://docs.github.com/ko/pull-requests/how-tos/create-pull-requests/creating-a-pull-request">
+          GitHub 검토 요청 도움말<span className="sr-only"> (새 탭)</span>
+        </a>
       </div>
     </details>
   );

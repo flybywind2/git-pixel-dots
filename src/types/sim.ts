@@ -1,25 +1,16 @@
-export type StageId =
-  | 'ch1'
-  | 'docs'
-  | 'ch2'
-  | 'ch3'
-  | 'ch4'
-  | 'ch5'
-  | 'ch6'
-  | 'ch7'
-  | 'ch8';
-
-export const ALL_STAGE_IDS: readonly StageId[] = [
+export const ALL_STAGE_IDS = [
   'docs',
   'ch1',
   'ch2',
-  'ch3',
   'ch4',
+  'ch3',
   'ch5',
   'ch6',
   'ch7',
   'ch8',
 ] as const;
+
+export type StageId = (typeof ALL_STAGE_IDS)[number];
 
 export type BubbleSpeaker = 'buddy' | 'cloud' | 'guard' | 'ai' | 'system';
 
@@ -125,41 +116,44 @@ export interface AiWorldState {
   merged: boolean;
 }
 
-export type PixelAnimKind =
-  | 'IDLE'
-  | 'EDIT'
-  | 'ADD'
-  | 'COMMIT'
-  | 'PUSH'
-  | 'PULL'
-  | 'FETCH'
-  | 'STASH'
-  | 'STASH_POP'
-  | 'RESET'
-  | 'REVERT'
-  | 'BRANCH'
-  | 'SWITCH'
-  | 'MERGE_OK'
-  | 'CONFLICT'
-  | 'RESOLVE'
-  | 'REBASE'
-  | 'PR_CREATE'
-  | 'PR_MERGE'
-  | 'GH_CMD'
-  | 'TOKEN_CLASSIC'
-  | 'TOKEN_FINE'
-  | 'TOKEN_SSO'
-  | 'TOKEN_SSH'
-  | 'TOKEN_BLOCK'
-  | 'GHES_LOGIN'
-  | 'GHES_BLOCK'
-  | 'GHES_API'
-  | 'GHES_RUNNER'
-  | 'AI_WORKTREE'
-  | 'AI_CODE'
-  | 'AI_BLOCK_MAIN'
-  | 'AI_PR'
-  | 'AI_APPROVE';
+const PIXEL_ANIMATION_KINDS = [
+  'IDLE',
+  'EDIT',
+  'ADD',
+  'COMMIT',
+  'PUSH',
+  'PULL',
+  'FETCH',
+  'STASH',
+  'STASH_POP',
+  'RESET',
+  'REVERT',
+  'BRANCH',
+  'SWITCH',
+  'MERGE_OK',
+  'CONFLICT',
+  'RESOLVE',
+  'REBASE',
+  'PR_CREATE',
+  'PR_MERGE',
+  'GH_CMD',
+  'TOKEN_CLASSIC',
+  'TOKEN_FINE',
+  'TOKEN_SSO',
+  'TOKEN_SSH',
+  'TOKEN_BLOCK',
+  'GHES_LOGIN',
+  'GHES_BLOCK',
+  'GHES_API',
+  'GHES_RUNNER',
+  'AI_WORKTREE',
+  'AI_CODE',
+  'AI_BLOCK_MAIN',
+  'AI_PR',
+  'AI_APPROVE',
+] as const;
+
+export type PixelAnimKind = (typeof PIXEL_ANIMATION_KINDS)[number];
 
 export interface PixelAnimEvent {
   kind: PixelAnimKind;
@@ -196,16 +190,19 @@ export interface StageStep {
   doneAction: LessonAction | LessonAction[];
 }
 
-export type LessonAction =
-  | PixelAnimKind
-  | 'MERGE_COMMIT'
-  | 'AUTH_STATUS'
-  | 'ISSUE_CREATE'
-  | 'REPO_API'
-  | 'FIREWALL_TEST'
-  | 'DOCUMENT_WORKING_DIFF'
-  | 'DOCUMENT_STAGED_DIFF'
-  | 'DOCUMENT_COMMIT_DIFF';
+export const LESSON_ACTIONS = [
+  ...PIXEL_ANIMATION_KINDS,
+  'MERGE_COMMIT',
+  'AUTH_STATUS',
+  'ISSUE_CREATE',
+  'REPO_API',
+  'FIREWALL_TEST',
+  'DOCUMENT_WORKING_DIFF',
+  'DOCUMENT_STAGED_DIFF',
+  'DOCUMENT_COMMIT_DIFF',
+] as const;
+
+export type LessonAction = (typeof LESSON_ACTIONS)[number];
 
 export type DocumentComparison = 'working' | 'staged' | 'commits';
 

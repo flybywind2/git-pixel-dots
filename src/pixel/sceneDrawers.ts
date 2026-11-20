@@ -700,14 +700,14 @@ function drawCh4Scene(
   );
 
   // 3 Cozy station pads
-  drawZonePad(ctx, xLocal, padY, padW, '내 컴퓨터', `브랜치: ${sim.headBranch}`, PALETTE.sky, kind === 'PUSH', time);
+  drawZonePad(ctx, xLocal, padY, padW, '내 브랜치', sim.headBranch, PALETTE.sky, kind === 'PUSH', time, true);
   drawZonePad(
     ctx,
     xCi,
     padY,
     padW,
     '자동 검사',
-    ciPass ? '자동 검사 통과 ✓' : latestPr ? '검사 대기 중' : 'PR 대기 중',
+    ciPass ? '검사 통과' : latestPr ? '검사 대기 중' : 'PR 대기 중',
     ciPass ? PALETTE.mint : PALETTE.butter,
     Boolean(latestPr),
     time,
@@ -741,7 +741,7 @@ function drawCh4Scene(
     ctx,
     xCi,
     gateY,
-    ciPass ? 'CI PASS ✓' : latestPr ? `PR #${latestPr.number}` : 'CI GATE',
+    ciPass ? 'CI PASS' : latestPr ? `PR #${latestPr.number}` : 'CI GATE',
     PALETTE.cream,
     ciPass ? PALETTE.mintDark : PALETTE.butterDark,
     ringColor,
@@ -863,7 +863,7 @@ function drawCh5Scene(
   // Draw the 4 islands & their icons
   islands.forEach((isl, idx) => {
     const isHit = activeIsland === idx;
-    drawZonePad(ctx, isl.x, isl.y, padW, isl.label, isl.sub, isl.color, isHit, time);
+    drawZonePad(ctx, isl.x, isl.y, padW, isl.label, isl.sub, isl.color, isHit, time, idx === 0);
     const iconY = isl.y - dot * 7.2 + Math.sin(time * 2.8 + idx) * 2;
     if (idx === 0) {
       drawPixelSprite(ctx, CLOUD_CASTLE, CLOUD_CASTLE_COLORS, isl.x, iconY - dot * 2, dot * 0.56, 'dot');
@@ -1004,10 +1004,10 @@ function drawCh6Scene(
 
   // SSO & SSH glowing badges above the vault doors
   if (sim.token.ssoAuthorized) {
-    drawPixelBadge(ctx, w * 0.52, h * 0.45, '조직 인증 ✓', PALETTE.cream, PALETTE.skyDark, PALETTE.sky);
+    drawPixelBadge(ctx, w * 0.52, h * 0.45, '조직 인증', PALETTE.cream, PALETTE.skyDark, PALETTE.sky);
   }
   if (sim.token.sshReady) {
-    drawPixelBadge(ctx, w * 0.77, h * 0.45, 'SSH 연결 ✓', PALETTE.cream, PALETTE.mintDark, PALETTE.mint);
+    drawPixelBadge(ctx, w * 0.77, h * 0.45, 'SSH 연결', PALETTE.cream, PALETTE.mintDark, PALETTE.mint);
   }
 }
 
@@ -1104,7 +1104,7 @@ function drawCh7Scene(
     ctx,
     wallX,
     tunnelY + 14,
-    connected ? 'VPN 연결 ✓' : 'VPN 인증 필요',
+    connected ? 'VPN 연결' : 'VPN 인증 필요',
     PALETTE.cream,
     connected ? PALETTE.mintDark : PALETTE.textSecondary,
     connected ? PALETTE.mint : PALETTE.woodBorder,
@@ -1131,6 +1131,7 @@ function drawCh7Scene(
     connected ? PALETTE.mint : PALETTE.woodBorder,
     connected,
     time,
+    true,
   );
 
   // Private Runner mini pod beside castle
@@ -1252,10 +1253,11 @@ function drawCh8Scene(
     wtY,
     padW,
     'AI 작업 폴더',
-    ai.worktreeActive ? ai.worktreeBranch : '방 생성 대기 중',
+    ai.worktreeActive ? ai.worktreeBranch : '생성 대기 중',
     PALETTE.lavender,
     ai.worktreeActive,
     time,
+    ai.worktreeActive,
   );
 
   // Center-Upper: main protection shield barrier!
@@ -1311,7 +1313,7 @@ function drawCh8Scene(
     gateY,
     clamp(w * 0.175, 102, 148),
     '사람 승인',
-    ai.humanApproved ? '승인 완료 ✓' : ai.prNumber ? `PR #${ai.prNumber} 검토 중` : '리뷰 대기',
+    ai.humanApproved ? '승인 완료' : ai.prNumber ? `PR #${ai.prNumber} 검토 중` : '검토 대기',
     ai.humanApproved ? PALETTE.mint : PALETTE.butter,
     Boolean(ai.prNumber) || ai.humanApproved,
     time,
@@ -1323,7 +1325,7 @@ function drawCh8Scene(
     ctx,
     ghX,
     ghY + dot * 10,
-    ai.merged ? '안전 병합 ✓' : 'GitHub',
+    ai.merged ? '병합 완료' : 'GitHub',
     PALETTE.cream,
     ai.merged ? PALETTE.mintDark : PALETTE.skyDark,
     ai.merged ? PALETTE.mint : PALETTE.sky,

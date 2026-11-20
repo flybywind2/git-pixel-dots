@@ -198,6 +198,7 @@ export function drawZonePad(
   accentColor: string,
   highlighted: boolean,
   time = 0,
+  monoSublabel = false,
 ): void {
   const padH = 22;
   const x = cx - width * 0.5;
@@ -256,7 +257,7 @@ export function drawZonePad(
   const nextY = drawWrappedLabel(ctx, label, cx, y + padH + 6, width + 4, labelSize * 1.2);
 
   if (sublabel) {
-    const sublabelSize = setLabelFont(ctx, 12);
+    const sublabelSize = setLabelFont(ctx, 12, monoSublabel);
     ctx.fillStyle = PALETTE.textSecondary;
     drawWrappedLabel(ctx, sublabel, cx, nextY, width + 4, sublabelSize * 1.2);
   }

@@ -1,9 +1,8 @@
 import { create } from 'zustand';
 import { ALL_STAGE_IDS, type PixelSimState, type StageId } from '../types/sim';
-import { createStageState, executePixelCommand, pendingHardReset, resumePracticeBubbles, savePracticeDocument } from '../engine';
+import { createStageState, executePixelCommand, pendingHardReset, savePracticeDocument } from '../engine';
 import { EXAMPLE_DOCUMENT, getDocumentWorkingText } from '../engine/documentDiff';
-
-const SESSION_KEY = 'gitdots.practice.v1';
+import { flushPracticeSaves, readPracticeSessions, writePracticeSession, type PracticeSaveIssue, type PracticeSession } from './practiceStorage';
 
 export function chapterHash(id: StageId): string {
   return `#/chapter/${ALL_STAGE_IDS.indexOf(id) + 1}`;
@@ -23,11 +22,6 @@ export function syncChapterLocation(): StageId {
   return id;
 }
 
-interface PracticeSession {
-  sim: PixelSimState;
-  documentDraft: string | null;
-}
-
 export type PracticeConfirmation =
   | { kind: 'lesson-reset' }
   | { kind: 'replace-draft' }
@@ -36,6 +30,7 @@ export type PracticeConfirmation =
 export interface PixelStore extends PracticeSession {
   stageId: StageId;
   sessions: Partial<Record<StageId, PracticeSession>>;
+  saveIssues: Partial<Record<StageId, PracticeSaveIssue>>;
   history: string[];
   helpOpen: boolean;
   confirmation: PracticeConfirmation | null;
@@ -55,53 +50,17 @@ function freshSession(id: StageId): PracticeSession {
   return { sim: createStageState(id), documentDraft: null };
 }
 
-function readSessions() {
-  const sessions: PixelStore['sessions'] = {};
-  if (typeof window === 'undefined') return sessions;
-  for (const id of ALL_STAGE_IDS) {
-    try {
-      const raw = window.localStorage.getItem(`${SESSION_KEY}.${id}`);
-      if (!raw) continue;
-      const { sim, documentDraft } = JSON.parse(raw) as PracticeSession;
-      if (sim.stageId !== id || !Array.isArray(sim.files) || !sim.index || !sim.branches
-        || !Array.isArray(sim.completedActions) || !Array.isArray(sim.commits)
-        || !sim.commits.every((commit) => commit.tree && Array.isArray(commit.parents))) continue;
-      sessions[id] = {
-        sim: { ...sim, bubbles: resumePracticeBubbles(sim) },
-        documentDraft: typeof documentDraft === 'string' ? documentDraft : null,
-      };
-    } catch {
-      // Treat a missing or unreadable browser save as a fresh chapter.
-    }
-  }
-  return sessions;
-}
-
-function applySession(state: PixelStore, sim: PixelSimState, documentDraft: string | null) {
+function applySession(state: PixelStore, sim: PixelSimState, documentDraft: string | null, defer = false) {
   const current = { sim, documentDraft };
   const sessions = { ...state.sessions, [sim.stageId]: current };
-  if (typeof window !== 'undefined') {
-    try {
-      // Keep repository versions and progress. Terminal input only lives in the page.
-      const resume = {
-        ...sim,
-        lastAnim: { kind: 'IDLE', seq: sim.lastAnim.seq, label: '실습 이어 하기' },
-        terminal: [{
-          id: 'resumed', command: 'welcome', branch: sim.headBranch,
-          lines: [{ text: '저장한 작업과 진행 상태를 불러왔어요.', tone: 'muted' }],
-        }],
-      };
-      window.localStorage.setItem(`${SESSION_KEY}.${sim.stageId}`, JSON.stringify({ sim: resume, documentDraft }));
-    } catch {
-      // The current page still keeps each chapter's work if browser storage is unavailable.
-    }
-  }
-  return { ...current, sessions, notice: null, confirmation: null };
+  const saveIssues = state.saveIssues[sim.stageId] ? { ...state.saveIssues, [sim.stageId]: undefined } : state.saveIssues;
+  writePracticeSession(current, defer);
+  return { ...current, sessions, saveIssues, notice: null, confirmation: null };
 }
 
-function applyDocumentDraft(state: PixelStore, text: string) {
+function applyDocumentDraft(state: PixelStore, text: string, defer = false) {
   const draft = text === getDocumentWorkingText(state.sim) ? null : text;
-  return applySession(state, state.sim, draft);
+  return applySession(state, state.sim, draft, defer);
 }
 
 function execute(state: PixelStore, command: string) {
@@ -113,13 +72,14 @@ function execute(state: PixelStore, command: string) {
   };
 }
 
-const sessions = readSessions();
+const { sessions, issues: saveIssues } = readPracticeSessions();
 const initialStage = typeof window === 'undefined' ? 'docs' : stageFromHash(window.location.hash);
 
 export const usePixelStore = create<PixelStore>((set) => ({
   ...(sessions[initialStage] ?? freshSession(initialStage)),
   stageId: initialStage,
   sessions,
+  saveIssues,
   history: [],
   helpOpen: false,
   confirmation: null,
@@ -128,11 +88,15 @@ export const usePixelStore = create<PixelStore>((set) => ({
   setStage: (id) => {
     const hash = chapterHash(id);
     if (typeof window !== 'undefined' && window.location.hash !== hash) window.location.hash = hash;
-    set((state) => state.stageId === id ? state : {
-      ...(state.sessions[id] ?? freshSession(id)),
-      stageId: id,
-      notice: null,
-      confirmation: null,
+    set((state) => {
+      if (state.stageId === id) return state;
+      flushPracticeSaves();
+      return {
+        ...(state.sessions[id] ?? freshSession(id)),
+        stageId: id,
+        notice: null,
+        confirmation: null,
+      };
     });
   },
 
@@ -140,6 +104,7 @@ export const usePixelStore = create<PixelStore>((set) => ({
     const command = raw.trim();
     if (!command) return state;
     if (command.toLowerCase() === 'reset') return { confirmation: { kind: 'lesson-reset' } };
+    if (state.saveIssues[state.stageId]) return state;
     const unsaved = state.documentDraft !== null && state.documentDraft !== getDocumentWorkingText(state.sim);
     if (unsaved && /^(?:(?:edit|resolve)\b|git\s+(?:add|commit|diff|revert|reset|switch|checkout|stash)\b)/i.test(command)) {
       return { notice: '먼저 문서를 저장하세요. 지금 편집한 내용은 아직 작업 파일에 반영되지 않았어요.' };
@@ -158,7 +123,7 @@ export const usePixelStore = create<PixelStore>((set) => ({
     return applySession(state, createStageState(state.stageId), null);
   }),
 
-  setDocumentDraft: (text) => set((state) => applyDocumentDraft(state, text)),
+  setDocumentDraft: (text) => set((state) => applyDocumentDraft(state, text, true)),
 
   loadExampleDocument: () => set((state) => {
     if (state.documentDraft !== null && state.documentDraft !== EXAMPLE_DOCUMENT) {

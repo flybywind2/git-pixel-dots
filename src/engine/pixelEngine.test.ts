@@ -11,6 +11,7 @@ import {
   savePracticeDocument,
 } from './index';
 import { diffDocumentLines, DOCUMENT_COMPARISONS, DOCUMENT_PATH, getDocumentComparison, ORIGINAL_DOCUMENT } from './documentDiff';
+import { ATTENDANCE_DOCUMENT, ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, MISTAKEN_NOTICE_PATH } from './meetingExample';
 
 function deepFreeze<T>(obj: T): T {
   if (obj && typeof obj === 'object' && !Object.isFrozen(obj)) {
@@ -53,6 +54,7 @@ describe('GitDots scenarios & initial stage presets', () => {
   it('defines the ordered stages with cheat sheets', () => {
     expect(STAGE_SCENARIOS.map((scenario) => scenario.id)).toEqual(ALL_STAGE_IDS);
     expect(STAGE_SCENARIOS.map((scenario) => scenario.number)).toEqual(ALL_STAGE_IDS.map((_, index) => index + 1));
+    expect(STAGE_SCENARIOS.filter((scenario) => scenario.track === 'basic').map(({ number }) => number)).toEqual([1, 2, 3, 4]);
     for (const id of ALL_STAGE_IDS) {
       const scenario = STAGE_MAP[id];
       expect(scenario).toBeDefined();
@@ -60,6 +62,11 @@ describe('GitDots scenarios & initial stage presets', () => {
       expect(scenario.steps.length).toBeGreaterThanOrEqual(3);
       expect(scenario.chips.length).toBeGreaterThanOrEqual(5);
       expect(scenario.cheatSheet.length).toBeGreaterThanOrEqual(5);
+      for (const chip of scenario.chips) {
+        if (chip.stepIndex === undefined) continue;
+        const { command, label } = scenario.steps[chip.stepIndex];
+        expect(chip).toMatchObject({ command, label });
+      }
     }
   });
 
@@ -67,6 +74,10 @@ describe('GitDots scenarios & initial stage presets', () => {
     for (const id of ALL_STAGE_IDS) {
       const state = createStageState(id);
       expect(state.stageId).toBe(id);
+      if (STAGE_MAP[id].track === 'basic') {
+        expect(state.files.every(({ name }) => name.endsWith('.md'))).toBe(true);
+        expect(state.commits.every(({ tree }) => Object.keys(tree).every((path) => path.endsWith('.md')))).toBe(true);
+      }
       expect(state.lastAnim.kind).toBe('IDLE');
       expect(state.lastAnim.seq).toBe(0);
       expect(state.completedActions).toEqual([]);
@@ -113,14 +124,15 @@ describe('Full stage walkthroughs', () => {
     expect(s.lastAnim.kind).toBe('IDLE');
     expect(s.lastAnim.seq).toBe(1);
 
-    s = deepFreeze(executePixelCommand(s, 'edit app.js'));
+    s = deepFreeze(executePixelCommand(s, `edit ${DOCUMENT_PATH}`));
     expect(s.lastAnim.kind).toBe('EDIT');
+    expect(s.files.find((f) => f.name === DOCUMENT_PATH)?.content).toContain('스터디 준비 사항을 확인했어요.');
 
     s = deepFreeze(executePixelCommand(s, 'git add .'));
     expect(s.lastAnim.kind).toBe('ADD');
-    expect(s.staged).toContain('app.js');
-    expect(s.staged).toContain('style.css');
-    expect(s.files.find((f) => f.name === 'app.js')?.status).toBe('staged');
+    expect(s.staged).toContain(DOCUMENT_PATH);
+    expect(s.staged).toContain(ATTENDANCE_PATH);
+    expect(s.files.find((f) => f.name === DOCUMENT_PATH)?.status).toBe('staged');
 
     s = deepFreeze(executePixelCommand(s, 'git commit -m "첫 세이브"'));
     expect(s.lastAnim.kind).toBe('COMMIT');
@@ -175,19 +187,19 @@ describe('Full stage walkthroughs', () => {
   it('restores the files in each stash and keeps the entry when newer edits overlap', () => {
     const initial = createStageState('ch1');
     let s = executePixelCommand(initial, 'git stash');
-    expect(s.files.find((file) => file.name === 'style.css')?.status).toBe('untracked');
-    s = executePixelCommand(s, 'edit app.js');
-    const edited = s.files.find((file) => file.name === 'app.js')?.content;
+    expect(s.files.find((file) => file.name === ATTENDANCE_PATH)?.status).toBe('untracked');
+    s = executePixelCommand(s, `edit ${DOCUMENT_PATH}`);
+    const edited = s.files.find((file) => file.name === DOCUMENT_PATH)?.content;
     s = executePixelCommand(s, 'git stash pop');
     expect(s.stashCount).toBe(1);
-    expect(s.files.find((file) => file.name === 'app.js')?.content).toBe(edited);
+    expect(s.files.find((file) => file.name === DOCUMENT_PATH)?.content).toBe(edited);
     s = executePixelCommand(s, 'git stash -u');
     expect(s.stashCount).toBe(2);
-    expect(s.files.some((file) => file.name === 'style.css')).toBe(false);
+    expect(s.files.some((file) => file.name === ATTENDANCE_PATH)).toBe(false);
     s = executePixelCommand(s, 'git stash pop');
     expect(s.stashCount).toBe(1);
-    expect(s.files.find((file) => file.name === 'style.css')).toEqual(initial.files[1]);
-    expect(s.files.find((file) => file.name === 'app.js')?.content).toBe(edited);
+    expect(s.files.find((file) => file.name === ATTENDANCE_PATH)).toEqual(initial.files[1]);
+    expect(s.files.find((file) => file.name === DOCUMENT_PATH)?.content).toBe(edited);
   });
 
   it('Ch3: branch switch, deterministic merge conflict with 1-click actions, resolve, commit, rebase', () => {
@@ -235,7 +247,7 @@ describe('Full stage walkthroughs', () => {
     expect(s.conflict).toBeNull();
     expect(s.commits[s.commits.length - 1]?.isMerge).toBe(true);
     expect(s.commits[s.commits.length - 1]?.parents.length).toBe(2);
-    expect(s.bubbles[0]?.title).toContain('4장 실습 완료');
+    expect(s.bubbles[0]?.title).toContain('5장 실습 완료');
 
     const before = s.branches['feat/dark'];
     s = deepFreeze(executePixelCommand(s, 'git rebase main'));
@@ -260,17 +272,20 @@ describe('Full stage walkthroughs', () => {
     let s = runSequence('ch4', [
       'git fetch',
       'git pull origin main',
-      'git push',
-      'gh pr create --title "새 기능"',
+      `git push -u origin ${MEETING_PR_BRANCH}`,
+      `gh pr create --title "${MEETING_PR_TITLE}"`,
       'gh pr merge',
     ]);
     expect(s.completedActions).toEqual(
       expect.arrayContaining(['FETCH', 'PULL', 'PUSH', 'PR_CREATE', 'PR_MERGE']),
     );
     expect(s.prs).toHaveLength(1);
-    expect(s.prs[0]?.title).toBe('새 기능');
+    expect(s.prs[0]?.title).toBe(MEETING_PR_TITLE);
     expect(s.prs[0]?.status).toBe('merged');
-    expect(s.bubbles[0]?.title).toContain('5장 실습 완료');
+    const remoteTree = s.commits.find((commit) => commit.id === s.remoteBranches.main)?.tree;
+    expect(remoteTree?.[DOCUMENT_PATH]).toContain('2층 모임방');
+    expect(remoteTree?.[ATTENDANCE_PATH]).toBe(ATTENDANCE_DOCUMENT);
+    expect(s.bubbles[0]?.title).toContain('4장 실습 완료');
   });
 
   it('Ch5: gh CLI full walkthrough (auth, repo, pr, issue, run watch, api)', () => {
@@ -558,8 +573,8 @@ describe('Git file snapshots', () => {
   it('reverts tracked additions and leaves unrelated working edits intact', () => {
     const before = createStageState('ch2');
     const state = executePixelCommand(before, 'git revert 7e8f9a0');
-    expect(state.files.some((file) => file.name === 'test-mode.js')).toBe(false);
-    expect(state.files.find((file) => file.name === 'app.js')).toEqual(before.files[0]);
+    expect(state.files.some((file) => file.name === MISTAKEN_NOTICE_PATH)).toBe(false);
+    expect(state.files.find((file) => file.name === DOCUMENT_PATH)).toEqual(before.files[0]);
     expect(state.index).toEqual(before.commits[1]?.tree);
   });
 
@@ -567,8 +582,8 @@ describe('Git file snapshots', () => {
     let state = runSequence('ch2', [
       "git branch original",
       "edit 'draft file.md'",
-      'edit app.js',
-      'git add app.js',
+      `edit ${DOCUMENT_PATH}`,
+      `git add ${DOCUMENT_PATH}`,
     ]);
     const rejected = executePixelCommand(state, 'git reset --hard unknown');
     expect(rejected.files).toBe(state.files);
@@ -576,14 +591,14 @@ describe('Git file snapshots', () => {
     state = executePixelCommand(state, 'git reset --hard HEAD~2');
     expect(state.branches.main).toBe('c1');
     expect(state.index).toEqual(state.commits[0]?.tree);
-    expect(state.files.find((file) => file.name === 'app.js')?.content).toBe('// 프로젝트 시작');
+    expect(state.files.find((file) => file.name === DOCUMENT_PATH)?.content).toBe(ORIGINAL_DOCUMENT);
     expect(state.files.find((file) => file.name === 'draft file.md')?.status).toBe('untracked');
-    expect(state.files.some((file) => file.name === 'test-mode.js')).toBe(false);
+    expect(state.files.some((file) => file.name === MISTAKEN_NOTICE_PATH)).toBe(false);
     expect(state.staged).toEqual([]);
 
     state = executePixelCommand(state, 'git reset --hard original');
     expect(state.branches.main).toBe('c3');
-    expect(state.files.find((file) => file.name === 'test-mode.js')?.content).toBe('export const testMode = true;');
+    expect(state.files.find((file) => file.name === MISTAKEN_NOTICE_PATH)?.content).toContain('이번 모임은 취소됐어요.');
   });
 
   it('switches tracked versions, preserves independent edits and refuses to overwrite local work', () => {
@@ -624,7 +639,7 @@ describe('Utility commands, unknown commands & autocomplete', () => {
 
     s = deepFreeze(executePixelCommand(s, 'clear'));
     expect(s.terminal).toHaveLength(1);
-    expect(s.staged).toContain('app.js');
+    expect(s.staged).toContain(DOCUMENT_PATH);
 
     s = deepFreeze(executePixelCommand(s, 'reset'));
     expect(s.staged).toEqual([]);

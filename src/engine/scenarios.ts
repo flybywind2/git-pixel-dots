@@ -1,5 +1,6 @@
-import type { StageId, StageScenario } from '../types/sim';
-import { DOCUMENT_COMPARISONS } from './documentDiff';
+import { ALL_STAGE_IDS, type CommandChip, type StageId, type StageScenario } from '../types/sim';
+import { DOCUMENT_COMPARISONS, DOCUMENT_REVERT } from './documentDiff';
+import { ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, MISTAKEN_NOTICE_PATH } from './meetingExample';
 
 const { working, staged, commits } = DOCUMENT_COMPARISONS;
 
@@ -7,10 +8,12 @@ export function isPracticeCommand(command: string): boolean {
   return !/^(git|gh)\s/.test(command);
 }
 
-export const STAGE_SCENARIOS: StageScenario[] = [
-  {
-    id: 'docs',
-    number: 1,
+type LessonContent = Omit<StageScenario, 'id' | 'number' | 'chips'> & {
+  chips: (Omit<CommandChip, 'stepIndex'> | { stepIndex: number })[];
+};
+
+const LESSON_CONTENT: Record<StageId, LessonContent> = {
+  docs: {
     track: 'basic',
     shortTitle: '문서 편집과 비교',
     title: '회의록을 고치고 바뀐 줄 찾기',
@@ -31,31 +34,29 @@ export const STAGE_SCENARIOS: StageScenario[] = [
     ],
     chips: [
       { command: 'git status', label: '문서 상태' },
-      { command: working.command, label: '작업 중 비교', stepIndex: 1 },
-      { command: 'git add 회의록.md', label: '스테이징', stepIndex: 2 },
-      { command: staged.command, label: '스테이징 비교', stepIndex: 3 },
-      { command: 'git commit -m "모임 안내 수정"', label: '문서 커밋', stepIndex: 4 },
-      { command: commits.command, label: '커밋 비교', stepIndex: 5 },
-      { command: 'git revert HEAD', label: '마지막 변경 취소' },
+      { stepIndex: 1 },
+      { stepIndex: 2 },
+      { stepIndex: 3 },
+      { stepIndex: 4 },
+      { stepIndex: 5 },
+      DOCUMENT_REVERT,
     ],
     cheatSheet: [
-      { cmd: 'git revert HEAD', desc: '최근 기록의 변경을 취소하는 새 커밋을 만들어요. 완료 뒤 회의록을 예전 내용으로 돌려 보세요.' },
+      { cmd: DOCUMENT_REVERT.command, desc: '최근 기록의 변경을 취소하는 새 커밋을 만들어요. 완료 뒤 회의록을 예전 내용으로 돌려 보세요.' },
       { cmd: 'edit 회의록.md', desc: '스터디 시간이 바뀐 예시를 작업 문서에 바로 저장해요. 원하는 글은 편집기에 직접 쓸 수 있어요.' },
       { cmd: working.command, desc: '스테이징 영역과 현재 작업 문서를 비교해요. 스테이징 이후에 문서를 더 고쳤을 때 어떤 내용이 추가로 바뀌었는지 알 수 있어요.' },
       { cmd: 'git add 회의록.md', desc: '지금 저장한 문서의 복사본을 다음 커밋에 담아요.' },
       { cmd: staged.command, desc: '최근 커밋과 스테이징 영역을 비교해 다음 커밋에 들어갈 변경을 확인해요.' },
       { cmd: 'git commit -m "모임 안내 수정"', desc: '스테이징 영역에 담긴 문서를 새 커밋으로 기록해요.' },
-      { cmd: commits.command, desc: 'HEAD는 최근 커밋, HEAD~1은 그 바로 이전 커밋이에요. 두 기록의 문서에서 어느 줄이 바뀌었는지 보여줘요.' },
+      { cmd: commits.command, desc: 'HEAD는 현재 커밋이에요. HEAD~1은 바로 이전 커밋이에요. 두 기록의 문서에서 어느 줄이 바뀌었는지 보여줘요.' },
     ],
   },
-  {
-    id: 'ch1',
-    number: 2,
+  ch1: {
     track: 'basic',
     shortTitle: '변경 기록과 공유',
     title: '변경 사항을 커밋하고 공유하기',
-    tagline: '프로젝트의 시작 커밋이 이미 있어요. 수정한 파일을 골라 새 기록을 남기고, 팀원이 볼 수 있도록 GitHub에 올려 보세요.',
-    takeaway: 'add로 변경을 고르고, commit으로 내 컴퓨터에 기록하고, push로 그 커밋을 GitHub에 공유했어요.',
+    tagline: `저장소에 회의록 초안이 있어요. 모임 시간을 고친 회의록과 새로 쓴 ${ATTENDANCE_PATH}를 기록하고 팀에 공유해 보세요.`,
+    takeaway: '회의록과 참석 안내의 변경을 골라 커밋으로 남기고, 팀이 볼 수 있도록 GitHub에 공유했어요.',
     accent: '#5eead4',
     terms: [
       { name: '스테이징 영역', meaning: '다음 커밋에 넣을 변경을 고르는 곳이에요.' },
@@ -65,7 +66,7 @@ export const STAGE_SCENARIOS: StageScenario[] = [
       {
         id: 'ch1-add',
         label: '공유할 변경 담기',
-        goal: '두 파일의 변경을 다음 커밋에 담기',
+        goal: '회의록.md와 참석안내.md의 변경을 다음 커밋에 담기',
         command: 'git add .',
         doneAction: 'ADD',
       },
@@ -86,51 +87,49 @@ export const STAGE_SCENARIOS: StageScenario[] = [
     ],
     chips: [
       { command: 'git status', label: '상태 보기' },
-      { command: 'edit app.js', label: '파일 수정' },
-      { command: 'git add .', label: '변경 고르기', stepIndex: 0 },
-      { command: 'git commit -m "변경 사항 기록"', label: '커밋 만들기', stepIndex: 1 },
-      { command: 'git push', label: 'GitHub에 올리기', stepIndex: 2 },
+      { command: 'edit 회의록.md', label: '회의록 예시 수정' },
+      { stepIndex: 0 },
+      { stepIndex: 1 },
+      { stepIndex: 2 },
     ],
     cheatSheet: [
       { cmd: 'git status', desc: '지금 수정·추가된 파일 상태를 한눈에 확인해요' },
-      { cmd: 'edit app.js', desc: '실습 파일 app.js에 변경을 만들어요' },
+      { cmd: 'edit 회의록.md', desc: '스터디 준비 사항을 회의록에 한 줄 추가해요.' },
       { cmd: 'git add .', desc: '현재 폴더와 하위 폴더의 변경을 스테이징 영역에 담아요. 다음 커밋에 포함할 내용을 고르는 곳이에요.' },
       { cmd: 'git commit -m "변경 사항 기록"', desc: '고른 변경을 내 저장소에 기록해요. -m 뒤의 글이 커밋 메시지가 돼요.' },
       { cmd: 'git push', desc: '내 브랜치의 새 커밋을 연결된 원격 저장소로 보내요' },
     ],
   },
-  {
-    id: 'ch2',
-    number: 3,
+  ch2: {
     track: 'basic',
     shortTitle: '보관과 취소',
     title: '작업 도중에 지난 커밋을 취소하려면?',
-    tagline: 'app.js를 수정하던 중 지난 커밋의 실수를 발견했어요. 지금 작업을 잠시 보관해 두면 지난 변경부터 되돌릴 수 있어요.',
+    tagline: `회의록에 준비물을 적다가 실수로 올린 ${MISTAKEN_NOTICE_PATH}를 발견했어요. 회의록 수정을 잠시 보관하고 잘못 올린 안내부터 되돌려 보세요.`,
     takeaway: 'stash로 하던 일을 보관하고, revert로 지난 변경을 취소하는 커밋을 남겼어요. stash pop으로 중단했던 작업도 되찾았어요.',
     accent: '#fbbf24',
     terms: [
       { name: 'stash', meaning: '작업 중인 변경을 잠시 맡기는 보관함이에요. stash pop으로 적용에 성공하면 그 항목을 보관함에서 꺼내요.' },
-      { name: 'HEAD', meaning: '지금 작업 중인 커밋을 가리켜요. HEAD~1은 그 커밋의 첫 번째 부모예요.' },
+      { name: 'HEAD', meaning: '현재 커밋을 가리켜요. HEAD~1은 바로 이전 커밋이에요.' },
     ],
     steps: [
       {
         id: 'ch2-stash',
         label: '작업 임시 보관',
-        goal: '아직 커밋하지 않은 app.js 변경을 잠시 보관하기',
+        goal: '아직 커밋하지 않은 회의록 수정을 잠시 보관하기',
         command: 'git stash',
         doneAction: 'STASH',
       },
       {
         id: 'ch2-revert',
         label: '지난 변경 취소',
-        goal: '마지막 커밋의 변경을 취소하는 새 커밋 만들기',
+        goal: '잘못 올린 임시안내.md를 취소하는 새 커밋 만들기',
         command: 'git revert HEAD',
         doneAction: 'REVERT',
       },
       {
         id: 'ch2-stash-pop',
         label: '보관한 작업 복원',
-        goal: '보관했던 app.js 변경을 꺼내 작업 이어가기',
+        goal: '보관했던 회의록 수정을 꺼내 작업 이어가기',
         command: 'git stash pop',
         doneAction: 'STASH_POP',
       },
@@ -138,9 +137,9 @@ export const STAGE_SCENARIOS: StageScenario[] = [
     chips: [
       { command: 'git status', label: '상태 보기' },
       { command: 'git log', label: '기록 보기' },
-      { command: 'git stash', label: '변경 임시 보관', stepIndex: 0 },
-      { command: 'git revert HEAD', label: '지난 변경 취소', stepIndex: 1 },
-      { command: 'git stash pop', label: '작업 복원', stepIndex: 2 },
+      { stepIndex: 0 },
+      { stepIndex: 1 },
+      { stepIndex: 2 },
       { command: 'git reset --soft HEAD~1', label: '커밋만 되감기' },
     ],
     cheatSheet: [
@@ -149,12 +148,67 @@ export const STAGE_SCENARIOS: StageScenario[] = [
       { cmd: 'git stash', desc: '아직 커밋하지 않은 변경을 임시 보관해요.' },
       { cmd: 'git stash pop', desc: '임시 보관한 변경을 작업 폴더에 다시 적용해요.' },
       { cmd: 'git revert HEAD', desc: 'HEAD는 현재 커밋이에요. 그 변경을 취소하는 새 커밋을 만들어요.' },
-      { cmd: 'git reset --soft HEAD~1', desc: '현재 브랜치를 이전 커밋으로 옮겨요. 작업 파일과 스테이징 영역은 그대로예요.' },
+      { cmd: 'git reset --soft HEAD~1', desc: 'HEAD~1은 바로 이전 커밋이에요. 작업 파일과 스테이징 영역을 유지하면서 현재 브랜치를 그 커밋으로 옮겨요.' },
     ],
   },
-  {
-    id: 'ch3',
-    number: 4,
+  ch4: {
+    track: 'basic',
+    shortTitle: 'GitHub 협업',
+    title: '팀에 회의록 수정 제안하기',
+    tagline: '브랜치는 기본 문서를 그대로 두고 따로 수정할 수 있는 작업 갈래예요. 장소를 바꾼 회의록을 GitHub에 올리고 검토 요청(풀 리퀘스트, PR)을 열어 보세요.',
+    takeaway: '회의록을 고친 브랜치를 공유하고 PR로 검토했어요. 병합한 뒤에는 GitHub의 기본 브랜치(main)에서 바뀐 장소를 볼 수 있어요.',
+    accent: '#38bdf8',
+    terms: [
+      { name: '브랜치', meaning: '별도로 작업을 이어 갈 커밋을 가리키는 이름이에요. main은 팀의 기본 브랜치예요.' },
+      { name: '원격 저장소', meaning: '내 컴퓨터에서 연결해 둔 다른 저장소예요. 여기서는 팀이 GitHub에 둔 저장소를 뜻해요.' },
+      { name: '풀 리퀘스트(PR)', meaning: '한 브랜치의 변경을 다른 브랜치에 합치자는 제안이에요. 팀원이 바뀐 줄을 보고 의견을 남길 수 있어요.' },
+    ],
+    steps: [
+      {
+        id: 'ch4-fetch',
+        label: '최신 기록 확인',
+        goal: 'GitHub의 최신 커밋 정보를 내 컴퓨터에 가져오기',
+        command: 'git fetch',
+        doneAction: 'FETCH',
+      },
+      {
+        id: 'ch4-push',
+        label: '팀에 공유하기',
+        goal: '회의록을 고친 작업 브랜치를 GitHub에 올리기',
+        command: `git push -u origin ${MEETING_PR_BRANCH}`,
+        doneAction: 'PUSH',
+      },
+      {
+        id: 'ch4-pr-create',
+        label: '검토 요청하기',
+        goal: '회의록 변경을 기본 브랜치(main)에 합치자고 PR 열기',
+        command: `gh pr create --title "${MEETING_PR_TITLE}"`,
+        doneAction: 'PR_CREATE',
+      },
+      {
+        id: 'ch4-pr-merge',
+        label: '검토한 변경 합치기',
+        goal: '예제의 검사가 끝난 PR을 main에 합치기',
+        command: 'gh pr merge',
+        doneAction: 'PR_MERGE',
+      },
+    ],
+    chips: [
+      { stepIndex: 0 },
+      { command: 'git pull origin main', label: '팀의 변경 가져오기' },
+      { stepIndex: 1 },
+      { stepIndex: 2 },
+      { stepIndex: 3 },
+    ],
+    cheatSheet: [
+      { cmd: 'git fetch', desc: '원격의 새 커밋과 브랜치 정보를 받아 와요. 현재 작업 파일은 그대로예요.' },
+      { cmd: 'git pull origin main', desc: '원격 최신 커밋을 가져와 내 브랜치에 바로 합쳐요' },
+      { cmd: `git push -u origin ${MEETING_PR_BRANCH}`, desc: '새 브랜치를 처음 올리고 연결할 원격 브랜치를 정해요. 그다음부터는 git push로 보낼 수 있어요.' },
+      { cmd: `gh pr create --title "${MEETING_PR_TITLE}"`, desc: '팀원에게 회의록 변경을 검토해 달라는 PR을 열어요.' },
+      { cmd: 'gh pr merge', desc: '검토와 테스트를 마친 PR을 기본 브랜치(main)에 병합해요.' },
+    ],
+  },
+  ch3: {
     track: 'advanced',
     shortTitle: '브랜치와 충돌',
     title: '두 사람이 같은 줄을 고쳤다면?',
@@ -197,11 +251,11 @@ export const STAGE_SCENARIOS: StageScenario[] = [
     ],
     chips: [
       { command: 'git branch', label: '브랜치 목록' },
-      { command: 'git switch -c feat/dark', label: '새 브랜치 만들기', stepIndex: 0 },
+      { stepIndex: 0 },
       { command: 'git switch main', label: '기본 브랜치로 이동' },
-      { command: 'git merge feature/ui', label: '두 버전 합치기', stepIndex: 1 },
-      { command: 'resolve both', label: '두 변경 함께 남기기', stepIndex: 2 },
-      { command: 'git commit', label: '합친 내용 기록하기', stepIndex: 3 },
+      { stepIndex: 1 },
+      { stepIndex: 2 },
+      { stepIndex: 3 },
       { command: 'git rebase main', label: '기본 기록 위로 옮기기' },
     ],
     cheatSheet: [
@@ -210,71 +264,11 @@ export const STAGE_SCENARIOS: StageScenario[] = [
       { cmd: 'git switch main', desc: '다른 브랜치로 이동해요' },
       { cmd: 'git merge feature/ui', desc: '다른 브랜치의 작업을 현재 브랜치로 합쳐요' },
       { cmd: 'resolve both', desc: '실습에서 두 변경을 함께 반영해요. 실제 Git에서는 충돌한 파일을 편집하고 git add로 해결을 표시해요.' },
-      { cmd: 'git commit', desc: '충돌 해결을 마친 뒤 머지 커밋을 기록해요' },
+      { cmd: 'git commit', desc: '충돌을 해결한 뒤 병합 결과를 커밋으로 남겨요.' },
       { cmd: 'git rebase main', desc: '내 커밋을 main 위로 옮겨 한 줄로 깔끔히 정리해요' },
     ],
   },
-  {
-    id: 'ch4',
-    number: 5,
-    track: 'basic',
-    shortTitle: 'GitHub 협업',
-    title: '내 브랜치의 변경을 팀에 제안하기',
-    tagline: '새 기능을 feat/sparkle 브랜치에 커밋해 두었어요. GitHub에서 변경을 검토하고 합치자고 제안하는 글을 풀 리퀘스트(PR)라고 해요.',
-    takeaway: 'push로 브랜치를 공유하고 PR에서 변경을 검토했어요. 병합한 뒤에는 main에도 새 기능이 들어 있어요.',
-    accent: '#38bdf8',
-    terms: [
-      { name: '원격 저장소', meaning: '내 컴퓨터에서 연결해 둔 다른 저장소예요. 여기서는 팀이 GitHub에 둔 저장소를 뜻해요.' },
-      { name: '풀 리퀘스트(PR)', meaning: '한 브랜치의 변경을 다른 브랜치에 합치자는 제안이에요. 팀원이 바뀐 코드를 보고 의견을 남길 수 있어요.' },
-    ],
-    steps: [
-      {
-        id: 'ch4-fetch',
-        label: '최신 기록 확인',
-        goal: 'GitHub의 최신 커밋 정보를 내 컴퓨터에 가져오기',
-        command: 'git fetch',
-        doneAction: 'FETCH',
-      },
-      {
-        id: 'ch4-push',
-        label: '팀에 공유하기',
-        goal: '내 작업 브랜치를 GitHub에 올리기',
-        command: 'git push -u origin feat/sparkle',
-        doneAction: 'PUSH',
-      },
-      {
-        id: 'ch4-pr-create',
-        label: '검토 요청하기',
-        goal: 'feat/sparkle을 main에 합치자고 PR 열기',
-        command: 'gh pr create --title "새 기능"',
-        doneAction: 'PR_CREATE',
-      },
-      {
-        id: 'ch4-pr-merge',
-        label: '검토한 변경 합치기',
-        goal: '예제의 검사가 끝난 PR을 main에 합치기',
-        command: 'gh pr merge',
-        doneAction: 'PR_MERGE',
-      },
-    ],
-    chips: [
-      { command: 'git fetch', label: '최신 기록 확인', stepIndex: 0 },
-      { command: 'git pull origin main', label: '팀의 변경 가져오기' },
-      { command: 'git push -u origin feat/sparkle', label: '팀에 공유하기', stepIndex: 1 },
-      { command: 'gh pr create --title "새 기능"', label: '검토 요청하기', stepIndex: 2 },
-      { command: 'gh pr merge', label: '검토한 변경 합치기', stepIndex: 3 },
-    ],
-    cheatSheet: [
-      { cmd: 'git fetch', desc: '원격의 새 커밋과 브랜치 정보를 받아 와요. 현재 작업 파일은 그대로예요.' },
-      { cmd: 'git pull origin main', desc: '원격 최신 커밋을 가져와 내 브랜치에 바로 합쳐요' },
-      { cmd: 'git push -u origin feat/sparkle', desc: '새 브랜치를 처음 올리고 연결할 원격 브랜치를 정해요. 그다음부터는 git push로 보낼 수 있어요.' },
-      { cmd: 'gh pr create --title "새 기능"', desc: '팀원에게 코드 리뷰를 요청하는 PR을 열어요' },
-      { cmd: 'gh pr merge', desc: '리뷰·테스트가 끝난 PR을 main에 합쳐요' },
-    ],
-  },
-  {
-    id: 'ch5',
-    number: 6,
+  ch5: {
     track: 'advanced',
     shortTitle: 'GitHub CLI',
     title: '터미널에서 PR과 이슈 만들기',
@@ -316,11 +310,11 @@ export const STAGE_SCENARIOS: StageScenario[] = [
       },
     ],
     chips: [
-      { command: 'gh auth status', label: '로그인 상태 확인', stepIndex: 0 },
-      { command: 'gh pr create --title "다크모드"', label: '검토 요청하기', stepIndex: 1 },
-      { command: 'gh issue create --title "버그 수정"', label: '버그 등록하기', stepIndex: 2 },
+      { stepIndex: 0 },
+      { stepIndex: 1 },
+      { stepIndex: 2 },
       { command: 'gh run watch', label: '자동 검사 지켜보기' },
-      { command: 'gh api repos/gitdots/app', label: '저장소 정보 보기', stepIndex: 3 },
+      { stepIndex: 3 },
     ],
     cheatSheet: [
       { cmd: 'gh auth status', desc: '현재 로그인된 계정과 권한을 확인해요' },
@@ -332,9 +326,7 @@ export const STAGE_SCENARIOS: StageScenario[] = [
       { cmd: 'gh api repos/gitdots/app', desc: '연습 저장소 gitdots/app의 정보를 JSON 형식으로 받아요' },
     ],
   },
-  {
-    id: 'ch6',
-    number: 7,
+  ch6: {
     track: 'advanced',
     shortTitle: '인증과 권한',
     title: '토큰이 접근할 저장소와 권한 고르기',
@@ -376,10 +368,10 @@ export const STAGE_SCENARIOS: StageScenario[] = [
       },
     ],
     chips: [
-      { command: 'token classic', label: '넓은 권한 살펴보기', stepIndex: 0 },
-      { command: 'token fine', label: '필요한 권한만 주기', stepIndex: 1 },
-      { command: 'token sso', label: '회사 계정 인증하기', stepIndex: 2 },
-      { command: 'token ssh', label: '연결 키 준비하기', stepIndex: 3 },
+      { stepIndex: 0 },
+      { stepIndex: 1 },
+      { stepIndex: 2 },
+      { stepIndex: 3 },
       { command: 'token leak-test', label: '유출 차단 확인' },
       { command: 'gh auth login --with-token', label: '토큰으로 로그인' },
     ],
@@ -388,13 +380,11 @@ export const STAGE_SCENARIOS: StageScenario[] = [
       { cmd: 'token fine', desc: '저장소·권한을 딱 필요한 만큼만 주는 github_pat_ 토큰이에요' },
       { cmd: 'token sso', desc: 'SSO(통합 로그인)를 사용하는 예제 조직에서 회사 계정의 신원을 확인해요' },
       { cmd: 'token ssh', desc: '공개키·비밀키 쌍으로 안전하게 Git 인증을 설정해요' },
-      { cmd: 'token leak-test', desc: 'Push Protection이 실수 유출을 막는 장면을 체험해요' },
+      { cmd: 'token leak-test', desc: '토큰이 담긴 변경을 올릴 때 비밀 정보 유출 방지 기능이 전송을 차단하는 과정을 확인해요.' },
       { cmd: 'gh auth login --with-token', desc: '토큰을 표준 입력으로 읽는 로그인 예제예요. 실습은 가상 인증으로 끝나요.' },
     ],
   },
-  {
-    id: 'ch7',
-    number: 8,
+  ch7: {
     track: 'advanced',
     shortTitle: '사내 GitHub',
     title: '회사에서 운영하는 GitHub에 접속하기',
@@ -436,10 +426,10 @@ export const STAGE_SCENARIOS: StageScenario[] = [
       },
     ],
     chips: [
-      { command: 'ghes test-public', label: '외부 전송 차단 확인', stepIndex: 0 },
-      { command: 'gh auth login --hostname github.corp.internal', label: '사내 서버 로그인', stepIndex: 1 },
-      { command: 'gh api user --hostname github.corp.internal', label: '내 계정 정보 보기', stepIndex: 2 },
-      { command: 'ghes runner', label: '자동 빌드 돌리기', stepIndex: 3 },
+      { stepIndex: 0 },
+      { stepIndex: 1 },
+      { stepIndex: 2 },
+      { stepIndex: 3 },
       { command: 'ghes cloud', label: '공용 서버와 비교' },
     ],
     cheatSheet: [
@@ -450,9 +440,7 @@ export const STAGE_SCENARIOS: StageScenario[] = [
       { cmd: 'ghes cloud', desc: 'GitHub.com 클라우드와 사내 GHES의 차이를 비교해요' },
     ],
   },
-  {
-    id: 'ch8',
-    number: 9,
+  ch8: {
     track: 'advanced',
     shortTitle: 'AI와 협업',
     title: 'AI가 고친 코드를 검토하고 합치기',
@@ -501,21 +489,35 @@ export const STAGE_SCENARIOS: StageScenario[] = [
       },
     ],
     chips: [
-      { command: 'git worktree add -b ai/fix wt-ai', label: 'AI 작업 폴더 만들기', stepIndex: 0 },
-      { command: 'ai code', label: '덧셈 오류 고치기', stepIndex: 1 },
-      { command: 'ai push-main', label: '직접 공유 제한 확인', stepIndex: 2 },
-      { command: 'ai pr', label: '검토 초안과 테스트 확인', stepIndex: 3 },
-      { command: 'ai approve', label: '승인하고 합치기', stepIndex: 4 },
+      { stepIndex: 0 },
+      { stepIndex: 1 },
+      { stepIndex: 2 },
+      { stepIndex: 3 },
+      { stepIndex: 4 },
     ],
     cheatSheet: [
       { cmd: 'git worktree add -b ai/fix wt-ai', desc: 'AI가 쓸 별도 작업 폴더(worktree)를 열어요.' },
       { cmd: 'ai code', desc: 'AI가 독립 브랜치에서 버그를 고치고 테스트를 돌려요' },
-      { cmd: 'ai push-main', desc: 'Branch Protection이 AI의 main 직접 푸시를 막아요' },
-      { cmd: 'ai pr', desc: 'AI가 Draft PR을 올리고 자동 CI 검증을 통과해요' },
+      { cmd: 'ai push-main', desc: '브랜치 보호 규칙이 AI가 기본 브랜치(main)에 직접 올리는 변경을 막아요.' },
+      { cmd: 'ai pr', desc: 'AI가 초안 PR을 열고 자동 테스트를 통과해요.' },
       { cmd: 'ai approve', desc: '사람이 변경을 확인하고 승인한 뒤 합쳐요.' },
     ],
   },
-];
+};
+
+export const STAGE_SCENARIOS: StageScenario[] = ALL_STAGE_IDS.map((id, index) => {
+  const { chips, ...lesson } = LESSON_CONTENT[id];
+  return {
+    ...lesson,
+    id,
+    number: index + 1,
+    chips: chips.map((chip) => {
+      if (!('stepIndex' in chip)) return chip;
+      const { command, label } = lesson.steps[chip.stepIndex];
+      return { command, label, stepIndex: chip.stepIndex };
+    }),
+  };
+});
 
 export const STAGE_TRACKS = [
   { id: 'basic', label: '기본 과정', lessons: STAGE_SCENARIOS.filter((lesson) => lesson.track === 'basic') },

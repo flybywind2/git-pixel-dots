@@ -30,6 +30,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify pixel font glyph coverage
+        run: |
+          python3 -m venv "$RUNNER_TEMP/gitdots-font-check"
+          "$RUNNER_TEMP/gitdots-font-check/bin/python" -m pip install 'fonttools[woff]==4.60.1'
+          "$RUNNER_TEMP/gitdots-font-check/bin/python" scripts/subset-pixel-font.py --check
+
       - name: Run Vitest unit suite
         run: npm test
 

@@ -90,7 +90,7 @@ export function DocumentLab() {
             maxLength={DOCUMENT_LIMIT}
             value={text}
             onChange={(event) => setDraft(event.target.value)}
-            className="font-mono-code block min-h-56 w-full resize-y bg-[#FFFDF8] px-4 py-4 text-sm leading-7 text-[#2F241D] focus:outline-2 focus:-outline-offset-2 focus:outline-[#80613B]"
+            className="font-mono-code block min-h-56 w-full resize-y bg-[#FFFDF8] px-4 py-4 text-base leading-7 text-[#2F241D] focus:outline-2 focus:-outline-offset-2 focus:outline-[#80613B] sm:pointer-fine:text-sm"
           />
           <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-[#DFD1BA] px-4 py-3">
             <button

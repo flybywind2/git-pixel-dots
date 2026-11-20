@@ -8,6 +8,7 @@ export const DOCUMENT_SAVE_LABEL = '회의록.md 저장';
 export const DOCUMENT_LIMIT = 4000;
 export const ORIGINAL_DOCUMENT = '# 스터디 회의록\n\n다음 모임은 금요일 저녁 7시예요.\n장소는 1층 회의실이에요.\n';
 export const EXAMPLE_DOCUMENT = '# 스터디 회의록\n\n다음 모임은 토요일 오전 10시예요.\n장소는 1층 회의실이에요.\n참석 여부는 목요일까지 알려 주세요.\n';
+export const DOCUMENT_REVERT = { command: 'git revert HEAD', label: '마지막 변경 취소해 보기' } as const;
 
 export const DOCUMENT_COMPARISONS = {
   working: {
