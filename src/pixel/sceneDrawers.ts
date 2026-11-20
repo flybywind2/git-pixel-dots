@@ -114,9 +114,9 @@ function drawBuddyWithIdleLife(
   flipX: boolean,
   time: number,
 ): void {
-  // Subtle cozy shadow under Buddy
+  // Subtle cozy warm shadow under Buddy
   ctx.save();
-  ctx.fillStyle = 'rgba(10, 14, 24, 0.45)';
+  ctx.fillStyle = 'rgba(104, 82, 58, 0.22)';
   ctx.beginPath();
   ctx.ellipse(px, py + dot * 5.8, dot * 4.5, dot * 1.4, 0, 0, Math.PI * 2);
   ctx.fill();
@@ -435,11 +435,11 @@ function drawCh2Scene(
     // Short hash & label beneath
     ctx.textAlign = 'center';
     ctx.font = `700 10px ${PIXEL_FONT}`;
-    ctx.fillStyle = c.ghost ? PALETTE.slateMuted : PALETTE.cream;
+    ctx.fillStyle = c.ghost ? PALETTE.slateMuted : PALETTE.textPrimary;
     ctx.fillText(c.hash.slice(0, 6), gx, gy + dot * 7);
 
-    ctx.font = `500 9.5px ${PIXEL_FONT}`;
-    ctx.fillStyle = c.ghost ? PALETTE.slateMuted : c.isRevert ? PALETTE.mint : PALETTE.slate;
+    ctx.font = `600 9.5px ${PIXEL_FONT}`;
+    ctx.fillStyle = c.ghost ? PALETTE.slateMuted : c.isRevert ? PALETTE.mintDark : PALETTE.textSecondary;
     const shortMsg = c.ghost ? '(reset됨)' : c.message.length > 9 ? `${c.message.slice(0, 8)}…` : c.message;
     ctx.fillText(shortMsg, gx, gy + dot * 10.6);
 
@@ -542,7 +542,7 @@ function drawCh3Scene(
 
   // Lower main sky-blue dotted railway
   drawDottedTrack(ctx, leftX, mainY, rightX, mainY, PALETTE.sky, time, sim.headBranch === 'main' || hasMerged);
-  drawPixelBadge(ctx, leftX - 4, mainY + dot * 6.5, 'main', PALETTE.woodDark, PALETTE.sky, PALETTE.sky, 10.5, true);
+  drawPixelBadge(ctx, leftX - 4, mainY + dot * 6.5, 'main', PALETTE.cream, PALETTE.skyDark, PALETTE.sky, 10.5, true);
 
   // Upper feature lavender dotted railway + curved fork
   drawDottedTrack(
@@ -572,8 +572,8 @@ function drawCh3Scene(
       forkX + w * 0.08,
       featY - dot * 7.2,
       featureName,
-      PALETTE.woodDark,
-      PALETTE.lavender,
+      PALETTE.cream,
+      PALETTE.lavenderDark,
       PALETTE.lavender,
       10.5,
       true,
@@ -605,7 +605,7 @@ function drawCh3Scene(
       ? makeGemColors(PALETTE.mint, PALETTE.cream, PALETTE.mintDark, PALETTE.butter)
       : makeGemColors(PALETTE.sky, PALETTE.skyLight, PALETTE.skyDark);
     drawPixelSprite(ctx, COMMIT_GEM, gemColors, gx, mainY, dot * (c.isMerge ? 1.12 : 0.9), 'dot');
-    ctx.fillStyle = c.isMerge ? PALETTE.mint : PALETTE.slate;
+    ctx.fillStyle = c.isMerge ? PALETTE.mintDark : PALETTE.textSecondary;
     ctx.font = `700 9.5px ${PIXEL_FONT}`;
     ctx.textAlign = 'center';
     ctx.fillText(c.isMerge ? '병합 완료!' : c.hash.slice(0, 5), gx, mainY + dot * 7.5);
@@ -622,7 +622,7 @@ function drawCh3Scene(
       dot * 0.9,
       'dot',
     );
-    ctx.fillStyle = PALETTE.lavenderLight;
+    ctx.fillStyle = PALETTE.lavenderDark;
     ctx.font = `700 9.5px ${PIXEL_FONT}`;
     ctx.textAlign = 'center';
     ctx.fillText(c.hash.slice(0, 5), gx, featY + dot * 7);
@@ -785,8 +785,8 @@ function drawCh4Scene(
     xCi,
     gateY,
     ciPass ? 'CI PASS ✓' : latestPr ? `PR #${latestPr.number}` : 'CI GATE',
-    PALETTE.bgDeep,
-    ringColor,
+    PALETTE.cream,
+    ciPass ? PALETTE.mintDark : PALETTE.butterDark,
     ringColor,
     10.5,
     true,
@@ -1047,10 +1047,10 @@ function drawCh6Scene(
 
   // SSO & SSH glowing badges above the vault doors
   if (sim.token.ssoAuthorized) {
-    drawPixelBadge(ctx, w * 0.55, h * 0.45, 'SSO 조직 승인 ✓', PALETTE.woodDark, PALETTE.sky, PALETTE.sky, 10.5);
+    drawPixelBadge(ctx, w * 0.55, h * 0.45, 'SSO 조직 승인 ✓', PALETTE.cream, PALETTE.skyDark, PALETTE.sky, 10.5);
   }
   if (sim.token.sshReady) {
-    drawPixelBadge(ctx, w * 0.75, h * 0.45, 'SSH 키 페어 연결 ✓', PALETTE.woodDark, PALETTE.mint, PALETTE.mint, 10.5);
+    drawPixelBadge(ctx, w * 0.75, h * 0.45, 'SSH 키 페어 연결 ✓', PALETTE.cream, PALETTE.mintDark, PALETTE.mint, 10.5);
   }
 }
 
@@ -1129,7 +1129,7 @@ function drawCh7Scene(
     dot * 0.78,
     'dot',
   );
-  drawPixelBadge(ctx, wallX, wallTop - 12, '방화벽 성벽', PALETTE.woodDark, PALETTE.coral, PALETTE.coral, 10);
+  drawPixelBadge(ctx, wallX, wallTop - 12, '방화벽 성벽', PALETTE.cream, PALETTE.coralDark, PALETTE.coral, 10);
 
   // Lower VPN/SAML tunnel under the wall
   const tunnelY = h * 0.81;
@@ -1148,8 +1148,8 @@ function drawCh7Scene(
     wallX,
     tunnelY + 14,
     connected ? 'VPN · SAML 안전 통로 ✓' : 'VPN 통로 (인증 필요)',
-    PALETTE.bgDeep,
-    connected ? PALETTE.mint : PALETTE.slate,
+    PALETTE.cream,
+    connected ? PALETTE.mintDark : PALETTE.textSecondary,
     connected ? PALETTE.mint : PALETTE.woodBorder,
     9.5,
   );
@@ -1198,8 +1198,8 @@ function drawCh7Scene(
     runnerX,
     runnerY + dot * 6.2,
     '사내 Runner',
-    PALETTE.bgDeep,
-    runnerActive ? PALETTE.mint : PALETTE.slate,
+    PALETTE.cream,
+    runnerActive ? PALETTE.mintDark : PALETTE.textSecondary,
     runnerActive ? PALETTE.mint : PALETTE.woodBorder,
     9.5,
   );
@@ -1321,7 +1321,7 @@ function drawCh8Scene(
     dot * 0.95,
     'dot',
   );
-  drawPixelBadge(ctx, shieldX, shieldY + dot * 8, 'main 보호 방어막', PALETTE.woodDark, PALETTE.coral, PALETTE.coral, 10);
+  drawPixelBadge(ctx, shieldX, shieldY + dot * 8, 'main 보호 방어막', PALETTE.cream, PALETTE.coralDark, PALETTE.coral, 10);
 
   // Dotted PR track: Worktree -> Human Approval Gate -> GitHub Cloud
   drawDottedTrack(
@@ -1367,8 +1367,8 @@ function drawCh8Scene(
     ghX,
     ghY + dot * 10,
     ai.merged ? '안전 병합 ✓' : 'GitHub',
-    PALETTE.woodDark,
-    ai.merged ? PALETTE.mint : PALETTE.sky,
+    PALETTE.cream,
+    ai.merged ? PALETTE.mintDark : PALETTE.skyDark,
     ai.merged ? PALETTE.mint : PALETTE.sky,
     10,
   );

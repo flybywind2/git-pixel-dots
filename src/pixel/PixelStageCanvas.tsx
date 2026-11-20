@@ -25,10 +25,10 @@ function isStepDone(step: StageStep, completed: PixelAnimKind[]): boolean {
 }
 
 const ACTION_TONE_CLASSES: Readonly<Record<NonNullable<BubbleAction['tone']>, string>> = {
-  primary: 'bg-[#6BCBFF] hover:bg-[#8ED8FF] text-[#131722] border-[#368DC4]',
-  mint: 'bg-[#5CE1B8] hover:bg-[#7EEAC8] text-[#131722] border-[#2E9F7D]',
-  coral: 'bg-[#FF7B89] hover:bg-[#FF96A1] text-[#131722] border-[#C94B5A]',
-  amber: 'bg-[#FFD166] hover:bg-[#FFDD87] text-[#131722] border-[#C99B32]',
+  primary: 'bg-[#A8DCFA] hover:bg-[#8ED0F8] text-[#174669] border-[#3292CE]',
+  mint: 'bg-[#9BEED5] hover:bg-[#7DE5C6] text-[#115843] border-[#22A882]',
+  coral: 'bg-[#FFAEB8] hover:bg-[#FF94A2] text-[#781B27] border-[#E05666]',
+  amber: 'bg-[#FFE08A] hover:bg-[#FFD363] text-[#6E4004] border-[#D18D20]',
 };
 
 function clamp(v: number, min: number, max: number): number {
@@ -212,7 +212,7 @@ export function PixelStageCanvas() {
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full overflow-hidden bg-[#161B2B] select-none"
+      className="relative w-full h-full overflow-hidden bg-[#F6EFE2] select-none"
     >
       {/* Full-bleed HiDPI Pixel-Dots Canvas */}
       <canvas
@@ -226,7 +226,7 @@ export function PixelStageCanvas() {
       {scenario && totalSteps > 0 && (
         <div
           data-testid="stage-step-badge"
-          className="absolute top-3 left-3 z-20 flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-[#111626]/90 border-2 border-[#2B3553] shadow-[0_4px_0_rgba(9,12,20,0.65)] backdrop-blur-xs"
+          className="absolute top-3 left-3 z-20 flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-[#FFFDF8]/95 border-2 border-[#CBB89B] shadow-[0_3px_0_rgba(124,98,70,0.22)] backdrop-blur-xs"
         >
           <div className="flex items-center gap-1" aria-hidden="true">
             {scenario.steps.map((step, idx) => {
@@ -238,18 +238,18 @@ export function PixelStageCanvas() {
                   className={[
                     'w-2 h-2 rounded-[2px] transition-all duration-200',
                     done
-                      ? 'bg-[#5CE1B8] shadow-[0_0_6px_rgba(92,225,184,0.8)]'
+                      ? 'bg-[#22A882]'
                       : isCurrent
-                        ? 'bg-[#FFD166] animate-pulse'
-                        : 'bg-[#36415E]',
+                        ? 'bg-[#F2A93B] animate-pulse'
+                        : 'bg-[#DFD2BC]',
                   ].join(' ')}
                 />
               );
             })}
           </div>
-          <span className="font-pixel text-[11px] sm:text-xs font-bold text-[#FFF8EB] whitespace-nowrap">
+          <span className="font-pixel text-[11px] sm:text-xs font-bold text-[#2F241D] whitespace-nowrap">
             {allDone ? (
-              <span className="text-[#5CE1B8] inline-flex items-center gap-1">
+              <span className="text-[#147A5B] inline-flex items-center gap-1">
                 <Check className="w-3.5 h-3.5" />
                 {totalSteps}단계 / {totalSteps}단계 완료
               </span>
@@ -270,7 +270,7 @@ export function PixelStageCanvas() {
               type="button"
               data-testid="next-chapter-btn"
               onClick={() => setStage(nextStageId)}
-              className="pixel-btn px-3.5 py-1.5 rounded-full bg-[#5CE1B8] hover:bg-[#7EEAC8] text-[#131722] border-[#2E9F7D] font-pixel text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-[0_4px_0_#0A0D16,0_0_16px_rgba(92,225,184,0.35)]"
+              className="pixel-btn px-3.5 py-1.5 rounded-full bg-[#22A882] hover:bg-[#1C9673] text-[#FFFDF8] border-[#147A5B] font-pixel text-xs font-bold flex items-center gap-1.5 cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5 shrink-0" />
               <span>다음 챕터로</span>
@@ -281,7 +281,7 @@ export function PixelStageCanvas() {
               type="button"
               data-testid="all-chapters-done-btn"
               onClick={() => setStage('ch1')}
-              className="pixel-btn px-3.5 py-1.5 rounded-full bg-[#FFD166] hover:bg-[#FFDD87] text-[#131722] border-[#C99B32] font-pixel text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-[0_4px_0_#0A0D16,0_0_16px_rgba(255,209,102,0.35)]"
+              className="pixel-btn px-3.5 py-1.5 rounded-full bg-[#F2A93B] hover:bg-[#E89B28] text-[#2F241D] border-[#B86E10] font-pixel text-xs font-bold flex items-center gap-1.5 cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5 shrink-0" />
               <span>모든 챕터 완주!</span>
@@ -307,7 +307,7 @@ export function PixelStageCanvas() {
                 top: `${topPct}%`,
                 borderColor: theme.border,
               }}
-              className="pointer-events-auto animate-bubble-pop pixel-bubble absolute w-[min(90vw,365px)] rounded-xl bg-[#1A2136]/95 backdrop-blur-xs px-3.5 py-2.5 text-left"
+              className="pointer-events-auto animate-bubble-pop pixel-bubble absolute w-[min(90vw,365px)] rounded-xl bg-[#FFFDF8]/96 backdrop-blur-xs px-3.5 py-2.5 text-left"
             >
               {/* Speaker Pill + Title */}
               <div className="flex items-center gap-2 mb-1">
@@ -325,21 +325,21 @@ export function PixelStageCanvas() {
                   />
                   {bubble.speakerName}
                 </span>
-                <h3 className="font-pixel text-[12.5px] sm:text-[13px] font-bold text-[#FFF8EB] truncate">
+                <h3 className="font-pixel text-[12.5px] sm:text-[13px] font-bold text-[#2F241D] truncate">
                   {bubble.title}
                 </h3>
               </div>
 
               {/* Warm 1-2 line Korean explanation */}
-              <p className="text-[12px] sm:text-[12.5px] leading-snug text-[#D9E2F5] break-keep">
+              <p className="text-[12px] sm:text-[12.5px] leading-snug text-[#4E3E33] break-keep">
                 {bubble.message}
               </p>
 
               {/* Gentle Next Hint Pill */}
               {cleanHint && (
-                <div className="mt-2 flex items-start gap-1.5 px-2.5 py-1 rounded-md bg-[#111626]/90 border border-[#2D3859] text-[11px] text-[#FFE8A3]">
-                  <span className="shrink-0">👉 다음:</span>
-                  <code className="font-mono-code font-semibold text-[#5CE1B8] break-words min-w-0">
+                <div className="mt-2 flex items-start gap-1.5 px-2.5 py-1 rounded-md bg-[#F4EBDC] border border-[#DECDB2] text-[11px] text-[#7A4B0C]">
+                  <span className="shrink-0 font-semibold">👉 다음:</span>
+                  <code className="font-mono-code font-semibold text-[#147A5B] break-words min-w-0">
                     {cleanHint}
                   </code>
                 </div>
@@ -372,7 +372,7 @@ export function PixelStageCanvas() {
               />
               <div
                 aria-hidden="true"
-                className="absolute left-1/2 -bottom-[6px] -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[7px] border-t-[#1A2136]"
+                className="absolute left-1/2 -bottom-[6px] -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[7px] border-t-[#FFFDF8]"
               />
             </div>
           );

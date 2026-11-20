@@ -23,7 +23,7 @@ export function App() {
   }, [setStage]);
 
   return (
-    <div className="h-screen w-full overflow-hidden bg-[#131722] text-[#FFF8EB] flex flex-col">
+    <div className="h-screen w-full overflow-hidden bg-[#F6EFE2] text-[#2F241D] flex flex-col">
       <TopStageBar />
       <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
         <div className="flex-1 min-h-[260px] relative overflow-hidden">

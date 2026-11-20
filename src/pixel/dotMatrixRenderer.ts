@@ -12,18 +12,18 @@ export function drawDotGridBackground(
   h: number,
   time: number,
 ): void {
-  // Base warm midnight navy fill
+  // Base warm sunlit oat-beige fill
   ctx.fillStyle = PALETTE.bg;
   ctx.fillRect(0, 0, w, h);
 
-  // Subtle cozy center tabletop illumination
-  const grad = ctx.createRadialGradient(w * 0.5, h * 0.58, 20, w * 0.5, h * 0.58, Math.max(w, h) * 0.65);
-  grad.addColorStop(0, withAlpha(PALETTE.bgCenterGlow, 0.55));
-  grad.addColorStop(1, withAlpha(PALETTE.bgDeep, 0.4));
+  // Subtle cozy center parchment warmth
+  const grad = ctx.createRadialGradient(w * 0.5, h * 0.56, 20, w * 0.5, h * 0.56, Math.max(w, h) * 0.65);
+  grad.addColorStop(0, withAlpha(PALETTE.bgCenterGlow, 0.7));
+  grad.addColorStop(1, withAlpha(PALETTE.bgDeep, 0.45));
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, w, h);
 
-  // LED dot-matrix grid
+  // Warm sand dot-matrix grid
   const spacing = 18;
   const cols = Math.ceil(w / spacing);
   const rows = Math.ceil(h / spacing);
@@ -39,23 +39,23 @@ export function drawDotGridBackground(
     }
   }
 
-  // Gentle twinkling ambient pixel stars/LEDs in the upper sky
-  const starCount = 24;
+  // Gentle floating warm pastel pixel speckles
+  const starCount = 22;
   for (let i = 0; i < starCount; i++) {
     const hashA = ((i * 73 + 19) % 97) / 97;
     const hashB = ((i * 41 + 11) % 89) / 89;
     const sx = Math.round((hashA * 0.92 + 0.04) * w);
-    const sy = Math.round((hashB * 0.42 + 0.06) * h);
+    const sy = Math.round((hashB * 0.44 + 0.06) * h);
     const twinkle = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(time * (1.4 + (i % 4) * 0.45) + i * 2.1));
     const starColor =
-      i % 5 === 0
+      i % 4 === 0
         ? PALETTE.butter
-        : i % 5 === 1
+        : i % 4 === 1
           ? PALETTE.sky
-          : i % 5 === 2
+          : i % 4 === 2
             ? PALETTE.mint
-            : PALETTE.cream;
-    ctx.fillStyle = withAlpha(starColor, twinkle * 0.45);
+            : PALETTE.blush;
+    ctx.fillStyle = withAlpha(starColor, twinkle * 0.38);
     const sz = i % 3 === 0 ? 3 : 2;
     ctx.fillRect(sx, sy, sz, sz);
   }
@@ -185,14 +185,14 @@ export function drawZonePad(
   ctx.fill();
 
   // Top cozy platform deck
-  ctx.fillStyle = highlighted ? withAlpha(accentColor, 0.22) : PALETTE.woodLight;
+  ctx.fillStyle = highlighted ? withAlpha(accentColor, 0.16) : PALETTE.woodLight;
   ctx.beginPath();
   ctx.roundRect(x, y, width, padH, 7);
   ctx.fill();
 
   // Crisp border
   ctx.strokeStyle = highlighted ? accentColor : PALETTE.woodBorder;
-  ctx.lineWidth = highlighted ? 2.2 : 1.5;
+  ctx.lineWidth = highlighted ? 2.2 : 1.6;
   ctx.beginPath();
   ctx.roundRect(x, y, width, padH, 7);
   ctx.stroke();
@@ -202,8 +202,8 @@ export function drawZonePad(
   const rimStart = cx - ((rimDots - 1) * 12) * 0.5;
   for (let i = 0; i < rimDots; i++) {
     ctx.fillStyle = highlighted
-      ? withAlpha(accentColor, 0.85)
-      : withAlpha(PALETTE.slate, 0.32);
+      ? withAlpha(accentColor, 0.9)
+      : withAlpha(PALETTE.woodBorder, 0.65);
     ctx.fillRect(rimStart + i * 12 - 1.5, y + padH * 0.5 - 1.5, 3, 3);
   }
 
@@ -211,12 +211,12 @@ export function drawZonePad(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.font = `700 12px ${PIXEL_FONT}`;
-  ctx.fillStyle = highlighted ? PALETTE.cream : PALETTE.creamSoft;
+  ctx.fillStyle = PALETTE.textPrimary;
   ctx.fillText(label, cx, y + padH + 9);
 
   if (sublabel) {
-    ctx.font = `500 10.5px ${PIXEL_FONT}`;
-    ctx.fillStyle = highlighted ? accentColor : PALETTE.slate;
+    ctx.font = `600 10.5px ${PIXEL_FONT}`;
+    ctx.fillStyle = highlighted ? accentColor : PALETTE.textSecondary;
     ctx.fillText(sublabel, cx, y + padH + 25);
   }
 
@@ -246,8 +246,8 @@ export function drawPixelBadge(
   const x = cx - boxW * 0.5;
   const y = cy - boxH * 0.5;
 
-  // Hard pixel drop shadow
-  ctx.fillStyle = 'rgba(10, 13, 22, 0.72)';
+  // Soft warm pixel drop shadow
+  ctx.fillStyle = 'rgba(104, 82, 58, 0.24)';
   ctx.beginPath();
   ctx.roundRect(x, y + 2, boxW, boxH, 5);
   ctx.fill();

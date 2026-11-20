@@ -1,49 +1,51 @@
 import type { BubbleSpeaker } from '../types/sim';
 
 export const PALETTE = {
-  // Warm cozy Pixel-Dots canvas backdrop
-  bg: '#161B2B',
-  bgDeep: '#101422',
-  bgCenterGlow: '#202842',
-  gridDot: '#232B42',
-  gridDotTwinkle: '#374569',
+  // Warm sunlit beige / linen Pixel-Dots canvas backdrop
+  bg: '#F6EFE2',
+  bgDeep: '#EAE0CE',
+  bgCenterGlow: '#FFFDF7',
+  gridDot: '#DFD2BC',
+  gridDotTwinkle: '#CBB89A',
 
-  // Core warm neutrals
-  cream: '#FFF8EB',
-  creamSoft: '#EDE2CE',
-  slate: '#94A3B8',
-  slateMuted: '#64748B',
-  slateDark: '#475569',
-  ink: '#171C2C',
+  // Core warm neutrals & crisp espresso typography
+  cream: '#FFFDF8',
+  creamSoft: '#F3E9D8',
+  textPrimary: '#2F241D',
+  textSecondary: '#6F5E4F',
+  slate: '#786758',
+  slateMuted: '#A1907E',
+  slateDark: '#5A4B3E',
+  ink: '#2F241D',
 
-  // Semantic cozy candy accents
-  mint: '#5CE1B8',
-  mintLight: '#9BF2D6',
-  mintDark: '#2E9F7D',
+  // Semantic cozy candy accents (rich & crisp on warm beige!)
+  mint: '#22A882',
+  mintLight: '#9BEED5',
+  mintDark: '#147A5B',
 
-  butter: '#FFD166',
-  butterLight: '#FFE6A3',
-  butterDark: '#D19A2E',
+  butter: '#F2A93B',
+  butterLight: '#FFE39E',
+  butterDark: '#B86E10',
 
-  sky: '#6BCBFF',
-  skyLight: '#ADE3FF',
-  skyDark: '#368DC4',
+  sky: '#3292CE',
+  skyLight: '#A8DCFA',
+  skyDark: '#1C6291',
 
-  lavender: '#C39BFF',
-  lavenderLight: '#DFC9FF',
-  lavenderDark: '#875ED1',
+  lavender: '#8B5FD6',
+  lavenderLight: '#D5C0FA',
+  lavenderDark: '#5E38A3',
 
-  coral: '#FF7B89',
-  coralLight: '#FFB0B9',
-  coralDark: '#C94B5A',
+  coral: '#E05666',
+  coralLight: '#FFAEB8',
+  coralDark: '#AD2E3F',
 
-  blush: '#FF9EAA',
+  blush: '#F48B9B',
 
-  // Cozy wood & stone architecture
-  woodLight: '#36415E',
-  woodDark: '#273049',
-  woodBorder: '#4A587D',
-  woodShadow: '#121726',
+  // Cozy warm cream-wood & sand architecture
+  woodLight: '#FFFBF2',
+  woodDark: '#DFD1BA',
+  woodBorder: '#C7B497',
+  woodShadow: '#D2C2A8',
 } as const;
 
 export const CONFETTI_COLORS: readonly string[] = [
@@ -52,7 +54,7 @@ export const CONFETTI_COLORS: readonly string[] = [
   PALETTE.sky,
   PALETTE.lavender,
   PALETTE.coral,
-  PALETTE.cream,
+  PALETTE.blush,
 ] as const;
 
 /** Convert a 6-digit hex color to rgba() with given alpha (0..1). */
@@ -74,38 +76,38 @@ export interface SpeakerTheme {
 
 export const SPEAKER_THEMES: Readonly<Record<BubbleSpeaker, SpeakerTheme>> = {
   buddy: {
-    accent: PALETTE.butter,
-    badgeBg: 'rgba(255, 209, 102, 0.16)',
-    badgeText: PALETTE.butter,
-    border: 'rgba(255, 209, 102, 0.55)',
+    accent: PALETTE.butterDark,
+    badgeBg: '#FFF2CF',
+    badgeText: '#8E5206',
+    border: '#DCA034',
     dot: PALETTE.butter,
   },
   cloud: {
-    accent: PALETTE.sky,
-    badgeBg: 'rgba(107, 203, 255, 0.16)',
-    badgeText: PALETTE.sky,
-    border: 'rgba(107, 203, 255, 0.55)',
+    accent: PALETTE.skyDark,
+    badgeBg: '#E4F4FF',
+    badgeText: '#175A86',
+    border: '#5BA9DB',
     dot: PALETTE.sky,
   },
   guard: {
-    accent: PALETTE.mint,
-    badgeBg: 'rgba(92, 225, 184, 0.16)',
-    badgeText: PALETTE.mint,
-    border: 'rgba(92, 225, 184, 0.55)',
+    accent: PALETTE.mintDark,
+    badgeBg: '#E1F7EF',
+    badgeText: '#126B50',
+    border: '#42B793',
     dot: PALETTE.mint,
   },
   ai: {
-    accent: PALETTE.lavender,
-    badgeBg: 'rgba(195, 155, 255, 0.18)',
-    badgeText: PALETTE.lavender,
-    border: 'rgba(195, 155, 255, 0.58)',
+    accent: PALETTE.lavenderDark,
+    badgeBg: '#F0E8FF',
+    badgeText: '#5A349E',
+    border: '#9C75E0',
     dot: PALETTE.lavender,
   },
   system: {
-    accent: PALETTE.cream,
-    badgeBg: 'rgba(255, 248, 235, 0.14)',
-    badgeText: PALETTE.cream,
-    border: 'rgba(148, 163, 184, 0.5)',
-    dot: PALETTE.cream,
+    accent: PALETTE.textPrimary,
+    badgeBg: '#F3E9D8',
+    badgeText: '#4F4035',
+    border: '#C5B092',
+    dot: PALETTE.textSecondary,
   },
 };
