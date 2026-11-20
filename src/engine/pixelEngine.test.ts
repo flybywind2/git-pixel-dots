@@ -11,7 +11,7 @@ import {
   savePracticeDocument,
 } from './index';
 import { diffDocumentLines, DOCUMENT_COMPARISONS, DOCUMENT_PATH, getDocumentComparison, ORIGINAL_DOCUMENT } from './documentDiff';
-import { ATTENDANCE_DOCUMENT, ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, MISTAKEN_NOTICE_PATH } from './meetingExample';
+import { ATTENDANCE_DOCUMENT, ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, MEETING_REVIEWER, MISTAKEN_NOTICE_PATH } from './meetingExample';
 
 function deepFreeze<T>(obj: T): T {
   if (obj && typeof obj === 'object' && !Object.isFrozen(obj)) {
@@ -213,8 +213,8 @@ describe('Full stage walkthroughs', () => {
     expect(s.headBranch).toBe('feat/dark');
     expect(s.branches['feat/dark']).toBeDefined();
 
-    // Deterministic conflict on merging feature/ui
-    s = deepFreeze(executePixelCommand(s, 'git merge feature/ui'));
+    // Deterministic conflict on merging feat/ui
+    s = deepFreeze(executePixelCommand(s, 'git merge feat/ui'));
     expect(s.lastAnim.kind).toBe('CONFLICT');
     expect(s.conflict).not.toBeNull();
     expect(s.conflict?.resolvedChoice).toBe('none');
@@ -255,7 +255,7 @@ describe('Full stage walkthroughs', () => {
   });
 
   it('Ch3: supports resolve ours, resolve theirs, and git checkout -b alias', () => {
-    let s = runSequence('ch3', ['git checkout -b feat/alt', 'git merge feature/ui']);
+    let s = runSequence('ch3', ['git checkout -b feat/alt', 'git merge feat/ui']);
     expect(s.headBranch).toBe('feat/alt');
     expect(s.conflict).not.toBeNull();
 
@@ -268,17 +268,25 @@ describe('Full stage walkthroughs', () => {
     expect(theirs.files.find((f) => f.name === 'theme.js')?.content).toContain('sunset-coral');
   });
 
-  it('Ch4: fetch, pull, push, gh pr create, gh pr merge', () => {
+  it('Ch4: create branch, commit, push, PR, teammate approval, merge', () => {
+    const initial = createStageState('ch4');
+    expect(initial.headBranch).toBe('main');
+    expect(initial.branches[MEETING_PR_BRANCH]).toBeUndefined();
+    expect(initial.files.find((file) => file.name === DOCUMENT_PATH)?.status).toBe('modified');
+
     let s = runSequence('ch4', [
-      'git fetch',
-      'git pull origin main',
+      `git switch -c ${MEETING_PR_BRANCH}`,
+      'git add 회의록.md',
+      `git commit -m "${MEETING_PR_TITLE}"`,
       `git push -u origin ${MEETING_PR_BRANCH}`,
       `gh pr create --title "${MEETING_PR_TITLE}"`,
+      'gh pr view',
       'gh pr merge',
     ]);
     expect(s.completedActions).toEqual(
-      expect.arrayContaining(['FETCH', 'PULL', 'PUSH', 'PR_CREATE', 'PR_MERGE']),
+      expect.arrayContaining(['BRANCH', 'ADD', 'COMMIT', 'PUSH', 'PR_CREATE', 'PR_REVIEW', 'PR_MERGE']),
     );
+    expect(s.headBranch).toBe(MEETING_PR_BRANCH);
     expect(s.prs).toHaveLength(1);
     expect(s.prs[0]?.title).toBe(MEETING_PR_TITLE);
     expect(s.prs[0]?.status).toBe('merged');
@@ -286,6 +294,30 @@ describe('Full stage walkthroughs', () => {
     expect(remoteTree?.[DOCUMENT_PATH]).toContain('2층 모임방');
     expect(remoteTree?.[ATTENDANCE_PATH]).toBe(ATTENDANCE_DOCUMENT);
     expect(s.bubbles[0]?.title).toContain('4장 실습 완료');
+  });
+
+  it('Ch4: merge is blocked until teammate approval is confirmed with gh pr view', () => {
+    const s = runSequence('ch4', [
+      `git switch -c ${MEETING_PR_BRANCH}`,
+      'git add 회의록.md',
+      `git commit -m "${MEETING_PR_TITLE}"`,
+      `git push -u origin ${MEETING_PR_BRANCH}`,
+      `gh pr create --title "${MEETING_PR_TITLE}"`,
+    ]);
+    const blocked = executePixelCommand(s, 'gh pr merge');
+    expect(blocked.lastAnim.kind).toBe('IDLE');
+    expect(blocked.prs[0]?.status).toBe('open');
+    expect(blocked.prs[0]?.approved).toBe(false);
+    expect(blocked.bubbles[0]?.actions?.some((action) => action.command === 'gh pr view')).toBe(true);
+
+    const reviewed = executePixelCommand(blocked, 'gh pr view');
+    expect(reviewed.prs[0]?.approved).toBe(true);
+    expect(reviewed.completedActions).toContain('PR_REVIEW');
+    expect(reviewed.bubbles[0]?.message).toContain(MEETING_REVIEWER);
+
+    const merged = executePixelCommand(reviewed, 'gh pr merge');
+    expect(merged.lastAnim.kind).toBe('PR_MERGE');
+    expect(merged.prs[0]?.status).toBe('merged');
   });
 
   it('Ch5: gh CLI full walkthrough (auth, repo, pr, issue, run watch, api)', () => {
@@ -606,14 +638,14 @@ describe('Git file snapshots', () => {
     let state = executePixelCommand(initial, 'edit app.js');
     state = executePixelCommand(state, 'git add app.js');
     const stagedApp = state.index['app.js'];
-    state = executePixelCommand(state, 'git switch feature/ui');
-    expect(state.headBranch).toBe('feature/ui');
+    state = executePixelCommand(state, 'git switch feat/ui');
+    expect(state.headBranch).toBe('feat/ui');
     expect(state.files.find((file) => file.name === 'theme.js')?.content).toContain('sunset-coral');
     expect(state.index['app.js']).toBe(stagedApp);
     expect(state.staged).toEqual(['app.js']);
     state = executePixelCommand(state, 'edit theme.js');
     const blocked = executePixelCommand(state, 'git switch main');
-    expect(blocked.headBranch).toBe('feature/ui');
+    expect(blocked.headBranch).toBe('feat/ui');
     expect(blocked.files).toBe(state.files);
     expect(blocked.index).toBe(state.index);
     state = executePixelCommand(state, 'git reset --hard HEAD');
@@ -659,7 +691,7 @@ describe('Utility commands, unknown commands & autocomplete', () => {
     // Conflict context boosts resolve commands to top
     const conflictState = runSequence('ch3', [
       'git switch -c feat/dark',
-      'git merge feature/ui',
+      'git merge feat/ui',
     ]);
     const conflictAc = getCommandAutocomplete('res', conflictState);
     expect(conflictAc[0]?.cmd).toBe('resolve both');

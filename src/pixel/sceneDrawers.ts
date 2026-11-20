@@ -526,7 +526,7 @@ function drawCh3Scene(
   const mainY = h * 0.67;
   const featY = h * 0.33;
   const kind = sim.lastAnim.kind;
-  const featureName = 'feature/ui' in sim.branches ? 'feature/ui'
+  const featureName = 'feat/ui' in sim.branches ? 'feat/ui'
     : Object.keys(sim.branches).find((name) => name !== 'main');
   const lowerBranch = sim.headBranch === featureName ? 'main' : sim.headBranch;
 
@@ -718,7 +718,7 @@ function drawCh4Scene(
     padY,
     padW,
     'GitHub 저장소',
-    prMerged ? 'PR 병합 완료!' : '원격 저장소',
+    prMerged ? 'PR 합치기 완료!' : '원격 저장소',
     PALETTE.lavender,
     prMerged || kind === 'PR_MERGE',
     time,
@@ -1325,7 +1325,7 @@ function drawCh8Scene(
     ctx,
     ghX,
     ghY + dot * 10,
-    ai.merged ? '병합 완료' : 'GitHub',
+    ai.merged ? '합치기 완료' : 'GitHub',
     PALETTE.cream,
     ai.merged ? PALETTE.mintDark : PALETTE.skyDark,
     ai.merged ? PALETTE.mint : PALETTE.sky,

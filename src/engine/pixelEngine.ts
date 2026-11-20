@@ -30,7 +30,7 @@ import {
   getDocumentWorkingText,
   ORIGINAL_DOCUMENT,
 } from './documentDiff';
-import { ATTENDANCE_DOCUMENT, ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, MISTAKEN_NOTICE_PATH } from './meetingExample';
+import { ATTENDANCE_DOCUMENT, ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, MEETING_REVIEW_COMMENT, MEETING_REVIEWER, MISTAKEN_NOTICE_PATH } from './meetingExample';
 import {
   changedPaths,
   checkoutTree,
@@ -327,7 +327,7 @@ function stageSeed(id: StageId): StageSeed {
             '공유할 문서 두 개가 있어요',
             `회의록.md의 모임 시간을 바꿨고 ${ATTENDANCE_PATH}를 새로 썼어요. 두 문서를 다음 커밋에 담아서 팀에 보낼 수 있어요.`,
             '아래 추천 버튼을 누르거나 git add . 를 입력해 보세요!',
-            [{ label: '공유할 변경 담기', command: 'git add .', tone: 'mint' }],
+            [{ label: '다음 기록에 담기', command: 'git add .', tone: 'mint' }],
           ),
         ],
         terminal: [
@@ -417,7 +417,7 @@ function stageSeed(id: StageId): StageSeed {
             '작업 중에 급한 수정이 생겼어요',
             `마지막 커밋에 ${MISTAKEN_NOTICE_PATH}를 실수로 넣었어요. 회의록에 적던 준비물을 임시 보관한 뒤 잘못 올린 안내를 취소해 보세요.`,
             'git stash로 작업 중인 변경을 임시 보관해 보세요.',
-            [{ label: '작업 임시 보관', command: 'git stash', tone: 'amber' }],
+            [{ label: '작업 임시 보관하기', command: 'git stash', tone: 'amber' }],
           ),
         ],
         terminal: [
@@ -440,12 +440,12 @@ function stageSeed(id: StageId): StageSeed {
           { id: 'c1', hash: '10aa20b', message: '기본 테마 설정', branch: 'main', parents: [],
             tree: { 'theme.js': 'export const theme = "light";', 'app.js': 'import { theme } from "./theme";' } },
           { id: 'c2', hash: '30cc40d', message: '메인 배경색 수정', branch: 'main', parents: ['c1'] },
-          { id: 'c3', hash: '50ee60f', message: 'UI 버튼 색상 변경', branch: 'feature/ui', parents: ['c1'],
+          { id: 'c3', hash: '50ee60f', message: 'UI 버튼 색상 변경', branch: 'feat/ui', parents: ['c1'],
             tree: { 'theme.js': 'export const theme = "sunset-coral";', 'app.js': 'import { theme } from "./theme";' } },
         ],
-        branches: { main: 'c2', 'feature/ui': 'c3' },
+        branches: { main: 'c2', 'feat/ui': 'c3' },
         headBranch: 'main',
-        remoteBranches: { main: 'c2', 'feature/ui': 'c3' },
+        remoteBranches: { main: 'c2', 'feat/ui': 'c3' },
         stashes: [],
         stashCount: 0,
         prs: [],
@@ -465,14 +465,14 @@ function stageSeed(id: StageId): StageSeed {
             34,
             54,
             'theme.js의 두 버전을 합쳐 봐요',
-            'main과 feature/ui가 같은 줄에 서로 다른 색을 골랐어요. main에서 새 브랜치를 만들어 병합을 연습해요.',
+            'main과 feat/ui가 같은 줄에 서로 다른 색을 골랐어요. main에서 새 브랜치를 만들어 합치기를 연습해요.',
             'git switch -c feat/dark 로 새 브랜치를 만들어 보세요!',
-            [{ label: '🌿 새 브랜치 (git switch -c feat/dark)', command: 'git switch -c feat/dark', tone: 'primary' }],
+            [{ label: '🌿 새 브랜치 만들기', command: 'git switch -c feat/dark', tone: 'primary' }],
           ),
         ],
         terminal: [
           makeLogEntry(0, 'welcome', 'main', [
-            { text: '브랜치: main (현재), feature/ui', tone: 'muted' },
+            { text: '브랜치: main (현재), feat/ui', tone: 'muted' },
           ]),
         ],
       };
@@ -481,17 +481,16 @@ function stageSeed(id: StageId): StageSeed {
       return {
         stageId: 'ch4',
         files: [
-          { name: DOCUMENT_PATH, status: 'committed', content: EXAMPLE_DOCUMENT.replace('1층 회의실', '2층 모임방') },
+          { name: DOCUMENT_PATH, status: 'modified', content: EXAMPLE_DOCUMENT.replace('1층 회의실', '2층 모임방') },
         ],
         staged: [],
         commits: [
           { id: 'c1', hash: 'a01b02c', message: '팀 회의록 초안', branch: 'main', parents: [], tree: { [DOCUMENT_PATH]: EXAMPLE_DOCUMENT } },
           { id: 'c2', hash: 'd03e04f', message: '팀원: 참석 안내 추가', branch: 'origin/main', parents: ['c1'],
             tree: { [DOCUMENT_PATH]: EXAMPLE_DOCUMENT, [ATTENDANCE_PATH]: ATTENDANCE_DOCUMENT } },
-          { id: 'c3', hash: 'f05a06b', message: MEETING_PR_TITLE, branch: MEETING_PR_BRANCH, parents: ['c1'] },
         ],
-        branches: { main: 'c1', [MEETING_PR_BRANCH]: 'c3' },
-        headBranch: MEETING_PR_BRANCH,
+        branches: { main: 'c1' },
+        headBranch: 'main',
         remoteBranches: { main: 'c2' },
         stashes: [],
         stashCount: 0,
@@ -508,18 +507,18 @@ function stageSeed(id: StageId): StageSeed {
         bubbles: [
           makeBubble(
             'init-ch4',
-            'cloud',
-            68,
-            48,
-            '팀원이 GitHub에 새 커밋을 올렸어요',
-            '팀원이 GitHub에 참석 안내를 올렸어요. 최신 기록을 가져온 뒤 내가 회의록에서 바꾼 장소를 팀에 제안해 보세요.',
-            'git fetch 를 입력해서 원격 최신 소식을 확인해 보세요!',
-            [{ label: '최신 기록 확인', command: 'git fetch', tone: 'primary' }],
+            'buddy',
+            34,
+            54,
+            '회의록 장소를 바꿨어요',
+            '작업 폴더의 회의록에 바꾼 장소가 아직 기록되지 않았어요. 팀원은 GitHub에 참석 안내를 올려 두었어요. 새 브랜치를 만들어 내 변경을 기록해 보세요.',
+            `git switch -c ${MEETING_PR_BRANCH} 로 새 브랜치를 만들어 보세요!`,
+            [{ label: '새 브랜치 만들기', command: `git switch -c ${MEETING_PR_BRANCH}`, tone: 'primary' }],
           ),
         ],
         terminal: [
-          makeLogEntry(0, 'welcome', MEETING_PR_BRANCH, [
-            { text: `${MEETING_PR_BRANCH} 브랜치에 회의록의 장소를 수정한 커밋이 준비되어 있어요.`, tone: 'muted' },
+          makeLogEntry(0, 'welcome', 'main', [
+            { text: 'main 브랜치예요. 회의록.md에 바꾼 장소가 아직 커밋되지 않았어요.', tone: 'muted' },
           ]),
         ],
       };
@@ -571,7 +570,7 @@ function stageSeed(id: StageId): StageSeed {
             '다크 모드 변경이 준비됐어요',
             'feat/darkmode 브랜치가 GitHub 연습 저장소에 올라가 있어요. 먼저 gh가 어느 계정으로 작업하는지 확인해요.',
             '먼저 gh auth status 로 로그인 상태를 확인해 볼까요?',
-            [{ label: '🔑 로그인 확인 (gh auth status)', command: 'gh auth status', tone: 'primary' }],
+            [{ label: '🔑 로그인 상태 확인하기', command: 'gh auth status', tone: 'primary' }],
           ),
         ],
         terminal: [
@@ -659,7 +658,7 @@ function stageSeed(id: StageId): StageSeed {
             '이 회사는 사내 GitHub를 써요',
             '이 예제 회사의 방화벽은 github.com 전송을 막아요. 사내 GitHub의 주소는 github.corp.internal이에요.',
             'ghes test-public 으로 외부 차단부터 확인해 보세요!',
-            [{ label: '외부 전송 차단 확인', command: 'ghes test-public', tone: 'coral' }],
+            [{ label: '외부 전송 차단 확인하기', command: 'ghes test-public', tone: 'coral' }],
           ),
         ],
         terminal: [
@@ -1027,7 +1026,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         `${targetName} 파일을 뚝딱 고쳤어요! ✏️`,
         '작업 파일을 수정했어요. 이 변경을 기록하려면 먼저 스테이징 영역에 담으세요.',
         'git add .로 바뀐 파일을 다음 커밋에 담을 수 있어요.',
-        [{ label: '공유할 변경 담기', command: 'git add .', tone: 'mint' }],
+        [{ label: '다음 기록에 담기', command: 'git add .', tone: 'mint' }],
       ),
     );
   }
@@ -1056,11 +1055,11 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           54,
           '지금은 충돌이 없어요! 🙂',
           state.stageId === 'ch3'
-            ? '먼저 git merge feature/ui 를 실행하면 충돌 상황을 직접 체험할 수 있어요!'
+            ? '먼저 git merge feat/ui 를 실행하면 충돌 상황을 직접 체험할 수 있어요!'
             : '모든 파일이 평화로운 상태예요.',
           nextStepHintText(state),
           state.stageId === 'ch3'
-            ? [{ label: '두 버전 합치기', command: 'git merge feature/ui', tone: 'amber' }]
+            ? [{ label: '두 버전 합치기', command: 'git merge feat/ui', tone: 'amber' }]
             : undefined,
         ),
       );
@@ -1624,19 +1623,19 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         state,
         draft,
         'AI_APPROVE',
-        `사람 승인 후 PR #${prNum} 병합`,
+        `사람 승인 후 PR #${prNum} 합치기`,
         'HITL_MERGED',
         cmd,
         [
           { text: `👤 Reviewed & Approved by @${state.ghUser} (Human-in-the-Loop)`, tone: 'mint' },
-          { text: `🎉 PR #${prNum} 이 기본 브랜치(main)에 병합됐어요. (${mergeCommit.hash})`, tone: 'mint' },
+          { text: `🎉 PR #${prNum} 이 기본 브랜치(main)에 합쳐졌어요. (${mergeCommit.hash})`, tone: 'mint' },
         ],
         makeBubble(
           `ai-approve-${seqNext}`,
           'ai',
           64,
           50,
-          '사람이 승인한 변경을 병합했어요',
+          '사람이 승인한 변경을 합쳤어요',
           '사람이 덧셈 수정과 테스트 결과를 확인했어요. 승인한 변경을 main에 합쳤어요.',
           'AI 협업 실습을 마쳤어요. 상단에서 다시 연습할 장을 고를 수 있어요.',
         ),
@@ -1750,7 +1749,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           state, draft, 'RESOLVE', '충돌 해결 스테이징', conflict.file, cmd,
           [{ text: `${conflict.file}의 현재 작업 파일을 해결 결과로 담았어요.`, tone: 'mint' }],
           makeBubble(`add-resolved-${seqNext}`, 'buddy', 38, 54, '해결한 파일을 담았어요',
-            conflict.revert ? 'git revert --continue로 취소 커밋의 기록을 마무리하세요.' : 'git commit으로 병합 결과를 기록하세요.'),
+            conflict.revert ? 'git revert --continue로 취소 커밋의 기록을 마무리하세요.' : 'git commit으로 합친 결과를 기록하세요.'),
         );
       }
 
@@ -1819,7 +1818,8 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       }
 
       const parsedMsg = extractQuotedFlag(cmd, ['-m', '-am', '--message'])
-        ?? (isMergeCommit ? `Merge ${state.conflict?.theirsLabel} into ${state.headBranch}` : '변경 사항 기록');
+        ?? (isMergeCommit ? `Merge ${state.conflict?.theirsLabel} into ${state.headBranch}`
+          : staged.length > 0 ? `${staged.join(', ')} 변경 기록` : '변경 기록');
       const parents = [state.branches[state.headBranch], state.conflict?.theirsCommit]
         .filter((id): id is string => Boolean(id));
       const newCommitId = `c${state.commits.length + 1}`;
@@ -1842,7 +1842,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       }, working, index);
 
       const message = isMergeCommit
-        ? '병합한 파일이 새 커밋에 기록됐어요.'
+        ? '합친 파일이 새 커밋에 기록됐어요.'
         : `스테이징 영역에 담았던 변경을 “${parsedMsg}” 커밋으로 기록했어요. ID는 ${newCommit.hash}예요.`;
       return finalizeTransition(
         state, draft, 'COMMIT', '커밋 기록', newCommit.hash, cmd,
@@ -2069,7 +2069,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       const action = (tokens[2] ?? 'push').toLowerCase();
       const working = workingTree(state);
       if (state.conflict) {
-        return commandNotice(state, cmd, '병합을 먼저 마무리하세요', '충돌 중인 파일을 해결한 뒤 작업을 보관할 수 있어요.', 'amber');
+        return commandNotice(state, cmd, '합치기를 먼저 마무리하세요', '충돌 중인 파일을 해결한 뒤 작업을 보관할 수 있어요.', 'amber');
       }
       if (action === 'pop' || action === 'apply') {
         const saved = state.stashes.at(-1);
@@ -2113,7 +2113,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       const nextWorking = { ...Object.fromEntries(includeUntracked ? [] : untracked), ...base };
       const draft = updateWorkspace({ ...state, stashes, stashCount: stashes.length }, nextWorking, base);
       return finalizeTransition(
-        state, draft, 'STASH', '작업 임시 보관', 'stash@{0}', cmd,
+        state, draft, 'STASH', '작업 임시 보관하기', 'stash@{0}', cmd,
         [{ text: `수정 내용을 보관했어요. 보관 항목 ${stashes.length}개.`, tone: 'mint' }],
         makeBubble(`stash-${seqNext}`, 'buddy', 34, 54, '하던 작업을 잠시 보관했어요',
           '추적 중인 작업 파일이 최근 커밋 상태로 돌아왔어요. 이제 급한 수정을 먼저 할 수 있어요.'),
@@ -2151,7 +2151,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       }
 
       if (args.mode === '--soft' && state.conflict) {
-        return commandNotice(state, cmd, '병합을 먼저 마무리하세요', '병합 중에는 git reset --soft를 실행할 수 없어요.', 'amber');
+        return commandNotice(state, cmd, '합치기를 먼저 마무리하세요', '합치기 중에는 git reset --soft를 실행할 수 없어요.', 'amber');
       }
 
       const oldHead = headCommit(state);
@@ -2214,7 +2214,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         return commandNotice(state, cmd, '먼저 진행 중인 변경을 정리하세요', '스테이징한 변경을 기록하거나 임시 보관한 다음 다시 시도하세요.', 'amber');
       }
       if (target.parents.length > 1 && mainline === undefined) {
-        return commandNotice(state, cmd, '병합 커밋의 기준이 필요해요', '병합을 취소할 때는 기준이 되는 부모를 -m 1처럼 지정하세요.', 'amber');
+        return commandNotice(state, cmd, '병합 커밋의 기준이 필요해요', '합치기를 취소할 때는 기준이 되는 부모를 -m 1처럼 지정하세요.', 'amber');
       }
       if (mainline !== undefined && (!Number.isInteger(mainline) || mainline < 1 || mainline > Math.max(1, target.parents.length))) {
         return commandNotice(state, cmd, '부모 커밋 번호를 확인하세요', '존재하는 부모 커밋의 번호를 입력하세요.', 'amber');
@@ -2342,7 +2342,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         return commandNotice(state, cmd, '이동할 브랜치를 확인하세요', 'git switch 뒤에 브랜치 이름을 적으세요. 새 브랜치는 git switch -c로 열 수 있어요.', 'amber');
       }
       if (state.conflict) {
-        return commandNotice(state, cmd, '현재 병합을 먼저 마무리하세요', '충돌 해결을 기록한 뒤 브랜치를 바꿀 수 있어요.', 'amber');
+        return commandNotice(state, cmd, '현재 합치기를 먼저 마무리하세요', '충돌 해결을 기록한 뒤 브랜치를 바꿀 수 있어요.', 'amber');
       }
       const existing = treeEntry(state.branches, targetBranch);
       if (isCreate && existing) {
@@ -2386,7 +2386,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         return commandNotice(state, cmd, '합칠 브랜치를 찾을 수 없어요', 'git branch로 브랜치 이름을 확인하세요.', 'amber');
       }
       if (state.conflict || state.staged.length > 0) {
-        return commandNotice(state, cmd, '현재 변경을 먼저 정리하세요', '스테이징한 변경을 커밋하거나 진행 중인 병합을 마무리하세요.', 'amber');
+        return commandNotice(state, cmd, '현재 변경을 먼저 정리하세요', '스테이징한 변경을 커밋하거나 진행 중인 합치기를 마무리하세요.', 'amber');
       }
       if (reachableCommits(state, local.id).has(target.id)) {
         return commandNotice(state, cmd, '이미 합쳐진 변경이에요', '대상 커밋이 현재 브랜치의 이력에 들어 있어요.');
@@ -2398,7 +2398,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       const working = workingTree(state);
       const blocked = merged.conflicts.some((path) => treeEntry(working, path) !== treeEntry(state.index, path));
       if (checkout.blocked.length > 0 || blocked || merged.conflicts.length > 1) {
-        return commandNotice(state, cmd, '병합하기 전에 변경을 확인하세요', '겹치는 작업이 있어 자동으로 합치지 못했어요. git diff로 현재 변경을 확인하세요.', 'amber');
+        return commandNotice(state, cmd, '합치기 전에 변경을 확인하세요', '겹치는 작업이 있어 자동으로 합치지 못했어요. git diff로 현재 변경을 확인하세요.', 'amber');
       }
       if (merged.conflicts.length === 1) {
         const file = merged.conflicts[0];
@@ -2440,7 +2440,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         ? `현재 브랜치를 ${target.hash}까지 옮기고 작업 파일을 갱신했어요.`
         : `${targetName}의 변경을 병합 커밋 ${commit.hash}에 기록했어요.`;
       return finalizeTransition(
-        state, draft, 'MERGE_OK', '병합 완료', targetName, cmd,
+        state, draft, 'MERGE_OK', '합치기 완료', targetName, cmd,
         [{ text: message, tone: 'mint' }],
         makeBubble(`merge-ok-${seqNext}`, 'buddy', 46, 52, '두 브랜치를 합쳤어요', message),
       );
@@ -2706,7 +2706,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         const lines: TerminalLine[] = [
           { text: `📋 Creating pull request for ${state.headBranch} into main...`, tone: 'sky' },
           { text: `✓ https://${state.ghHost}/gitdots/app/pull/${nextNum} — "${title}"`, tone: 'mint' },
-          { text: '✅ 자동 테스트(CI) 통과!', tone: 'mint' },
+          { text: '✅ 자동 검사(CI) 통과!', tone: 'mint' },
         ];
         const previewState: PixelSimState = {
           ...draft,
@@ -2728,8 +2728,50 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             68,
             48,
             `PR #${nextNum} 리뷰 요청서 도착! 📋`,
-            `"${title}" PR이 열리고 자동 테스트도 통과했어요! 팀원들이 코드 변경점을 한눈에 리뷰할 수 있어요.`,
+            `"${title}" PR이 열리고 자동 검사도 통과했어요! 팀원에게 검토를 요청했으니, 팀원의 의견과 승인을 확인한 뒤 합쳐요.`,
             nextStepHintText(previewState),
+            nextStep
+              ? [{ label: `▶ ${nextStep.command}`, command: nextStep.command, tone: 'mint' }]
+              : undefined,
+          ),
+        );
+      }
+
+      if (sub2 === 'view') {
+        const targetPr = [...state.prs].reverse().find((p) => p.status !== 'merged');
+        if (!targetPr) {
+          return commandNotice(state, cmd, '확인할 PR이 없어요', 'gh pr create로 검토를 요청한 뒤 팀원의 의견을 확인할 수 있어요.', 'amber');
+        }
+        const alreadyApproved = targetPr.approved;
+        const draft: PixelSimState = {
+          ...state,
+          prs: state.prs.map((p) => (p.number === targetPr.number ? { ...p, approved: true } : p)),
+          completedActions: withCompletedAction(state.completedActions, 'PR_REVIEW'),
+        };
+        const lines: TerminalLine[] = [
+          { text: `📋 PR #${targetPr.number} ${targetPr.title} (${targetPr.headBranch} → ${targetPr.baseBranch})`, tone: 'sky' },
+          { text: `  상태: ${targetPr.status === 'draft' ? '초안' : '열림'} · 자동 검사: ${targetPr.ci === 'pass' ? '통과' : '대기'}`, tone: 'default' },
+          { text: `  💬 팀원 @${MEETING_REVIEWER}: ${MEETING_REVIEW_COMMENT}`, tone: 'mint' },
+          { text: alreadyApproved ? '  ✅ 팀원 승인이 이미 있어요. 이제 합칠 수 있어요!' : '  ✅ 팀원이 변경을 검토하고 승인했어요!', tone: 'mint' },
+        ];
+        const nextStep = getNextPendingStep(draft);
+
+        return finalizeTransition(
+          state,
+          draft,
+          'GH_CMD',
+          `PR #${targetPr.number} 검토 확인`,
+          `@${MEETING_REVIEWER} 승인`,
+          cmd,
+          lines,
+          makeBubble(
+            `gh-pr-view-${seqNext}`,
+            'cloud',
+            68,
+            48,
+            '팀원 검토가 도착했어요 ✅',
+            `팀원 @${MEETING_REVIEWER}가 바뀐 줄을 확인하고 “${MEETING_REVIEW_COMMENT}” 의견을 남기며 승인했어요. 승인을 확인한 변경만 합치는 것이 안전해요.`,
+            nextStepHintText(draft),
             nextStep
               ? [{ label: `▶ ${nextStep.command}`, command: nextStep.command, tone: 'mint' }]
               : undefined,
@@ -2773,17 +2815,17 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             state,
             state,
             'IDLE',
-            '병합할 PR 없음',
+            '합칠 PR 없음',
             undefined,
             cmd,
-            [{ text: '병합할 열린 PR이 없어요. 먼저 gh pr create로 PR을 열어 주세요.', tone: 'amber' }],
+            [{ text: '합칠 열린 PR이 없어요. 먼저 gh pr create로 PR을 열어 주세요.', tone: 'amber' }],
             makeBubble(
               `gh-pr-merge-empty-${seqNext}`,
               'cloud',
               68,
               48,
               '아직 열려 있는 PR이 없어요! 📋',
-              '먼저 gh pr create로 검토를 요청한 뒤 병합해 볼까요?',
+              '먼저 gh pr create로 검토를 요청한 뒤 합쳐 볼까요?',
               `${createCommand} 명령을 실행해 보세요.`,
               [
                 {
@@ -2792,6 +2834,28 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
                   tone: 'primary',
                 },
               ],
+            ),
+          );
+        }
+
+        if (!targetPr.approved) {
+          return finalizeTransition(
+            state,
+            state,
+            'IDLE',
+            '승인 확인 필요',
+            undefined,
+            cmd,
+            [{ text: 'error: Review required — 팀원 승인을 확인한 뒤 합칠 수 있어요.', tone: 'amber' }],
+            makeBubble(
+              `gh-pr-merge-unapproved-${seqNext}`,
+              'cloud',
+              68,
+              48,
+              '팀원 승인을 먼저 확인하세요',
+              '이 PR은 아직 팀원 승인이 없어요. gh pr view로 팀원의 검토 의견과 승인을 확인한 뒤 합쳐 주세요.',
+              'gh pr view 명령을 실행해 보세요.',
+              [{ label: '팀원 승인 확인하기', command: 'gh pr view', tone: 'primary' }],
             ),
           );
         }
@@ -2834,7 +2898,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           state,
           draft,
           'PR_MERGE',
-          `PR #${targetPr.number} 병합`,
+          `PR #${targetPr.number} 합치기`,
           mergeCommit.hash,
           cmd,
           [
@@ -2846,7 +2910,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             'cloud',
             68,
             48,
-            `PR #${targetPr.number} 병합 완료! 🎊`,
+            `PR #${targetPr.number} 합치기 완료! 🎊`,
             `"${targetPr.title}" 변경이 검토를 마치고 기본 브랜치(main)에 합쳐졌어요.`,
             nextStepHintText({ ...draft, completedActions: withCompletedAction(draft.completedActions, 'PR_MERGE') }),
           ),
@@ -2929,7 +2993,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         state,
         state,
         'GH_CMD',
-        'CI 실행 모니터링',
+        '자동 검사 지켜보기',
         'PASS',
         cmd,
         [
@@ -2943,8 +3007,8 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           'cloud',
           68,
           48,
-          '자동 테스트(CI) 전원 통과! ✅',
-          'gh run watch 로 GitHub Actions 빌드 과정을 터미널에서 실시간으로 지켜봤어요!',
+          '자동 검사(CI) 전원 통과! ✅',
+          'gh run watch 로 자동 검사(빌드·테스트) 과정을 터미널에서 실시간으로 지켜봤어요!',
           nextStepHintText(state),
         ),
       );
@@ -3120,49 +3184,50 @@ const GENERAL_CATALOG: { cmd: string; hint: string }[] = [
   { cmd: 'git status', hint: '작업 파일과 스테이징 상태 보기' },
   { cmd: 'edit 회의록.md', hint: '회의록에 예시 문장 추가하기' },
   { cmd: 'git add .', hint: '변경을 다음 커밋에 담기' },
-  { cmd: 'git commit -m "변경 사항 기록"', hint: '내 저장소에 커밋 남기기' },
+  { cmd: 'git commit -m "모임 시간 수정, 참석 안내 추가"', hint: '무엇을 바꿨는지 적어 커밋 남기기' },
   { cmd: 'git push', hint: '팀의 GitHub 저장소에 공유하기' },
   { cmd: 'git log', hint: '커밋 타임라인 기록 보기' },
   { cmd: 'git diff', hint: '수정 전후 차이 비교하기' },
-  { cmd: 'git stash', hint: '작업 중인 변경 임시 보관' },
-  { cmd: 'git stash pop', hint: '임시 보관한 작업 복원' },
+  { cmd: 'git stash', hint: '작업 중인 변경 임시 보관하기' },
+  { cmd: 'git stash pop', hint: '임시 보관한 작업 복원하기' },
   { cmd: 'git revert HEAD', hint: '기록을 남기며 안전하게 취소' },
   { cmd: 'git reset --soft HEAD~1', hint: '커밋만 한 칸 되감기' },
   { cmd: 'git branch', hint: '브랜치 목록 보기' },
   { cmd: 'git switch -c feat/dark', hint: '새 브랜치 만들고 이동하기' },
   { cmd: 'git switch main', hint: 'main 브랜치로 이동하기' },
-  { cmd: 'git merge feature/ui', hint: 'feature/ui 합치기 (충돌 체험)' },
+  { cmd: 'git merge feat/ui', hint: 'feat/ui 합치기 (충돌 체험)' },
   { cmd: 'resolve both', hint: '충돌 해결: 둘 다 합치기' },
   { cmd: 'resolve ours', hint: '충돌 해결: 내 코드 유지' },
   { cmd: 'resolve theirs', hint: '충돌 해결: 상대 코드 채택' },
-  { cmd: 'git commit', hint: '병합 결과를 커밋하기' },
+  { cmd: 'git commit', hint: '합친 결과를 커밋하기' },
   { cmd: 'git rebase main', hint: 'main 위로 커밋 일직선 정렬' },
-  { cmd: 'git fetch', hint: '원격 GitHub 최신 소식 확인' },
+  { cmd: 'git fetch', hint: '원격 GitHub 최신 소식 확인하기' },
   { cmd: 'git pull', hint: '원격 최신 커밋 받아 합치기' },
-  { cmd: 'gh auth status', hint: 'gh CLI 로그인 상태 확인' },
+  { cmd: 'gh auth status', hint: 'gh CLI 로그인 상태 확인하기' },
   { cmd: 'gh repo view', hint: '저장소 요약 보기' },
   { cmd: 'gh pr create', hint: '변경을 검토해 달라는 PR 열기' },
   { cmd: 'gh pr list', hint: '열린 PR 목록 보기' },
-  { cmd: 'gh pr merge', hint: 'PR을 기본 브랜치(main)에 병합하기' },
+  { cmd: 'gh pr view', hint: 'PR의 팀원 검토·승인 확인하기' },
+  { cmd: 'gh pr merge', hint: '승인을 확인한 PR을 main에 합치기' },
   { cmd: 'gh issue create --title "버그 수정"', hint: '새 이슈 카드 등록하기' },
-  { cmd: 'gh run watch', hint: 'GitHub Actions CI 실시간 보기' },
+  { cmd: 'gh run watch', hint: '자동 검사(CI) 실시간 지켜보기' },
   { cmd: 'gh api repos/gitdots/app', hint: 'GitHub REST API 조회하기' },
   { cmd: 'token classic', hint: '예제 classic 토큰의 권한 확인' },
   { cmd: 'token fine', hint: 'Fine-Grained 최소 권한 토큰' },
   { cmd: 'token sso', hint: '회사 계정으로 조직 인증하기' },
   { cmd: 'token ssh', hint: 'SSH 암호화 키 인증 설정' },
-  { cmd: 'token leak-test', hint: '비밀 정보 유출 차단 확인' },
+  { cmd: 'token leak-test', hint: '비밀 정보 유출 차단 확인하기' },
   { cmd: 'gh auth login --with-token', hint: '표준 입력으로 안전 토큰 로그인' },
-  { cmd: 'ghes test-public', hint: '사내 방화벽 외부 차단 테스트' },
+  { cmd: 'ghes test-public', hint: '사내 방화벽 외부 차단 확인하기' },
   { cmd: 'gh auth login --hostname github.corp.internal', hint: '사내 GHES 서버 로그인' },
   { cmd: 'gh api user --hostname github.corp.internal', hint: '사내 GitHub 계정 정보 조회' },
   { cmd: 'ghes runner', hint: '사내 실행기로 자동 빌드하기' },
   { cmd: 'ghes cloud', hint: 'Cloud vs GHES 비교 보기' },
   { cmd: 'git worktree add -b ai/fix wt-ai', hint: 'AI 브랜치의 별도 작업 폴더 만들기' },
   { cmd: 'ai code', hint: 'AI가 버그 수정 코드 작성' },
-  { cmd: 'ai push-main', hint: '브랜치 보호 규칙으로 직접 공유 차단 확인' },
-  { cmd: 'ai pr', hint: 'AI 초안 PR의 자동 테스트 결과 보기' },
-  { cmd: 'ai approve', hint: '사람이 검토하고 승인한 변경 병합' },
+  { cmd: 'ai push-main', hint: '브랜치 보호 규칙으로 직접 공유 차단 확인하기' },
+  { cmd: 'ai pr', hint: 'AI 초안 PR의 자동 검사 결과 보기' },
+  { cmd: 'ai approve', hint: '사람이 검토하고 승인한 변경 합치기' },
   { cmd: 'help', hint: '현재 스테이지 도움말 보기' },
   { cmd: 'clear', hint: '터미널 화면 비우기' },
   { cmd: 'reset', hint: '현재 스테이지 처음부터 다시' },
@@ -3196,7 +3261,7 @@ export function getCommandAutocomplete(
   }
 
   if (state.stageId === 'ch8' && state.ai.prNumber !== null && !state.ai.merged) {
-    pushUnique('ai approve', '사람이 검토하고 승인한 변경 병합');
+    pushUnique('ai approve', '사람이 검토하고 승인한 변경 합치기');
   }
 
   // Stage steps & chips next

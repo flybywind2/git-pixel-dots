@@ -7,10 +7,15 @@ import {
 } from '../types/sim';
 
 // Bump the version when changing the saved snapshot shape or replacing a chapter's example.
-const SESSION_KEY = 'gitdots.practice.v2';
-const LEGACY_KEY = 'gitdots.practice.v1';
+const SESSION_KEY = 'gitdots.practice.v3';
+const LEGACY_KEYS = ['gitdots.practice.v2', 'gitdots.practice.v1'] as const;
 const DRAFT_SAVE_DELAY_MS = 250;
-const replacedExamples: ReadonlySet<StageId> = new Set(['ch1', 'ch2', 'ch4']);
+type LegacyVersion = 'v2' | 'v1';
+// v2→v3에서는 4장 협업 예제가 바뀌었어요. v1→v3은 이전 회의록 전환까지 포함해요.
+const replacedExamples: Record<LegacyVersion, ReadonlySet<StageId>> = {
+  v2: new Set<StageId>(['ch4']),
+  v1: new Set<StageId>(['ch1', 'ch2', 'ch4']),
+};
 
 export interface PracticeSession {
   sim: PixelSimState;
@@ -125,11 +130,11 @@ function hasValidHistory(sim: SavedProgress): boolean {
     && sim.stashCount === sim.stashes.length;
 }
 
-function decodeSession(raw: string, id: StageId, legacy: boolean): PracticeSession | null {
+function decodeSession(raw: string, id: StageId, legacy: LegacyVersion | null): PracticeSession | null {
   const stored: unknown = JSON.parse(raw);
   if (!isRecord(stored) || !isRecord(stored.sim)) return null;
-  const seq = legacy && isRecord(stored.sim.lastAnim) ? stored.sim.lastAnim.seq : stored.seq;
-  const snapshot = legacy && stored.sim.bubbles === undefined ? { ...stored.sim, bubbles: [] } : stored.sim;
+  const seq = legacy === 'v1' && isRecord(stored.sim.lastAnim) ? stored.sim.lastAnim.seq : stored.seq;
+  const snapshot = legacy === 'v1' && stored.sim.bubbles === undefined ? { ...stored.sim, bubbles: [] } : stored.sim;
   if (!savedProgress(snapshot) || snapshot.stageId !== id || !hasValidHistory(snapshot) || !isCount(seq)
     || !nullable(isString)(stored.documentDraft) || (id === 'docs') !== Boolean(snapshot.document)) return null;
 
@@ -142,7 +147,7 @@ function decodeSession(raw: string, id: StageId, legacy: boolean): PracticeSessi
     }],
   };
   sim.bubbles = resumePracticeBubbles(sim).map((bubble) => (
-    legacy && /^\d+장 실습 완료$/.test(bubble.title)
+    legacy === 'v1' && /^\d+장 실습 완료$/.test(bubble.title)
       ? { ...bubble, title: `${STAGE_MAP[id].number}장 실습 완료` } : bubble
   ));
   return { sim, documentDraft: stored.documentDraft };
@@ -163,25 +168,35 @@ export function readPracticeSessions() {
   if (!storage) return { sessions, issues };
 
   for (const id of ALL_STAGE_IDS) {
-    let current: string | null;
-    let legacy: string | null;
+    let current: string | null = null;
+    let legacyRaw: string | null = null;
+    let legacyVersion: LegacyVersion | null = null;
     try {
       current = storage.getItem(`${SESSION_KEY}.${id}`);
-      legacy = current === null ? storage.getItem(`${LEGACY_KEY}.${id}`) : null;
+      if (current === null) {
+        for (const [index, key] of LEGACY_KEYS.entries()) {
+          const raw = storage.getItem(`${key}.${id}`);
+          if (raw !== null) {
+            legacyRaw = raw;
+            legacyVersion = index === 0 ? 'v2' : 'v1';
+            break;
+          }
+        }
+      }
     } catch {
       break;
     }
-    const raw = current ?? legacy;
+    const raw = current ?? legacyRaw;
     if (raw === null) continue;
     try {
-      const session = decodeSession(raw, id, legacy !== null);
+      const session = decodeSession(raw, id, legacyVersion);
       if (!session) {
         issues[id] = 'invalid';
-      } else if (legacy !== null && replacedExamples.has(id)) {
+      } else if (legacyVersion !== null && replacedExamples[legacyVersion].has(id)) {
         issues[id] = 'example-updated';
       } else {
         sessions[id] = session;
-        if (legacy !== null) writeNow(session);
+        if (legacyVersion !== null) writeNow(session);
       }
     } catch {
       issues[id] = 'invalid';
@@ -190,12 +205,49 @@ export function readPracticeSessions() {
   return { sessions, issues };
 }
 
+type StorageFailureListener = () => void;
+let failureListener: StorageFailureListener | null = null;
+let failureNotified = false;
+
+export function setPracticeStorageFailureListener(listener: StorageFailureListener | null) {
+  failureListener = listener;
+}
+
+function notifyStorageFailure() {
+  if (failureNotified) return;
+  failureNotified = true;
+  failureListener?.();
+}
+
+export function practiceStorageAvailable(): boolean {
+  return getStorage() !== undefined;
+}
+
 function writeNow({ sim, documentDraft }: PracticeSession) {
   const { lastAnim, terminal: _terminal, ...snapshot } = sim;
+  const storage = getStorage();
+  if (!storage) {
+    notifyStorageFailure();
+    return;
+  }
   try {
-    getStorage()?.setItem(`${SESSION_KEY}.${sim.stageId}`, JSON.stringify({ sim: snapshot, seq: lastAnim.seq, documentDraft }));
+    storage.setItem(`${SESSION_KEY}.${sim.stageId}`, JSON.stringify({ sim: snapshot, seq: lastAnim.seq, documentDraft }));
   } catch {
     // The page keeps the latest work in memory when browser storage is unavailable.
+    notifyStorageFailure();
+  }
+}
+
+export function readExternalSession(key: string, raw: string): { id: StageId; session: PracticeSession } | null {
+  const prefix = `${SESSION_KEY}.`;
+  if (!key.startsWith(prefix)) return null;
+  const id = key.slice(prefix.length) as StageId;
+  if (!ALL_STAGE_IDS.includes(id)) return null;
+  try {
+    const session = decodeSession(raw, id, null);
+    return session ? { id, session } : null;
+  } catch {
+    return null;
   }
 }
 

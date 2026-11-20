@@ -28,7 +28,7 @@ export function LessonGuide() {
   const editDocument = lesson.id === 'docs' && nextStep?.doneAction === 'EDIT';
   const saveDraft = draft !== null;
   const ButtonIcon = saveDraft ? Save : editDocument ? Pencil : Play;
-  const label = saveDraft ? '문서 저장' : nextStep?.label;
+  const label = saveDraft ? '문서 저장하기' : nextStep?.label;
 
   function runGuidedStep() {
     if (saveDraft) {

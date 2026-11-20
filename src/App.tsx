@@ -7,14 +7,27 @@ import { HelpDrawer } from './components/HelpDrawer';
 import { LessonGuide } from './components/LessonGuide';
 import { DocumentLab } from './components/DocumentLab';
 import { PracticeConfirmation } from './components/PracticeConfirmation';
-import { flushPracticeSaves, type PracticeSaveIssue } from './store/practiceStorage';
+import { flushPracticeSaves, readExternalSession, type PracticeSaveIssue } from './store/practiceStorage';
 
 export function App() {
   const setStage = usePixelStore((s) => s.setStage);
   const stageId = usePixelStore((s) => s.stageId);
   const saveIssue = usePixelStore((s) => s.saveIssues[s.stageId]);
+  const storageWarning = usePixelStore((s) => s.storageWarning);
+  const dismissStorageWarning = usePixelStore((s) => s.dismissStorageWarning);
+  const adoptExternalSession = usePixelStore((s) => s.adoptExternalSession);
   const shell = useRef<HTMLDivElement>(null);
   const main = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (!event.key || event.newValue === null) return;
+      const external = readExternalSession(event.key, event.newValue);
+      if (external) adoptExternalSession(external.id, external.session);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [adoptExternalSession]);
 
   useEffect(() => {
     const onHash = () => setStage(syncChapterLocation());
@@ -67,6 +80,17 @@ export function App() {
     <div ref={shell} className="practice-shell relative flex h-dvh w-full flex-col bg-[#F6EFE2] text-[#2F241D]">
       <TopStageBar />
       <main ref={main} className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain">
+        {storageWarning && (
+          <div role="alert" className="mx-auto mt-3 flex w-[calc(100%-2rem)] max-w-3xl items-start gap-3 rounded-md border border-[#DDBE8A] bg-[#FFF2D7] px-3 py-2 text-sm text-[#73450E]">
+            <p className="flex-1 break-keep leading-relaxed">
+              이 브라우저에는 진행 상태를 저장할 수 없어요. 이 창을 닫으면 진행 상태가 사라져요.
+            </p>
+            <button type="button" onClick={dismissStorageWarning}
+              className="shrink-0 rounded-md border border-[#DDBE8A] bg-[#FFFDF8] px-2 py-1 text-xs font-semibold">
+              닫기
+            </button>
+          </div>
+        )}
         {saveIssue ? <PracticeRecovery issue={saveIssue} /> : (
           <>
             <LessonGuide />
@@ -82,19 +106,19 @@ export function App() {
 }
 
 function PracticeRecovery({ issue }: { issue: PracticeSaveIssue }) {
-  const resetStage = usePixelStore((state) => state.resetStage);
+  const resetStageImmediately = usePixelStore((state) => state.resetStageImmediately);
   const updated = issue === 'example-updated';
 
   return (
     <section aria-labelledby="practice-recovery-title" className="mx-auto mt-6 w-[calc(100%-2rem)] max-w-xl rounded-xl border border-[#CDBCA3] bg-[#FFFDF8] p-5 sm:p-6">
       <h1 id="practice-recovery-title" className="break-keep text-xl font-bold">
-        {updated ? '이 장의 예제가 회의록으로 바뀌었어요' : '이 장의 저장 내용을 읽을 수 없어요'}
+        {updated ? '이 장의 실습 예제가 바뀌었어요' : '이 장의 저장 내용을 읽을 수 없어요'}
       </h1>
       <p className="mt-2 break-keep text-sm leading-relaxed text-[#59483B]">
-        {updated ? '이전 실습 기록은 브라우저에 보관했어요. 이 장을 초기화하면 새 문서 예제가 열려요.'
+        {updated ? '이전 실습 기록은 브라우저에 보관했어요. 이 장을 초기화하면 새 예제가 열려요.'
           : '현재 장을 초기화하면 처음부터 다시 실습할 수 있어요.'}
       </p>
-      <button type="button" onClick={resetStage} className="pixel-btn mt-4 rounded-md border-[#C78B1E] bg-[#F4B942] px-3 py-2 text-sm font-bold">
+      <button type="button" onClick={resetStageImmediately} className="pixel-btn mt-4 rounded-md border-[#C78B1E] bg-[#F4B942] px-3 py-2 text-sm font-bold">
         현재 장 초기화
       </button>
     </section>

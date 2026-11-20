@@ -2,7 +2,10 @@ import { create } from 'zustand';
 import { ALL_STAGE_IDS, type PixelSimState, type StageId } from '../types/sim';
 import { createStageState, executePixelCommand, pendingHardReset, savePracticeDocument } from '../engine';
 import { EXAMPLE_DOCUMENT, getDocumentWorkingText } from '../engine/documentDiff';
-import { flushPracticeSaves, readPracticeSessions, writePracticeSession, type PracticeSaveIssue, type PracticeSession } from './practiceStorage';
+import {
+  flushPracticeSaves, practiceStorageAvailable, readPracticeSessions, setPracticeStorageFailureListener,
+  writePracticeSession, type PracticeSaveIssue, type PracticeSession,
+} from './practiceStorage';
 
 export function chapterHash(id: StageId): string {
   return `#/chapter/${ALL_STAGE_IDS.indexOf(id) + 1}`;
@@ -35,15 +38,19 @@ export interface PixelStore extends PracticeSession {
   helpOpen: boolean;
   confirmation: PracticeConfirmation | null;
   notice: string | null;
+  storageWarning: boolean;
 
   setStage: (id: StageId) => void;
   runCommand: (cmd: string) => void;
   resetStage: () => void;
+  resetStageImmediately: () => void;
   setDocumentDraft: (text: string) => void;
   loadExampleDocument: () => void;
   saveDocument: () => void;
   setHelpOpen: (open: boolean) => void;
   resolveConfirmation: (confirmed: boolean) => void;
+  dismissStorageWarning: () => void;
+  adoptExternalSession: (id: StageId, session: PracticeSession) => void;
 }
 
 function freshSession(id: StageId): PracticeSession {
@@ -84,6 +91,7 @@ export const usePixelStore = create<PixelStore>((set) => ({
   helpOpen: false,
   confirmation: null,
   notice: null,
+  storageWarning: !practiceStorageAvailable(),
 
   setStage: (id) => {
     const hash = chapterHash(id);
@@ -116,6 +124,8 @@ export const usePixelStore = create<PixelStore>((set) => ({
 
   resetStage: () => set({ confirmation: { kind: 'lesson-reset' } }),
 
+  resetStageImmediately: () => set((state) => applySession(state, createStageState(state.stageId), null)),
+
   resolveConfirmation: (confirmed) => set((state) => {
     if (!confirmed || !state.confirmation) return { confirmation: null };
     if (state.confirmation.kind === 'hard-reset') return execute(state, state.confirmation.command);
@@ -140,4 +150,15 @@ export const usePixelStore = create<PixelStore>((set) => ({
   }),
 
   setHelpOpen: (open) => set({ helpOpen: open }),
+
+  dismissStorageWarning: () => set({ storageWarning: false }),
+
+  adoptExternalSession: (id, session) => set((state) => {
+    const sessions = { ...state.sessions, [id]: session };
+    const saveIssues = state.saveIssues[id] ? { ...state.saveIssues, [id]: undefined } : state.saveIssues;
+    if (id !== state.stageId) return { sessions, saveIssues };
+    return { ...session, stageId: id, sessions, saveIssues, notice: null, confirmation: null };
+  }),
 }));
+
+setPracticeStorageFailureListener(() => usePixelStore.setState({ storageWarning: true }));

@@ -96,7 +96,7 @@ async function documentLesson(page, url, capture) {
   assert(await editor.evaluate((node) => node === document.activeElement));
   const edited = original.replace('금요일 저녁 7시', '수요일 오후 2시');
   await editor.fill(edited);
-  assert.equal(await guide.innerText(), '문서 저장');
+  assert.equal(await guide.innerText(), '문서 저장하기');
 
   const example = page.getByRole('button', { name: '예시 수정 넣기', exact: true });
   const replace = page.getByRole('dialog', { name: '예시 문장으로 바꿀까요?' });
@@ -151,9 +151,9 @@ async function documentLesson(page, url, capture) {
   await page.waitForURL('**/#/chapter/2');
   await page.getByRole('heading', { name: '변경 사항을 커밋하고 공유하기', exact: true }).waitFor();
   await openTerminal(page);
-  await expectQuickAction(page, '공유할 변경 담기', 'git add .');
+  await expectQuickAction(page, '다음 기록에 담기', 'git add .');
   await expectQuickAction(page, '팀에 공유하기', 'git push');
-  for (const label of ['공유할 변경 담기', '기록 남기기', '팀에 공유하기']) {
+  for (const label of ['다음 기록에 담기', '기록 남기기', '팀에 공유하기']) {
     assert.equal(await guide.innerText(), label);
     await guide.click();
   }
@@ -227,8 +227,8 @@ async function practiceTracks(page, url) {
   await openChapter(page, url, 3);
   const guide = page.getByTestId('guided-command');
   await openTerminal(page);
-  await expectQuickAction(page, '보관한 작업 복원', 'git stash pop');
-  for (const label of ['작업 임시 보관', '지난 변경 취소', '보관한 작업 복원']) {
+  await expectQuickAction(page, '보관한 작업 복원하기', 'git stash pop');
+  for (const label of ['작업 임시 보관하기', '지난 변경 취소하기', '보관한 작업 복원하기']) {
     assert.equal(await guide.innerText(), label);
     await guide.click();
   }
@@ -248,11 +248,11 @@ async function practiceTracks(page, url) {
   assert.match(page.url(), /#\/chapter\/4$/);
   await helpTab.close();
 
-  for (const label of ['최신 기록 확인', '팀에 공유하기', '검토 요청하기', '검토한 변경 합치기']) {
+  for (const label of ['새 브랜치 만들기', '다음 기록에 담기', '기록 남기기', '팀에 공유하기', '검토 요청하기', '팀원 승인 확인하기', '검토한 변경 합치기']) {
     assert.equal(await guide.innerText(), label);
     await guide.click();
   }
-  await expectProgress(page, 4, 4);
+  await expectProgress(page, 7, 7);
   await runCommand(page, 'git show origin/main:회의록.md');
   await page.getByRole('log').getByText(/장소는 2층 모임방이에요\./).waitFor();
 
@@ -274,7 +274,7 @@ async function storageRecovery(page, url) {
     window.draftWrites = 0;
     const originalSet = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key, value) {
-      if (key === 'gitdots.practice.v2.docs') window.draftWrites++;
+      if (key === 'gitdots.practice.v3.docs') window.draftWrites++;
       return originalSet.call(this, key, value);
     };
     const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
@@ -294,47 +294,49 @@ async function storageRecovery(page, url) {
   assert.equal(await editor.inputValue(), latest);
 
   const guide = page.getByTestId('guided-command');
-  await openChapter(page, url, 3);
-  await guide.click();
   await openChapter(page, url, 5);
   await guide.click();
+  await openChapter(page, url, 4);
+  await guide.click();
   await page.evaluate(() => {
-    for (const id of ['docs', 'ch2']) {
-      const key = `gitdots.practice.v2.${id}`;
-      const { sim, seq, documentDraft } = JSON.parse(localStorage.getItem(key));
-      const legacy = { sim: { ...sim, lastAnim: { kind: 'IDLE', seq, label: '이전 실습' }, bubbles: [], terminal: [] }, documentDraft };
-      localStorage.setItem(`gitdots.practice.v1.${id}`, JSON.stringify(legacy));
+    // docs와 ch4의 v3 저장본을 v2 레거시로 돌려 예제 변경 마이그레이션을 검증해요.
+    for (const id of ['docs', 'ch4']) {
+      const key = `gitdots.practice.v3.${id}`;
+      localStorage.setItem(`gitdots.practice.v2.${id}`, localStorage.getItem(key));
       localStorage.removeItem(key);
     }
-    const key = 'gitdots.practice.v2.ch3';
+    // ch3 저장본의 커밋 부모를 깨뜨려 읽기 불가 복구를 검증해요.
+    const key = 'gitdots.practice.v3.ch3';
     const broken = JSON.parse(localStorage.getItem(key));
     const firstCommit = broken.sim.commits[0];
     firstCommit.parents = [firstCommit.id];
     localStorage.setItem(key, JSON.stringify(broken));
   });
+  // 현재 URL은 #/chapter/4(ch4)예요. v2 레거시 + 예제 변경 → 복구 화면.
   await page.reload();
   const reset = page.getByRole('main').getByRole('button', { name: '현재 장 초기화', exact: true });
-  const confirmation = page.getByRole('dialog', { name: '현재 장을 초기화할까요?' });
+  const updated = page.getByRole('heading', { name: '이 장의 실습 예제가 바뀌었어요' });
+  await updated.waitFor();
+  // 복구 화면의 초기화는 확인 창 없이 바로 동작해요.
+  await reset.click();
+  await expectProgress(page, 0, 7);
+  assert(await page.evaluate(() => localStorage.getItem('gitdots.practice.v2.ch4') && localStorage.getItem('gitdots.practice.v3.ch4')));
+  await page.reload();
+  await expectProgress(page, 0, 7);
+
+  // 깨진 ch3 저장본 → 읽기 불가 복구.
+  await page.goto(`${url}#/chapter/5`);
   const unreadable = page.getByRole('heading', { name: '이 장의 저장 내용을 읽을 수 없어요' });
   await unreadable.waitFor();
   await reset.click();
-  await confirmation.getByRole('button', { name: '취소', exact: true }).click();
-  await unreadable.waitFor();
-  await reset.click();
-  await confirmation.getByRole('button', { name: '현재 장 초기화', exact: true }).click();
   await expectProgress(page, 0, 4);
   await page.reload();
   await expectProgress(page, 0, 4);
 
-  await page.goto(`${url}#/chapter/3`);
-  await page.getByRole('heading', { name: '이 장의 예제가 회의록으로 바뀌었어요' }).waitFor();
-  await reset.click();
-  await confirmation.getByRole('button', { name: '현재 장 초기화', exact: true }).click();
-  await expectProgress(page, 0, 3);
-  assert(await page.evaluate(() => localStorage.getItem('gitdots.practice.v1.ch2') && localStorage.getItem('gitdots.practice.v2.ch2')));
+  // docs는 v2 레거시에서 조용히 마이그레이션돼요.
   await openChapter(page, url, 1);
   assert.equal(await editor.inputValue(), latest);
-  assert(await page.evaluate(() => JSON.parse(localStorage.getItem('gitdots.practice.v2.docs')).sim.bubbles.length > 0));
+  assert(await page.evaluate(() => JSON.parse(localStorage.getItem('gitdots.practice.v3.docs')).sim.bubbles.length > 0));
 }
 
 async function mobileCanvasAndKeyboard(browser, url) {
@@ -376,7 +378,7 @@ async function mobileCanvasAndKeyboard(browser, url) {
     await openChapter(page, url, 5);
     await page.waitForFunction(() => window.sampledLabels.has('10aa20b'), undefined, { timeout: 9000 });
     const labels = await page.evaluate(() => Array.from(window.sampledLabels));
-    for (const entry of ['10aa20b', '30cc40d', '50ee60f', 'HEAD · main', 'feature/ui']) {
+    for (const entry of ['10aa20b', '30cc40d', '50ee60f', 'HEAD · main', 'feat/ui']) {
       assert(labels.some(([label]) => label === entry), `Missing canvas label ${entry}`);
     }
     for (const [label, { size, font, maxWidth }] of labels) {
@@ -441,6 +443,41 @@ async function revertConflict(page) {
   assert.equal(await editor.inputValue(), original);
 }
 
+async function storageWarning(page, url) {
+  await openChapter(page, url, 2);
+  assert.equal(await page.getByRole('alert').count(), 0);
+  // 사생활 보호 모드·용량 초과처럼 저장이 실패하는 상황을 재현해요.
+  await page.evaluate(() => {
+    const originalSet = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key.startsWith('gitdots.practice.')) throw new DOMException('quota exceeded', 'QuotaExceededError');
+      return originalSet.call(this, key, value);
+    };
+  });
+  await page.getByTestId('guided-command').click();
+  const alert = page.getByRole('alert');
+  await alert.waitFor();
+  assert.match(await alert.innerText(), /이 창을 닫으면 진행 상태가 사라져요/);
+  await alert.getByRole('button', { name: '닫기', exact: true }).click();
+  assert.equal(await page.getByRole('alert').count(), 0);
+  // 닫은 뒤에는 저장 실패가 반복돼도 경고를 다시 띄우지 않아요.
+  await page.getByTestId('guided-command').click();
+  assert.equal(await page.getByRole('alert').count(), 0);
+}
+
+async function crossTabSync(browser, url) {
+  const context = await browser.newContext({ viewport: { width: 1024, height: 768 } });
+  const a = await context.newPage();
+  const b = await context.newPage();
+  await openChapter(a, url, 2);
+  await openChapter(b, url, 2);
+  await a.getByTestId('guided-command').click();
+  await expectProgress(a, 1, 3);
+  // 다른 탭의 저장본을 storage 이벤트로 반영해 두 탭이 같은 진행 상태를 보여줘요.
+  await b.waitForFunction(() => document.querySelector('[data-testid="stage-step-badge"]')?.textContent === '실습 1/3 완료');
+  await context.close();
+}
+
 async function main() {
   fs.mkdirSync(out, { recursive: true });
   const local = publicUrl ? undefined : await startServer();
@@ -475,6 +512,14 @@ async function main() {
     await savedPage.close();
     await mobileCanvasAndKeyboard(browser, url);
     console.log('[QA] Course numbering, web guide, save migration and recovery, glyph fallback and mobile keyboard checks passed');
+
+    const warningPage = await browser.newPage();
+    const warningErrors = trackErrors(warningPage, origin);
+    await storageWarning(warningPage, url);
+    assert.deepEqual(warningErrors, []);
+    await warningPage.close();
+    await crossTabSync(browser, url);
+    console.log('[QA] Storage failure warning and cross-tab sync passed');
 
     const link = await browser.newPage();
     await link.goto(url + 'docs/deeper/');

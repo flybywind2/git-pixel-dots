@@ -31,7 +31,7 @@
 | [1. 문서 편집과 비교](https://flybywind2.github.io/git-pixel-dots/#/chapter/1) | 회의록을 고치고 기록에 담긴 줄을 비교해요. |
 | [2. 변경 기록과 공유](https://flybywind2.github.io/git-pixel-dots/#/chapter/2) | 회의록과 참석 안내를 새 커밋에 담아 팀에 공유해요. |
 | [3. 보관과 취소](https://flybywind2.github.io/git-pixel-dots/#/chapter/3) | 회의록 수정을 잠시 보관하고 잘못 올린 임시 안내를 취소해요. |
-| [4. GitHub 협업](https://flybywind2.github.io/git-pixel-dots/#/chapter/4) | 모임 장소를 수정한 회의록을 풀 리퀘스트(PR)로 검토 요청하고 병합해요. |
+| [4. GitHub 협업](https://flybywind2.github.io/git-pixel-dots/#/chapter/4) | 새 브랜치에 모임 장소 수정을 기록하고, 풀 리퀘스트(PR)로 팀원 승인을 받아 합쳐요. |
 
 ## 심화 실습
 
@@ -47,7 +47,7 @@
 
 앱의 1장과 4장에서도 이 안내를 열 수 있어요.
 
-- 파일을 열고 연필 버튼으로 수정한 뒤 **Commit changes**에서 변경 메시지를 남길 수 있어요. 다른 브랜치나 포크로 변경을 제안할 때는 **Propose changes**가 표시될 수 있어요. [GitHub 파일 편집 안내](https://docs.github.com/en/repositories/working-with-files/managing-files/editing-files)
-- 새 브랜치의 변경을 제안하려면 **Compare & pull request**에서 대상 브랜치를 확인하고 **Create pull request**를 누르세요. [GitHub 풀 리퀘스트 안내](https://docs.github.com/en/pull-requests/how-tos/create-pull-requests/creating-a-pull-request)
+- 파일을 열고 연필 버튼으로 수정한 뒤 **Commit changes**에서 변경 메시지를 남길 수 있어요. 다른 브랜치나 포크로 변경을 제안할 때는 **Propose changes**가 표시될 수 있어요. [GitHub 파일 편집 안내](https://docs.github.com/ko/repositories/working-with-files/managing-files/editing-files)
+- 새 브랜치의 변경을 제안하려면 **Compare & pull request**에서 대상 브랜치를 확인하고 **Create pull request**를 누르세요. [GitHub 풀 리퀘스트 안내](https://docs.github.com/ko/pull-requests/how-tos/create-pull-requests/creating-a-pull-request)
 
 픽셀 글꼴 GitDots Pixel은 Galmuri11 2.40.3에서 캔버스와 이름표에 쓰는 글자를 추린 버전이에요. 라벨에 새 글자를 추가한 뒤에는 `fonttools[woff]`가 설치된 환경에서 `python scripts/subset-pixel-font.py /경로/Galmuri11.woff2`로 다시 만들 수 있어요. CI는 `python scripts/subset-pixel-font.py --check`로 캔버스와 이름표에 필요한 글자를 검사해요. [Galmuri 라이선스](public/licenses/Galmuri-OFL.txt)
