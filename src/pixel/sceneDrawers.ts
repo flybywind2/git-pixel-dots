@@ -1,4 +1,5 @@
 import type { PixelAnimKind, PixelSimState } from '../types/sim';
+import { commitById, reachableCommits } from '../engine/repoVersions';
 import { PALETTE, withAlpha } from './palette';
 import {
   AI_BOT,
@@ -33,7 +34,7 @@ import {
   type BuddyPose,
 } from './sprites';
 import {
-  PIXEL_FONT,
+  drawCommitHash,
   drawDottedTrack,
   drawPixelBadge,
   drawZonePad,
@@ -196,8 +197,8 @@ function drawCh1Scene(
     xs[0],
     padY,
     padW,
-    '1. 작업 공간',
-    workingCount > 0 ? `변경 파일 ${workingCount}개` : '추가 변경 없음',
+    '작업 폴더',
+    workingCount > 0 ? `변경 ${workingCount}개` : '변경 없음',
     PALETTE.butter,
     activeIdx === 0,
     time,
@@ -207,8 +208,8 @@ function drawCh1Scene(
     xs[1],
     padY,
     padW,
-    '2. 스테이징',
-    sim.staged.length > 0 ? `담긴 파일 ${sim.staged.length}개` : '임시 바구니',
+    '스테이징',
+    sim.staged.length > 0 ? `선택 ${sim.staged.length}개` : '선택 없음',
     PALETTE.mint,
     activeIdx === 1,
     time,
@@ -218,7 +219,7 @@ function drawCh1Scene(
     xs[2],
     padY,
     padW,
-    '3. 로컬 저장소',
+    '내 저장소',
     `커밋 ${sim.commits.length}개`,
     PALETTE.sky,
     activeIdx === 2,
@@ -229,7 +230,7 @@ function drawCh1Scene(
     xs[3],
     padY,
     padW,
-    '4. 원격 GitHub',
+    '팀 저장소',
     shared ? '같은 커밋' : remoteHead ? '푸시 대기' : '원격 브랜치 없음',
     PALETTE.lavender,
     activeIdx === 3,
@@ -366,6 +367,17 @@ function drawCh1Scene(
 // CH2: 필수 명령어 — 타임라인 & 임시 보관함 (Stash / Revert / Reset)
 // ===========================================================================
 
+export function recentTimelineCommits(sim: PixelSimState) {
+  const history = reachableCommits(sim, sim.branches[sim.headBranch]);
+  const previousHead = commitById(sim, sim.origHead);
+  const ghost = previousHead?.ghost && !history.has(previousHead.id) ? previousHead : undefined;
+  const recent = sim.commits.filter((commit) => history.has(commit.id)).slice(ghost ? -3 : -4);
+  const visible = new Set(recent.map((commit) => commit.id));
+  if (ghost) visible.add(ghost.id);
+  return sim.commits.filter((commit) => visible.has(commit.id))
+    .map((commit) => ({ commit, rewound: !history.has(commit.id) }));
+}
+
 function drawCh2Scene(
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -376,7 +388,7 @@ function drawCh2Scene(
   motion: SceneMotionState,
 ): void {
   const dot = computeDotSize(w, h);
-  const railY = h * 0.62;
+  const railY = h * 0.7;
   const railLeft = w * 0.16;
   const railRight = w * 0.86;
   const kind = sim.lastAnim.kind;
@@ -394,23 +406,23 @@ function drawCh2Scene(
   );
 
   // Draw commit gems along the rail
-  const commits = sim.commits.slice(-6);
+  const commits = recentTimelineCommits(sim);
   const headCommitId = sim.branches[sim.headBranch];
   let headX = railLeft + (railRight - railLeft) * 0.35;
 
-  commits.forEach((c, idx) => {
+  commits.forEach(({ commit: c, rewound }, idx) => {
     const frac = commits.length <= 1 ? 0.5 : idx / Math.max(commits.length - 1, 1);
     const gx = railLeft + 24 + frac * (railRight - railLeft - 48);
-    const gy = c.ghost ? railY - dot * 6.5 : railY;
+    const gy = rewound ? railY - dot * 6.5 : railY;
     const isHead = c.id === headCommitId;
     if (isHead) headX = gx;
 
     ctx.save();
-    if (c.ghost) {
+    if (rewound) {
       ctx.globalAlpha = 0.42;
     }
 
-    const gemColors = c.ghost
+    const gemColors = rewound
       ? makeGemColors(PALETTE.slateMuted, PALETTE.slate, PALETTE.woodDark, PALETTE.slate)
       : c.isRevert
         ? makeGemColors(PALETTE.mint, PALETTE.mintLight, PALETTE.mintDark)
@@ -433,25 +445,19 @@ function drawCh2Scene(
       drawPixelSprite(ctx, SHIELD_ICON, makeShieldColors(PALETTE.mint, PALETTE.mintDark), gx + dot * 5.2, gy - dot * 5.2, dot * 0.45, 'dot');
     }
 
-    // Short hash & label beneath
-    ctx.textAlign = 'center';
-    ctx.font = `700 10px ${PIXEL_FONT}`;
-    ctx.fillStyle = c.ghost ? PALETTE.slateMuted : PALETTE.textPrimary;
-    ctx.fillText(c.hash.slice(0, 6), gx, gy + dot * 7);
-
     ctx.restore();
+    drawCommitHash(ctx, c.hash, gx, gy + dot * 4.5 + 8, PALETTE.textPrimary);
   });
 
-  // Cozy pixel Stash drawer on bottom-left
   const stashX = w * 0.2;
-  const stashY = h * 0.82;
+  const stashY = h * 0.32;
   const stashActive = kind === 'STASH' || kind === 'STASH_POP';
   drawZonePad(
     ctx,
     stashX,
     stashY,
     clamp(w * 0.2, 118, 165),
-    '임시 서랍 (Stash)',
+    '임시 보관',
     sim.stashCount > 0 ? `보관 중 ${sim.stashCount}개` : '비어 있음',
     PALETTE.butter,
     stashActive || sim.stashCount > 0,
@@ -480,8 +486,8 @@ function drawCh2Scene(
   }
 
   // Buddy stands near Stash during stash ops, otherwise alongside HEAD
-  const targetNormX = stashActive ? 0.32 : clamp((headX - dot * 11) / w, 0.14, 0.86);
-  const targetNormY = stashActive ? 0.77 : 0.3;
+  const targetNormX = stashActive ? 0.39 : clamp(headX / w, 0.44, 0.85);
+  const targetNormY = 0.32;
   const b = moveBuddySmooth(motion, 'ch2', targetNormX, targetNormY);
   const pose: BuddyPose =
     kind === 'RESET' && animProgress < 0.8
@@ -499,6 +505,14 @@ function drawCh2Scene(
 // CH3: 브랜치·충돌 — 평행우주 기찻길 (Main & Feature Tracks + Conflict Bonk)
 // ===========================================================================
 
+function firstParentHistory(sim: PixelSimState, tip: string | undefined) {
+  const commits: PixelSimState['commits'] = [];
+  for (let commit = commitById(sim, tip); commit; commit = commitById(sim, commit.parents[0])) {
+    commits.push(commit);
+  }
+  return commits.reverse();
+}
+
 function drawCh3Scene(
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -509,112 +523,72 @@ function drawCh3Scene(
   motion: SceneMotionState,
 ): void {
   const dot = computeDotSize(w, h);
-  const mainY = h * 0.75;
-  const featY = h * 0.54;
-  const leftX = w * 0.14;
-  const forkX = w * 0.3;
-  const joinX = w * 0.72;
-  const rightX = w * 0.88;
+  const mainY = h * 0.67;
+  const featY = h * 0.33;
   const kind = sim.lastAnim.kind;
+  const featureName = 'feature/ui' in sim.branches ? 'feature/ui'
+    : Object.keys(sim.branches).find((name) => name !== 'main');
+  const lowerBranch = sim.headBranch === featureName ? 'main' : sim.headBranch;
 
-  const featureBranches = Object.keys(sim.branches).filter((b) => b !== 'main');
-  const featureName = featureBranches[0] ?? 'feature';
-  const hasFeature = featureBranches.length > 0;
+  const lowerHistory = firstParentHistory(sim, sim.branches[lowerBranch]);
+  const upperHistory = firstParentHistory(sim, featureName ? sim.branches[featureName] : undefined);
+  const lowerIds = new Set(lowerHistory.map((commit) => commit.id));
+  const split = upperHistory.findIndex((commit) => !lowerIds.has(commit.id));
+  const forkCommit = upperHistory[split === -1 ? upperHistory.length - 1 : split - 1];
+  const lowerCommits = lowerHistory.slice(-4);
+  if (forkCommit && !lowerCommits.includes(forkCommit)) lowerCommits.splice(0, 1, forkCommit);
+  const mainNodes = lowerCommits.map((commit, index) => ({ commit, x: w * (0.19 + index * 0.16) }));
+  const fork = mainNodes.find((node) => node.commit.id === forkCommit?.id);
+
+  const featureCommits = split === -1 ? [] : upperHistory.slice(split).slice(-3);
+  const featureStart = Math.min((fork?.x ?? w * 0.12) + w * 0.23, w * 0.65);
+  const featureGap = Math.min(w * 0.19, (w * 0.85 - featureStart) / Math.max(1, featureCommits.length - 1));
+  const featureNodes = featureCommits.map((commit, index) => ({ commit, x: featureStart + index * featureGap }));
+  const featureTip = featureNodes.at(-1);
   const hasConflict = Boolean(sim.conflict && sim.conflict.resolvedChoice === 'none');
-  const hasMerged = sim.commits.some((c) => c.isMerge) || kind === 'MERGE_OK' || kind === 'RESOLVE';
+  const mergeNode = mainNodes.filter(({ commit }) => commit.parents.slice(1).some((parent) =>
+    upperHistory.some((ancestor) => ancestor.id === parent))).at(-1);
+  const hasMerged = Boolean(mergeNode) || kind === 'MERGE_OK' || kind === 'RESOLVE';
 
-  // Lower main sky-blue dotted railway
-  drawDottedTrack(ctx, leftX, mainY, rightX, mainY, PALETTE.sky, time, sim.headBranch === 'main' || hasMerged);
-  drawPixelBadge(ctx, leftX - 4, mainY + dot * 6.5, 'main', PALETTE.cream, PALETTE.skyDark, PALETTE.sky, 10.5, true);
-
-  // Upper feature lavender dotted railway + curved fork
-  drawDottedTrack(
-    ctx,
-    forkX,
-    mainY,
-    forkX + w * 0.08,
-    featY,
-    PALETTE.lavender,
-    time,
-    hasFeature,
-    -14,
-  );
-  drawDottedTrack(
-    ctx,
-    forkX + w * 0.08,
-    featY,
-    joinX - w * 0.03,
-    featY,
-    PALETTE.lavender,
-    time,
-    hasFeature && (sim.headBranch !== 'main' || hasConflict),
-  );
-  if (hasFeature) {
-    drawPixelBadge(
-      ctx,
-      forkX + w * 0.08,
-      featY - dot * 7.2,
-      featureName,
-      PALETTE.cream,
-      PALETTE.lavenderDark,
-      PALETTE.lavender,
-      10.5,
-      true,
-    );
+  drawDottedTrack(ctx, w * 0.12, mainY, w * 0.9, mainY, PALETTE.sky, time, sim.headBranch === lowerBranch);
+  if (fork && featureNodes.length > 0) {
+    drawDottedTrack(ctx, fork.x, mainY, featureStart, featY, PALETTE.lavender, time, true, -10);
+  }
+  if (featureTip) {
+    drawDottedTrack(ctx, featureStart, featY, featureTip.x, featY, PALETTE.lavender, time, sim.headBranch === featureName);
+    if (hasConflict || mergeNode) {
+      drawDottedTrack(ctx, featureTip.x, featY, mergeNode?.x ?? w * 0.86, mainY,
+        hasConflict ? PALETTE.coral : PALETTE.mint, time, true, -9);
+    }
   }
 
-  // Merge curve back to main when merged or during conflict clash
-  if (hasMerged || hasConflict) {
-    drawDottedTrack(
-      ctx,
-      joinX - w * 0.03,
-      featY,
-      joinX + w * 0.05,
-      mainY,
-      hasConflict ? PALETTE.coral : PALETTE.mint,
-      time,
-      true,
-      12,
-    );
-  }
-
-  // Render commits on their respective tracks
-  const mainCommits = sim.commits.filter((c) => c.branch === 'main' || c.isMerge);
-  const featCommits = sim.commits.filter((c) => c.branch !== 'main' && !c.isMerge);
-
-  mainCommits.slice(-4).forEach((c, idx) => {
-    const gx = c.isMerge ? joinX + w * 0.05 : leftX + w * 0.06 + idx * (w * 0.16);
-    const gemColors = c.isMerge
+  for (const { commit, x } of mainNodes) {
+    const colors = commit.isMerge
       ? makeGemColors(PALETTE.mint, PALETTE.cream, PALETTE.mintDark, PALETTE.butter)
       : makeGemColors(PALETTE.sky, PALETTE.skyLight, PALETTE.skyDark);
-    drawPixelSprite(ctx, COMMIT_GEM, gemColors, gx, mainY, dot * (c.isMerge ? 1.12 : 0.9), 'dot');
-    ctx.fillStyle = c.isMerge ? PALETTE.mintDark : PALETTE.textSecondary;
-    ctx.font = `700 9.5px ${PIXEL_FONT}`;
-    ctx.textAlign = 'center';
-    ctx.fillText(c.isMerge ? '병합 완료!' : c.hash.slice(0, 5), gx, mainY + dot * 7.5);
-  });
+    const gemSize = dot * (commit.isMerge ? 1.12 : 0.9);
+    drawPixelSprite(ctx, COMMIT_GEM, colors, x, mainY, gemSize, 'dot');
+    drawCommitHash(ctx, commit.hash, x, mainY + gemSize * 4.5 + 6, PALETTE.textPrimary);
+  }
+  for (const { commit, x } of featureNodes) {
+    drawPixelSprite(ctx, COMMIT_GEM, makeGemColors(PALETTE.lavender, PALETTE.lavenderLight, PALETTE.lavenderDark),
+      x, featY, dot * 0.9, 'dot');
+    drawCommitHash(ctx, commit.hash, x, featY + dot * 4.05 + 6, PALETTE.lavenderDark);
+  }
 
-  featCommits.slice(-3).forEach((c, idx) => {
-    const gx = forkX + w * 0.12 + idx * (w * 0.12);
-    drawPixelSprite(
-      ctx,
-      COMMIT_GEM,
-      makeGemColors(PALETTE.lavender, PALETTE.lavenderLight, PALETTE.lavenderDark),
-      gx,
-      featY,
-      dot * 0.9,
-      'dot',
-    );
-    ctx.fillStyle = PALETTE.lavenderDark;
-    ctx.font = `700 9.5px ${PIXEL_FONT}`;
-    ctx.textAlign = 'center';
-    ctx.fillText(c.hash.slice(0, 5), gx, featY + dot * 7);
-  });
+  const lowerLabel = lowerBranch === sim.headBranch ? `HEAD · ${lowerBranch}` : lowerBranch;
+  drawPixelBadge(ctx, mainNodes.at(-1)?.x ?? w * 0.37, mainY + dot * 5 + 39, lowerLabel,
+    PALETTE.cream, PALETTE.skyDark, PALETTE.sky, 12, true);
+  if (featureName && (featureTip || fork)) {
+    const upperLabel = featureName === sim.headBranch ? `HEAD · ${featureName}` : featureName;
+    drawPixelBadge(ctx, featureTip?.x ?? fork?.x ?? featureStart, (featureTip ? featY : mainY) - dot * 5 - 15, upperLabel,
+      PALETTE.cream, PALETTE.lavenderDark, PALETTE.lavender, 12, true);
+  }
 
   // CONFLICT BONK ANIMATION at x = 70%
   if (hasConflict) {
-    const clashX = w * 0.7;
-    const clashY = h * 0.64;
+    const clashX = w * 0.77;
+    const clashY = h * 0.43;
     const shake = Math.sin(time * 28) * 3.5;
 
     // Pulsing coral alarm glow
@@ -662,13 +636,13 @@ function drawCh3Scene(
       );
     }
 
-    drawPixelBadge(ctx, clashX, clashY + dot * 10, '충돌! 같은 줄 수정됨', PALETTE.coralDark, PALETTE.cream, PALETTE.coral, 10.5);
+    drawPixelBadge(ctx, clashX, clashY - dot * 8, '같은 줄이 바뀌었어요', PALETTE.coralDark, PALETTE.cream, PALETTE.coral);
   }
 
   // Buddy hops cleanly between main & feature railways!
   const onFeature = sim.headBranch !== 'main';
-  const targetX = hasConflict ? 0.58 : onFeature ? 0.52 : hasMerged ? 0.77 : 0.42;
-  const targetY = hasConflict ? 0.64 : onFeature ? 0.49 : 0.69;
+  const targetX = hasConflict ? 0.58 : onFeature ? 0.7 : hasMerged ? 0.82 : 0.73;
+  const targetY = hasConflict ? 0.43 : onFeature ? 0.37 : 0.56;
   const b = moveBuddySmooth(motion, 'ch3', targetX, targetY);
   const pose: BuddyPose = hasConflict
     ? 'shocked'
@@ -732,7 +706,7 @@ function drawCh4Scene(
     xCi,
     padY,
     padW,
-    'CI 테스트 게이트',
+    '자동 검사',
     ciPass ? '자동 검사 통과 ✓' : latestPr ? '검사 대기 중' : 'PR 대기 중',
     ciPass ? PALETTE.mint : PALETTE.butter,
     Boolean(latestPr),
@@ -743,7 +717,7 @@ function drawCh4Scene(
     xCloud,
     padY,
     padW,
-    'GitHub 구름 성',
+    'GitHub 저장소',
     prMerged ? 'PR 병합 완료!' : '원격 저장소',
     PALETTE.lavender,
     prMerged || kind === 'PR_MERGE',
@@ -835,15 +809,15 @@ function drawCh5Scene(
 ): void {
   const dot = computeDotSize(w, h);
   const hubX = w * 0.2;
-  const hubY = h * 0.7;
+  const hubY = h * 0.6;
   const padW = clamp(w * 0.175, 102, 148);
   const activeIsland = detectGhTargetIsland(sim);
 
   const islands = [
-    { x: w * 0.56, y: h * 0.56, label: '저장소 (Repo)', sub: sim.ghUser || 'gitdots/app', color: PALETTE.sky },
-    { x: w * 0.83, y: h * 0.56, label: 'PR 관리', sub: `열린 PR ${sim.prs.length}개`, color: PALETTE.lavender },
-    { x: w * 0.56, y: h * 0.8, label: '이슈 (Issue)', sub: `이슈 ${sim.issues.length}개`, color: PALETTE.butter },
-    { x: w * 0.83, y: h * 0.8, label: 'CI 액션', sub: '워크플로우 점검', color: PALETTE.mint },
+    { x: w * 0.56, y: h * 0.34, label: '저장소', sub: sim.ghUser || 'gitdots/app', color: PALETTE.sky },
+    { x: w * 0.83, y: h * 0.34, label: '검토 요청', sub: `열린 PR ${sim.prs.length}개`, color: PALETTE.lavender },
+    { x: w * 0.56, y: h * 0.76, label: '이슈', sub: `열린 글 ${sim.issues.length}개`, color: PALETTE.butter },
+    { x: w * 0.83, y: h * 0.76, label: '자동 검사', sub: '실행 결과', color: PALETTE.mint },
   ] as const;
 
   // Dot laser beams from Buddy's remote to each island
@@ -863,8 +837,8 @@ function drawCh5Scene(
   });
 
   // Left hub pad + Buddy with pixel remote
-  drawZonePad(ctx, hubX, hubY, clamp(w * 0.19, 108, 152), 'gh 터미널 리모컨', '원격 조작 허브', PALETTE.butter, true, time);
-  const b = moveBuddySmooth(motion, 'ch5', 0.18, 0.62);
+  drawZonePad(ctx, hubX, hubY, clamp(w * 0.19, 108, 152), '내 터미널', 'gh 명령어', PALETTE.butter, true, time);
+  const b = moveBuddySmooth(motion, 'ch5', 0.18, 0.48);
   drawBuddyWithIdleLife(
     ctx,
     b.x * w,
@@ -928,8 +902,8 @@ function drawCh6Scene(
     buddyZoneX,
     padY,
     clamp(w * 0.21, 120, 168),
-    isClassic ? 'Classic 토큰' : 'Fine-grained 토큰',
-    isClassic ? '넓게 부여한 권한' : '한 저장소에 쓰기',
+    isClassic ? '클래식 토큰' : '세분화 토큰',
+    isClassic ? '넓은 권한' : '한 곳에 쓰기',
     isClassic ? PALETTE.coral : PALETTE.mint,
     true,
     time,
@@ -1011,7 +985,7 @@ function drawCh6Scene(
     if (door.danger) {
       const blink = Math.sin(time * 8 + idx) > 0;
       if (blink) {
-        drawPixelBadge(ctx, door.x, doorTopY - dot * 3.2, '! 과다 노출', PALETTE.coral, PALETTE.ink, PALETTE.cream, 10);
+        drawPixelBadge(ctx, door.x, doorTopY - dot * 3.2, '권한 과다', PALETTE.coral, PALETTE.ink, PALETTE.cream, 10);
       }
     } else if (!door.open) {
       drawPixelSprite(
@@ -1030,10 +1004,10 @@ function drawCh6Scene(
 
   // SSO & SSH glowing badges above the vault doors
   if (sim.token.ssoAuthorized) {
-    drawPixelBadge(ctx, w * 0.55, h * 0.45, 'SSO 조직 승인 ✓', PALETTE.cream, PALETTE.skyDark, PALETTE.sky, 10.5);
+    drawPixelBadge(ctx, w * 0.52, h * 0.45, '조직 인증 ✓', PALETTE.cream, PALETTE.skyDark, PALETTE.sky);
   }
   if (sim.token.sshReady) {
-    drawPixelBadge(ctx, w * 0.75, h * 0.45, 'SSH 키 페어 연결 ✓', PALETTE.cream, PALETTE.mintDark, PALETTE.mint, 10.5);
+    drawPixelBadge(ctx, w * 0.77, h * 0.45, 'SSH 연결 ✓', PALETTE.cream, PALETTE.mintDark, PALETTE.mint);
   }
 }
 
@@ -1054,7 +1028,7 @@ function drawCh7Scene(
   const publicX = w * 0.19;
   const wallX = w * 0.47;
   const castleX = w * 0.76;
-  const baseY = h * 0.75;
+  const baseY = h * 0.71;
   const kind = sim.lastAnim.kind;
   const connected = sim.ghes.connected;
 
@@ -1073,8 +1047,8 @@ function drawCh7Scene(
     publicX,
     baseY,
     clamp(w * 0.19, 104, 152),
-    '공용 GitHub.com',
-    '외부 인터넷 구름',
+    '공용 GitHub',
+    'github.com',
     PALETTE.sky,
     kind === 'GHES_BLOCK',
     time,
@@ -1112,10 +1086,10 @@ function drawCh7Scene(
     dot * 0.78,
     'dot',
   );
-  drawPixelBadge(ctx, wallX, wallTop - 12, '방화벽 성벽', PALETTE.cream, PALETTE.coralDark, PALETTE.coral, 10);
+  drawPixelBadge(ctx, wallX, wallTop - 14, '방화벽', PALETTE.cream, PALETTE.coralDark, PALETTE.coral);
 
   // Lower VPN/SAML tunnel under the wall
-  const tunnelY = h * 0.81;
+  const tunnelY = h * 0.94;
   drawDottedTrack(
     ctx,
     publicX + w * 0.08,
@@ -1130,7 +1104,7 @@ function drawCh7Scene(
     ctx,
     wallX,
     tunnelY + 14,
-    connected ? 'VPN · SAML 안전 통로 ✓' : 'VPN 통로 (인증 필요)',
+    connected ? 'VPN 연결 ✓' : 'VPN 인증 필요',
     PALETTE.cream,
     connected ? PALETTE.mintDark : PALETTE.textSecondary,
     connected ? PALETTE.mint : PALETTE.woodBorder,
@@ -1151,8 +1125,8 @@ function drawCh7Scene(
     ctx,
     castleX,
     baseY,
-    clamp(w * 0.22, 122, 175),
-    '사내 GHES 성',
+    clamp(w * 0.39, 148, 202),
+    '사내 GitHub',
     sim.ghes.host,
     connected ? PALETTE.mint : PALETTE.woodBorder,
     connected,
@@ -1161,7 +1135,7 @@ function drawCh7Scene(
 
   // Private Runner mini pod beside castle
   const runnerX = w * 0.9;
-  const runnerY = h * 0.68;
+  const runnerY = h * 0.36;
   const runnerActive = kind === 'GHES_RUNNER' || sim.ghes.lastFlow === 'runner';
   drawPixelSprite(
     ctx,
@@ -1180,7 +1154,7 @@ function drawCh7Scene(
     ctx,
     runnerX,
     runnerY + dot * 6.2,
-    '사내 Runner',
+    '사내 실행기',
     PALETTE.cream,
     runnerActive ? PALETTE.mintDark : PALETTE.textSecondary,
     runnerActive ? PALETTE.mint : PALETTE.woodBorder,
@@ -1256,7 +1230,7 @@ function drawCh8Scene(
   const padW = clamp(w * 0.18, 102, 150);
 
   // Left-Upper: Human main workspace (stays clean!)
-  drawZonePad(ctx, mainX, mainY, padW, '내 작업실 (main)', '안전하게 유지 중', PALETTE.sky, true, time);
+  drawZonePad(ctx, mainX, mainY, padW, '내 작업 폴더', 'main 보호 중', PALETTE.sky, true, time);
   drawPixelSprite(ctx, FILE_SPRITE, makeFileColors(PALETTE.sky, PALETTE.skyLight), mainX - dot * 5, mainY - dot * 6.5, dot * 0.75, 'dot');
 
   // Left-Lower: AI dedicated Worktree room with dotted lavender walls
@@ -1277,7 +1251,7 @@ function drawCh8Scene(
     wtX,
     wtY,
     padW,
-    'AI 전용 Worktree',
+    'AI 작업 폴더',
     ai.worktreeActive ? ai.worktreeBranch : '방 생성 대기 중',
     PALETTE.lavender,
     ai.worktreeActive,
@@ -1336,7 +1310,7 @@ function drawCh8Scene(
     gateX,
     gateY,
     clamp(w * 0.175, 102, 148),
-    '사람 승인 게이트',
+    '사람 승인',
     ai.humanApproved ? '승인 완료 ✓' : ai.prNumber ? `PR #${ai.prNumber} 검토 중` : '리뷰 대기',
     ai.humanApproved ? PALETTE.mint : PALETTE.butter,
     Boolean(ai.prNumber) || ai.humanApproved,
@@ -1504,12 +1478,12 @@ export function getParticleCuesForAnim(
       ];
     case 'STASH':
       return [
-        { kind: 'parcel', x: w * 0.5, y: h * 0.62, x1: w * 0.2, y1: h * 0.78, color: PALETTE.butter },
-        { kind: 'smoke', x: w * 0.2, y: h * 0.78, color: PALETTE.butter },
+        { kind: 'parcel', x: w * 0.5, y: h * 0.65, x1: w * 0.2, y1: h * 0.28, color: PALETTE.butter },
+        { kind: 'smoke', x: w * 0.2, y: h * 0.28, color: PALETTE.butter },
       ];
     case 'STASH_POP':
       return [
-        { kind: 'parcel', x: w * 0.2, y: h * 0.78, x1: w * 0.5, y1: h * 0.62, color: PALETTE.mint },
+        { kind: 'parcel', x: w * 0.2, y: h * 0.28, x1: w * 0.5, y1: h * 0.65, color: PALETTE.mint },
         { kind: 'sparkles', x: w * 0.5, y: h * 0.6, color: PALETTE.mint },
       ];
     case 'RESET':

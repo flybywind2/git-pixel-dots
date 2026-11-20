@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { ALL_STAGE_IDS, type PixelSimState, type StageId } from '../types/sim';
-import { createStageState, executePixelCommand, pendingHardReset, savePracticeDocument } from '../engine';
-import { getDocumentWorkingText } from '../engine/documentDiff';
+import { createStageState, executePixelCommand, pendingHardReset, resumePracticeBubbles, savePracticeDocument } from '../engine';
+import { EXAMPLE_DOCUMENT, getDocumentWorkingText } from '../engine/documentDiff';
 
 const SESSION_KEY = 'gitdots.practice.v1';
 
@@ -28,7 +28,10 @@ interface PracticeSession {
   documentDraft: string | null;
 }
 
-export type PracticeConfirmation = { kind: 'lesson-reset' } | { kind: 'hard-reset'; command: string; target: string };
+export type PracticeConfirmation =
+  | { kind: 'lesson-reset' }
+  | { kind: 'replace-draft' }
+  | { kind: 'hard-reset'; command: string; target: string };
 
 export interface PixelStore extends PracticeSession {
   stageId: StageId;
@@ -42,6 +45,7 @@ export interface PixelStore extends PracticeSession {
   runCommand: (cmd: string) => void;
   resetStage: () => void;
   setDocumentDraft: (text: string) => void;
+  loadExampleDocument: () => void;
   saveDocument: () => void;
   setHelpOpen: (open: boolean) => void;
   resolveConfirmation: (confirmed: boolean) => void;
@@ -62,7 +66,10 @@ function readSessions() {
       if (sim.stageId !== id || !Array.isArray(sim.files) || !sim.index || !sim.branches
         || !Array.isArray(sim.completedActions) || !Array.isArray(sim.commits)
         || !sim.commits.every((commit) => commit.tree && Array.isArray(commit.parents))) continue;
-      sessions[id] = { sim, documentDraft: typeof documentDraft === 'string' ? documentDraft : null };
+      sessions[id] = {
+        sim: { ...sim, bubbles: resumePracticeBubbles(sim) },
+        documentDraft: typeof documentDraft === 'string' ? documentDraft : null,
+      };
     } catch {
       // Treat a missing or unreadable browser save as a fresh chapter.
     }
@@ -79,7 +86,6 @@ function applySession(state: PixelStore, sim: PixelSimState, documentDraft: stri
       const resume = {
         ...sim,
         lastAnim: { kind: 'IDLE', seq: sim.lastAnim.seq, label: '실습 이어 하기' },
-        bubbles: [],
         terminal: [{
           id: 'resumed', command: 'welcome', branch: sim.headBranch,
           lines: [{ text: '저장한 작업과 진행 상태를 불러왔어요.', tone: 'muted' }],
@@ -91,6 +97,11 @@ function applySession(state: PixelStore, sim: PixelSimState, documentDraft: stri
     }
   }
   return { ...current, sessions, notice: null, confirmation: null };
+}
+
+function applyDocumentDraft(state: PixelStore, text: string) {
+  const draft = text === getDocumentWorkingText(state.sim) ? null : text;
+  return applySession(state, state.sim, draft);
 }
 
 function execute(state: PixelStore, command: string) {
@@ -143,12 +154,18 @@ export const usePixelStore = create<PixelStore>((set) => ({
   resolveConfirmation: (confirmed) => set((state) => {
     if (!confirmed || !state.confirmation) return { confirmation: null };
     if (state.confirmation.kind === 'hard-reset') return execute(state, state.confirmation.command);
+    if (state.confirmation.kind === 'replace-draft') return applyDocumentDraft(state, EXAMPLE_DOCUMENT);
     return applySession(state, createStageState(state.stageId), null);
   }),
 
-  setDocumentDraft: (text) => set((state) =>
-    applySession(state, state.sim, text === getDocumentWorkingText(state.sim) ? null : text),
-  ),
+  setDocumentDraft: (text) => set((state) => applyDocumentDraft(state, text)),
+
+  loadExampleDocument: () => set((state) => {
+    if (state.documentDraft !== null && state.documentDraft !== EXAMPLE_DOCUMENT) {
+      return { confirmation: { kind: 'replace-draft' } };
+    }
+    return applyDocumentDraft(state, EXAMPLE_DOCUMENT);
+  }),
 
   saveDocument: () => set((state) => {
     if (state.documentDraft === null) return state;

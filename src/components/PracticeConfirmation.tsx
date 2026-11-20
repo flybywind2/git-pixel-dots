@@ -19,6 +19,7 @@ export function PracticeConfirmation() {
   }, [confirmation]);
 
   const hardReset = confirmation?.kind === 'hard-reset';
+  const replaceDraft = confirmation?.kind === 'replace-draft';
   return (
     <dialog
       ref={dialog}
@@ -28,12 +29,14 @@ export function PracticeConfirmation() {
       className="m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border border-[#CDBCA3] bg-[#FFFDF8] p-5 text-[#2F241D] shadow-xl backdrop:bg-[#2F241D]/45"
     >
       <h2 id="practice-confirm-title" className="text-lg font-bold">
-        {hardReset ? `${confirmation.target}로 복원할까요?` : '현재 장을 초기화할까요?'}
+        {hardReset ? `${confirmation.target}로 복원할까요?`
+          : replaceDraft ? '예시 문장으로 바꿀까요?' : '현재 장을 초기화할까요?'}
       </h2>
       <p id="practice-confirm-description" className="mt-2 break-keep text-sm leading-relaxed text-[#59483B]">
         {hardReset
           ? '작업 파일과 스테이징 영역을 대상 커밋에 맞춥니다. 커밋하지 않은 변경이 사라질 수 있어요.'
-          : '작성 중인 문서와 이 장에서 진행한 실습을 시작 상태로 돌립니다.'}
+          : replaceDraft ? '저장하지 않은 수정이 예시 문장으로 바뀌어요.'
+            : '작성 중인 문서와 이 장에서 진행한 실습을 시작 상태로 돌립니다.'}
       </p>
       {hardReset && <code className="mt-2 block break-all text-sm">{confirmation.command}</code>}
       <div className="mt-5 flex flex-wrap justify-end gap-2">
@@ -41,7 +44,7 @@ export function PracticeConfirmation() {
           취소
         </button>
         <button type="button" onClick={() => resolve(true)} className="rounded-md bg-[#A9303F] px-3 py-2 text-sm font-bold text-white">
-          {hardReset ? '대상 커밋으로 복원' : '현재 장 초기화'}
+          {hardReset ? '대상 커밋으로 복원' : replaceDraft ? '예시로 바꾸기' : '현재 장 초기화'}
         </button>
       </div>
     </dialog>

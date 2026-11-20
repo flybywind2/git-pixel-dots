@@ -77,6 +77,7 @@ async function documentLesson(page, url, capture) {
   const response = await page.goto(url, { waitUntil: 'domcontentloaded' });
   assert.equal(response?.status(), 200);
   await page.waitForURL('**/#/chapter/1');
+  assert.equal(await page.title(), 'GitDots · 회의록으로 연습하는 Git');
   const editor = page.getByRole('textbox', { name: '회의록.md', exact: true });
   const guide = page.getByTestId('guided-command');
   const comparison = page.getByRole('region', { name: '변경 비교', exact: true });
@@ -86,8 +87,20 @@ async function documentLesson(page, url, capture) {
   assert.equal(await page.getByTestId('terminal-input').isVisible(), false);
   await guide.click();
   assert(await editor.evaluate((node) => node === document.activeElement));
-  await editor.fill(original.replace('금요일 저녁 7시', '수요일 오후 2시'));
+  const edited = original.replace('금요일 저녁 7시', '수요일 오후 2시');
+  await editor.fill(edited);
   assert.equal(await guide.innerText(), '문서 저장');
+
+  const example = page.getByRole('button', { name: '예시 수정 넣기', exact: true });
+  const replace = page.getByRole('dialog', { name: '예시 문장으로 바꿀까요?' });
+  await example.click();
+  await replace.getByRole('button', { name: '취소', exact: true }).click();
+  assert.equal(await editor.inputValue(), edited);
+  await example.click();
+  await replace.getByRole('button', { name: '예시로 바꾸기', exact: true }).click();
+  assert.match(await editor.inputValue(), /토요일 오전 10시/);
+  await expectProgress(page, 0, 6);
+  await editor.fill(edited);
 
   await runCommand(page, 'git add 회의록.md');
   await page.getByText('먼저 문서를 저장하세요.', { exact: false }).waitFor();
@@ -150,8 +163,14 @@ async function documentLesson(page, url, capture) {
 
 async function terminalAndScenes(page, url) {
   await openChapter(page, url, 3);
-  await page.getByText('실수로 넣은 테스트 코드', { exact: false }).first().waitFor();
+  const history = page.getByRole('list', { name: '최근 커밋', exact: true });
+  await history.getByText('실수로 넣은 테스트 코드', { exact: false }).waitFor();
+  assert.deepEqual(await history.locator('code').allTextContents(), ['1a2b3c4', '4d5e6f7', '7e8f9a0']);
   const input = await openTerminal(page);
+  await history.scrollIntoViewIfNeeded();
+  const historyBox = await history.boundingBox();
+  const terminalBox = await page.getByRole('region', { name: '실습 터미널' }).boundingBox();
+  assert(historyBox.y + historyBox.height <= terminalBox.y + 1, 'Terminal overlaps commit history');
   await input.fill('git');
   await input.press('Tab');
   const first = await input.inputValue();
@@ -176,6 +195,11 @@ async function terminalAndScenes(page, url) {
   await page.getByTestId('guided-command').click();
   await page.getByTestId('guided-command').click();
   await page.getByRole('button', { name: '상대 브랜치 내용 사용', exact: true }).waitFor();
+  const bubble = page.getByTestId('speech-bubble');
+  assert.match(await bubble.innerText(), /아래 버튼에서 남길 내용을 고르세요/);
+  const lastMessage = await bubble.innerText();
+  await page.reload();
+  assert.equal(await bubble.innerText(), lastMessage);
   const canvas = page.getByTestId('pixel-stage-canvas');
   assert.equal(await canvas.getAttribute('role'), 'img');
   await page.evaluate(() => document.fonts.ready);
@@ -184,6 +208,101 @@ async function terminalAndScenes(page, url) {
   await new Promise((resolve) => setTimeout(resolve, 150));
   assert.equal(await canvas.evaluate((element) => element.toDataURL()), still, 'Canvas moves with reduced motion enabled');
   await checkViewport(page);
+}
+
+async function practiceTracks(page, url) {
+  await openChapter(page, url, 3);
+  for (const label of ['작업 임시 보관', '지난 변경 취소', '보관한 작업 복원']) {
+    await page.getByRole('button', { name: label, exact: true }).click();
+  }
+  await page.getByTestId('next-chapter-btn').click();
+  await page.waitForURL('**/#/chapter/5');
+  await page.getByText('GitHub 웹에서 이어 하기', { exact: true }).click();
+  await page.getByText('Create pull request', { exact: true }).waitFor();
+  await page.getByRole('link', { name: 'GitHub 문서 편집 도움말' }).waitFor();
+  const advanced = page.getByRole('combobox', { name: '심화 실습 선택', exact: true });
+  await advanced.selectOption('ch8');
+  await page.waitForURL('**/#/chapter/9');
+  const nav = await page.getByRole('navigation', { name: '학습 장' }).boundingBox();
+  assert(nav.height <= 35, 'Chapter navigation wraps on desktop');
+
+  await page.evaluate(() => {
+    const key = 'gitdots.practice.v1.ch2';
+    const legacy = JSON.parse(localStorage.getItem(key));
+    legacy.sim.bubbles = [];
+    localStorage.setItem(key, JSON.stringify(legacy));
+  });
+  await openChapter(page, url, 3);
+  await page.reload();
+  await expectProgress(page, 3, 3);
+  await page.getByTestId('speech-bubble').getByText('이 장의 실습을 마쳤어요').waitFor();
+}
+
+async function mobileCanvasAndKeyboard(browser, url) {
+  const page = await browser.newPage({
+    viewport: { width: 360, height: 760 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, reducedMotion: 'reduce',
+  });
+  let releaseFont;
+  const fontGate = new Promise((resolve) => { releaseFont = resolve; });
+  try {
+    await page.route('**/GitDotsPixel-Regular-*.woff2', async (route) => {
+      await fontGate;
+      await route.continue();
+    });
+    await page.addInitScript(() => {
+      window.sampledLabels = new Map();
+      const original = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (text, x, y, maxWidth) {
+        const transform = this.getTransform();
+        const size = Number(/([\d.]+)px/.exec(this.font)?.[1]);
+        const scale = transform.a / Math.min(devicePixelRatio, 2);
+        window.sampledLabels.set(text, { size: size * scale, font: this.font, maxWidth });
+        return original.apply(this, arguments);
+      };
+    });
+    await openChapter(page, url, 2);
+    await page.waitForFunction(() => window.sampledLabels.has('스테이징'), undefined, { timeout: 9000 });
+    const canvas = page.getByTestId('pixel-stage-canvas');
+    const before = await canvas.evaluate((element) => element.toDataURL());
+    releaseFont();
+    await page.waitForFunction((previous) => {
+      const font = [...document.fonts].find((item) => item.family.replaceAll('"', '') === 'GitDots Pixel');
+      return font?.status === 'loaded' && document.querySelector('canvas').toDataURL() !== previous;
+    }, before, { timeout: 9000 });
+    await openChapter(page, url, 4);
+    await page.waitForFunction(() => window.sampledLabels.has('10aa20b'), undefined, { timeout: 9000 });
+    const labels = await page.evaluate(() => Array.from(window.sampledLabels));
+    for (const entry of ['10aa20b', '30cc40d', '50ee60f', 'HEAD · main', 'feature/ui']) {
+      assert(labels.some(([label]) => label === entry), `Missing canvas label ${entry}`);
+    }
+    for (const [label, { size, font, maxWidth }] of labels) {
+      assert(size >= 11.99, `${label} renders below 12 CSS px`);
+      assert(!/\b(?:bold|[5-9]00)\b/.test(font), `${label} uses a synthetic weight`);
+      assert.equal(maxWidth, undefined, `${label} can be horizontally compressed`);
+    }
+
+    await openChapter(page, url, 3);
+    const input = await openTerminal(page);
+    await input.focus();
+    const log = page.getByRole('log', { name: '명령 실행 결과' });
+    for (const [width, height] of [[360, 350], [320, 270]]) {
+      await page.setViewportSize({ width, height });
+      await page.waitForFunction((size) => document.querySelector('.practice-shell').clientHeight === size, height);
+      await runCommand(page, 'git log --oneline');
+      const result = log.getByText(/1a2b3c4/).last();
+      await result.waitFor();
+      const resultBox = await result.boundingBox();
+      const logBox = await log.boundingBox();
+      const promptBox = await input.boundingBox();
+      const viewportBottom = await page.evaluate(() => visualViewport.height + visualViewport.offsetTop);
+      assert(logBox.height >= 32 && logBox.y + logBox.height < promptBox.y, 'Output loses its space above the input');
+      assert(resultBox.y >= logBox.y && resultBox.y + resultBox.height <= logBox.y + logBox.height, 'Latest result is out of view');
+      assert(promptBox.y + promptBox.height <= viewportBottom + 1, 'Input is hidden by the keyboard-sized viewport');
+    }
+  } finally {
+    releaseFont();
+    await page.close();
+  }
 }
 
 async function revertConflict(page) {
@@ -235,6 +354,12 @@ async function main() {
       console.log(`[QA] ${width} × ${height} · document, persistence, reset, autocomplete and reduced motion`);
       await page.close();
     }
+
+    const trackPage = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+    await practiceTracks(trackPage, url);
+    await trackPage.close();
+    await mobileCanvasAndKeyboard(browser, url);
+    console.log('[QA] Course navigation, web guide, legacy saves, delayed fonts and mobile keyboard-sized viewport passed');
 
     const link = await browser.newPage();
     await link.goto(url + 'docs/deeper/');

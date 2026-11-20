@@ -190,7 +190,7 @@ export interface CommandChip {
 
 export interface StageStep {
   id: string;
-  label?: string;
+  label: string;
   goal: string;
   command: string;
   doneAction: LessonAction | LessonAction[];
@@ -222,6 +222,7 @@ export interface PixelStash {
 export interface StageScenario {
   id: StageId;
   number: number;
+  track: 'basic' | 'advanced';
   shortTitle: string;
   title: string;
   tagline: string;

@@ -5,7 +5,6 @@ import {
   DOCUMENT_COMPARISONS,
   DOCUMENT_LIMIT,
   DOCUMENT_PATH,
-  EXAMPLE_DOCUMENT,
   getDocumentComparison,
   getDocumentWorkingText,
 } from '../engine/documentDiff';
@@ -24,6 +23,7 @@ export function DocumentLab() {
   const sim = usePixelStore((s) => s.sim);
   const draft = usePixelStore((s) => s.documentDraft);
   const setDraft = usePixelStore((s) => s.setDocumentDraft);
+  const loadExample = usePixelStore((s) => s.loadExampleDocument);
   const saveDocument = usePixelStore((s) => s.saveDocument);
   const runCommand = usePixelStore((s) => s.runCommand);
   const conflict = sim.conflict;
@@ -95,7 +95,7 @@ export function DocumentLab() {
           <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-[#DFD1BA] px-4 py-3">
             <button
               type="button"
-              onClick={() => setDraft(EXAMPLE_DOCUMENT)}
+              onClick={loadExample}
               className="min-h-9 rounded-md border border-[#CDBCA3] bg-[#FAF4E8] px-3 py-1.5 text-sm font-semibold hover:bg-[#F0E5CF]"
             >
               예시 수정 넣기

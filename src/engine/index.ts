@@ -1,4 +1,4 @@
-export { STAGE_SCENARIOS, STAGE_MAP, isPracticeCommand } from './scenarios';
+export { STAGE_SCENARIOS, STAGE_MAP, STAGE_TRACKS, isPracticeCommand } from './scenarios';
 export {
   createStageState,
   executePixelCommand,
@@ -6,5 +6,6 @@ export {
   getNextPendingStep,
   isStepCompleted,
   pendingHardReset,
+  resumePracticeBubbles,
   savePracticeDocument,
 } from './pixelEngine';

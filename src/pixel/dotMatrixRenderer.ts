@@ -1,7 +1,50 @@
 import { CONFETTI_COLORS, PALETTE, withAlpha } from './palette';
 
-export const PIXEL_FONT = '"Galmuri11", "Galmuri9", "Pretendard Variable", system-ui, sans-serif';
-export const MONO_FONT = '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace';
+export const PIXEL_FONT = '"GitDots Pixel", system-ui, sans-serif';
+const MONO_FONT = 'ui-monospace, SFMono-Regular, Menlo, monospace';
+
+function setLabelFont(ctx: CanvasRenderingContext2D, size: number, mono = false): number {
+  const sceneScale = ctx.getTransform().a / Math.min(globalThis.devicePixelRatio || 1, 2);
+  const fontSize = Math.max(size, 12 / sceneScale);
+  ctx.font = `400 ${fontSize}px ${mono ? MONO_FONT : PIXEL_FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  return fontSize;
+}
+
+export function drawCommitHash(ctx: CanvasRenderingContext2D, hash: string, x: number, y: number, color: string) {
+  ctx.save();
+  setLabelFont(ctx, 12, true);
+  ctx.fillStyle = color;
+  ctx.fillText(hash, x, y);
+  ctx.restore();
+}
+
+function drawWrappedLabel(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, width: number, lineHeight: number): number {
+  let line = '';
+  for (const word of text.split(' ')) {
+    const combined = line ? `${line} ${word}` : word;
+    if (ctx.measureText(combined).width <= width) {
+      line = combined;
+      continue;
+    }
+    if (line) {
+      ctx.fillText(line, x, y);
+      y += lineHeight;
+    }
+    line = '';
+    for (const character of word) {
+      if (line && ctx.measureText(line + character).width > width) {
+        ctx.fillText(line, x, y);
+        y += lineHeight;
+        line = '';
+      }
+      line += character;
+    }
+  }
+  if (line) ctx.fillText(line, x, y);
+  return y + lineHeight;
+}
 
 /**
  * Draws the warm LED dot-matrix canvas background with gentle twinkling ambient dots.
@@ -208,18 +251,14 @@ export function drawZonePad(
   }
 
   // Korean pixel label underneath
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  const sceneScale = ctx.getTransform().a / Math.min(globalThis.devicePixelRatio || 1, 2);
-  const labelSize = Math.max(12, 12 / sceneScale);
-  ctx.font = `700 ${labelSize}px ${PIXEL_FONT}`;
+  const labelSize = setLabelFont(ctx, 13);
   ctx.fillStyle = PALETTE.textPrimary;
-  ctx.fillText(label, cx, y + padH + 9, width + 4);
+  const nextY = drawWrappedLabel(ctx, label, cx, y + padH + 6, width + 4, labelSize * 1.2);
 
   if (sublabel) {
-    ctx.font = `600 ${Math.max(10.5, 11 / sceneScale)}px ${PIXEL_FONT}`;
-    ctx.fillStyle = highlighted ? accentColor : PALETTE.textSecondary;
-    ctx.fillText(sublabel, cx, y + padH + 13 + labelSize, width + 4);
+    const sublabelSize = setLabelFont(ctx, 12);
+    ctx.fillStyle = PALETTE.textSecondary;
+    drawWrappedLabel(ctx, sublabel, cx, nextY, width + 4, sublabelSize * 1.2);
   }
 
   ctx.restore();
@@ -240,12 +279,13 @@ export function drawPixelBadge(
   useMono = false,
 ): void {
   ctx.save();
-  ctx.font = `700 ${fontSize}px ${useMono ? MONO_FONT : PIXEL_FONT}`;
+  const labelSize = setLabelFont(ctx, fontSize, useMono);
   const metrics = ctx.measureText(text);
   const padX = 8;
   const boxW = Math.ceil(metrics.width + padX * 2);
-  const boxH = fontSize + 9;
-  const x = cx - boxW * 0.5;
+  const boxH = labelSize + 9;
+  const width = ctx.canvas.width / ctx.getTransform().a;
+  const x = Math.max(4, Math.min(cx - boxW * 0.5, width - boxW - 4));
   const y = cy - boxH * 0.5;
 
   // Soft warm pixel drop shadow
@@ -268,7 +308,7 @@ export function drawPixelBadge(
   ctx.fillStyle = textColor;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, cx, cy + 0.5);
+  ctx.fillText(text, x + boxW * 0.5, cy + 0.5);
   ctx.restore();
 }
 

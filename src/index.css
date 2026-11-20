@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 @font-face {
-  font-family: "Galmuri11";
-  src: url("./assets/fonts/Galmuri11.woff2") format("woff2");
+  font-family: "GitDots Pixel";
+  src: url("./assets/fonts/GitDotsPixel-Regular.woff2") format("woff2");
   font-weight: 400;
   font-display: swap;
 }
 
 @layer base {
   :root {
-    --font-pixel: "Galmuri11", system-ui, sans-serif;
+    --font-pixel: "GitDots Pixel", system-ui, sans-serif;
     --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans KR", sans-serif;
     --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
@@ -26,10 +26,21 @@
 
 .font-pixel {
   font-family: var(--font-pixel);
+  font-weight: 400;
+  font-synthesis: none;
 }
 
 .font-mono-code {
   font-family: var(--font-mono);
+}
+
+.practice-shell[data-compact] .terminal-dock[data-expanded] {
+  min-height: min(58%, 9.5rem);
+}
+
+.practice-shell[data-compact] .terminal-quick-actions {
+  max-height: min(2.125rem, 33%);
+  padding-block: 0.125rem;
 }
 
 /* Crisp cozy warm-beige pixel frame shadow */

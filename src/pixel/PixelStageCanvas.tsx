@@ -1,14 +1,14 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import { getNextPendingStep, STAGE_MAP } from '../engine';
-import { reachableCommits } from '../engine/repoVersions';
 import { usePixelStore } from '../store/usePixelStore';
 import type { BubbleAction, PixelSimState } from '../types/sim';
 import { SPEAKER_THEMES } from './palette';
-import { PixelParticlePool, drawDotGridBackground } from './dotMatrixRenderer';
+import { PIXEL_FONT, PixelParticlePool, drawDotGridBackground } from './dotMatrixRenderer';
 import {
   createSceneMotion,
   drawStageScene,
   getParticleCuesForAnim,
+  recentTimelineCommits,
 } from './sceneDrawers';
 
 const ACTION_TONE_CLASSES: Readonly<Record<NonNullable<BubbleAction['tone']>, string>> = {
@@ -67,6 +67,7 @@ export function PixelStageCanvas() {
     const motionSetting = window.matchMedia('(prefers-reduced-motion: reduce)');
 
     let rafId = 0;
+    let mounted = true;
     let prevTs = performance.now();
     let elapsed = 0;
     let animProgress = 1;
@@ -84,7 +85,8 @@ export function PixelStageCanvas() {
       const { width, height } = stageSizeRef.current;
       const sceneScale = Math.min(1, width / 520);
       const sceneWidth = width / sceneScale;
-      const sceneHeight = height / sceneScale;
+      const bottomPadding = currentSim.stageId === 'ch6' || currentSim.stageId === 'ch7' ? 32 : 16;
+      const sceneHeight = Math.max(1, height - bottomPadding) / sceneScale;
 
       // Sync HiDPI backing store only when size or DPR changes
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -162,15 +164,22 @@ export function PixelStageCanvas() {
     };
 
     function scheduleDraw() {
-      if (!rafId) rafId = window.requestAnimationFrame(renderFrame);
+      if (mounted && !rafId) rafId = window.requestAnimationFrame(renderFrame);
     }
 
     queueDraw.current = scheduleDraw;
     motionSetting.addEventListener('change', scheduleDraw);
+    document.fonts.addEventListener('loadingdone', scheduleDraw);
+    void document.fonts.load(`400 13px ${PIXEL_FONT}`)
+      .catch(() => [])
+      .then(() => document.fonts.ready)
+      .then(scheduleDraw);
     scheduleDraw();
     return () => {
+      mounted = false;
       queueDraw.current = null;
       motionSetting.removeEventListener('change', scheduleDraw);
+      document.fonts.removeEventListener('loadingdone', scheduleDraw);
       window.cancelAnimationFrame(rafId);
     };
   }, []);
@@ -178,11 +187,13 @@ export function PixelStageCanvas() {
   const scenario = STAGE_MAP[stageId];
   const nextStep = getNextPendingStep(sim);
   const head = sim.branches[sim.headBranch];
-  const visibleHistory = stageId === 'ch2' ? reachableCommits(sim, head) : null;
+  const visibleHistory = stageId === 'ch2' ? recentTimelineCommits(sim) : null;
+  const canvasMinHeight = stageId === 'ch2' ? 'min-h-[186px]'
+    : stageId === 'ch3' ? 'min-h-[192px] sm:min-h-[245px]' : 'min-h-[225px] sm:min-h-[260px]';
 
   return (
     <div className="relative flex flex-1 flex-col bg-[#F6EFE2]">
-      <div ref={containerRef} className="relative order-2 min-h-[165px] flex-1 sm:min-h-[280px]">
+      <div ref={containerRef} className={`relative order-3 flex-1 ${canvasMinHeight}`}>
         <canvas
           ref={canvasRef}
           data-testid="pixel-stage-canvas"
@@ -216,7 +227,7 @@ export function PixelStageCanvas() {
                     color: theme.badgeText,
                     borderColor: theme.border,
                   }}
-                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[10.5px] font-pixel font-bold shrink-0"
+                  className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 font-pixel text-xs shrink-0"
                 >
                   <span
                     style={{ backgroundColor: theme.dot }}
@@ -245,7 +256,7 @@ export function PixelStageCanvas() {
                         key={`${act.label}-${act.command}`}
                         type="button"
                         onClick={() => runCommand(act.command)}
-                        className={`pixel-btn px-2.5 py-1 rounded-md font-pixel text-[11px] font-bold cursor-pointer ${toneCls}`}
+                        className={`pixel-btn cursor-pointer rounded-md px-2.5 py-1 text-xs font-semibold ${toneCls}`}
                       >
                         {act.label}
                       </button>
@@ -259,12 +270,13 @@ export function PixelStageCanvas() {
         })}
       </div>
       {visibleHistory && (
-        <ol aria-label="현재 브랜치의 최근 커밋" className="order-3 mx-auto flex w-full max-w-5xl flex-wrap gap-2 px-3 pb-4 text-sm">
-          {sim.commits.filter((commit) => visibleHistory.has(commit.id)).slice(-4).reverse().map((commit) => (
+        <ol aria-label="최근 커밋" className="order-2 mx-auto mt-3 flex w-full max-w-5xl flex-wrap justify-center gap-2 px-3 pb-2 text-sm">
+          {visibleHistory.map(({ commit, rewound }) => (
             <li key={commit.id} className="max-w-full rounded-md border border-[#D8C9B0] bg-[#FFFDF8] px-2.5 py-1.5 [overflow-wrap:anywhere]">
               {commit.id === head && <strong className="mr-2 text-[#79521D]">HEAD · {sim.headBranch}</strong>}
               <code className="mr-2 text-xs text-[#14694F]">{commit.hash}</code>
               {commit.message}
+              {rewound && <span className="ml-2 text-xs text-[#715A43]">되감기 전 기록</span>}
             </li>
           ))}
         </ol>

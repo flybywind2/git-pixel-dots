@@ -50,12 +50,20 @@ export function TerminalDock() {
   }, [sim.stageId]);
 
   useEffect(() => {
-    if (open) prompt.current?.focus({ preventScroll: true });
+    if (open && window.matchMedia('(pointer: fine)').matches) prompt.current?.focus({ preventScroll: true });
   }, [open]);
 
   useEffect(() => {
     if (log.current) log.current.scrollTop = log.current.scrollHeight;
   }, [open, sim.terminal]);
+
+  useEffect(() => {
+    const element = log.current;
+    if (!open || !element) return;
+    const observer = new ResizeObserver(() => { element.scrollTop = element.scrollHeight; });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [open]);
 
   useEffect(() => {
     if (showOptions && active !== undefined) {
@@ -100,106 +108,103 @@ export function TerminalDock() {
   }
 
   return (
-    <>
-      <div aria-hidden="true" className={open ? 'h-[min(66dvh,22rem)] shrink-0' : 'h-12 shrink-0'} />
-      <section aria-label="실습 터미널" className="fixed inset-x-0 bottom-0 z-30 border-t border-[#CBB99C] bg-[#FBF6EC]">
-        {notice && <p role="status" className="border-b border-[#DDBE8A] bg-[#FFF2D7] px-4 py-2 text-sm font-semibold text-[#73450E]">{notice}</p>}
-        <div className={`flex flex-col ${open ? 'h-[min(66dvh,22rem)]' : 'h-12'}`}>
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-controls="terminal-content"
-            onClick={() => setOpen(!open)}
-            className="flex min-h-12 shrink-0 items-center gap-2 bg-[#EFE6D5] px-4 text-left text-sm font-bold text-[#3A2D24] hover:bg-[#F4EADB]"
-          >
-            <Terminal aria-hidden="true" className="h-4 w-4 shrink-0 text-[#126549]" />
-            {open ? '터미널 접기' : '직접 입력해 보기'}
-            {open ? <ChevronDown aria-hidden="true" className="ml-auto h-4 w-4" /> : <ChevronUp aria-hidden="true" className="ml-auto h-4 w-4" />}
-          </button>
-          <div id="terminal-content" hidden={!open} className={open ? 'flex min-h-0 flex-1 flex-col' : undefined}>
-            <div role="group" aria-label="빠른 실행" className="flex max-h-24 shrink-0 flex-wrap items-center gap-1.5 overflow-y-auto border-y border-[#E3D5BE] bg-[#F6EDDE] px-3 py-2">
-              <span className="mr-1 text-xs font-semibold text-[#715D49]">빠른 실행</span>
-              {scenario.chips.map((chip) => {
-                const step = chip.stepIndex === undefined ? undefined : scenario.steps[chip.stepIndex];
-                const recommended = next?.command === chip.command;
-                const done = step && isStepCompleted(sim, step);
-                return (
-                  <button
-                    key={chip.command}
-                    type="button"
-                    onClick={() => { runCommand(chip.command); setDismissed(true); }}
-                    title={chip.command}
-                    className={`inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-1 text-left text-xs ${recommended ? 'border-[#BF8B29] bg-[#FFE7A8] font-bold' : 'border-[#D7C7AE] bg-[#FFFDF8]'}`}
-                  >
-                    {done && <Check aria-hidden="true" className="h-3 w-3 shrink-0 text-[#147A5B]" />}
-                    {chip.label}
-                  </button>
-                );
-              })}
-            </div>
-            <div ref={log} role="log" aria-label="명령 실행 결과" aria-live="polite" tabIndex={0}
-              className="font-mono-code min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2 text-xs">
-              {sim.terminal.map((entry) => (
-                <div key={entry.id}>
-                  <p className="break-words font-semibold">
-                    {entry.command === 'welcome' ? '연습 저장소'
-                      : entry.command === DOCUMENT_SAVE_LABEL ? entry.command : '$ ' + entry.command}
-                  </p>
-                  {entry.lines.map((line, index) => (
-                    <p key={index} className={`whitespace-pre-wrap pl-3 [overflow-wrap:anywhere] ${TONE_CLASS[line.tone]}`}>{line.text}</p>
-                  ))}
-                </div>
-              ))}
-            </div>
-            <form onSubmit={(event) => { event.preventDefault(); submit(); }} className="relative flex min-h-12 shrink-0 items-center gap-2 border-t border-[#E0D1B8] bg-[#F1E8D8] px-3 py-2">
-              {showOptions && (
-                <ul id="terminal-options" role="listbox" aria-label="자동완성 후보"
-                  className="absolute inset-x-3 bottom-full mb-1 max-h-42 overflow-y-auto rounded-md border border-[#CBB99C] bg-[#FFFDF8] shadow-lg">
-                  {options.map(({ cmd, hint }, index) => (
-                    <li key={cmd} id={`terminal-option-${index}`} role="option" aria-selected={index === active}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => { setInput(cmd); setCycle(null); setDismissed(true); prompt.current?.focus(); }}
-                      className={`cursor-pointer border-b border-[#ECE1CF] px-3 py-2 text-xs hover:bg-[#FFF3D1] ${index === active ? 'bg-[#FFE7A8]' : ''}`}>
-                      <code className="font-mono-code font-semibold [overflow-wrap:anywhere]">{cmd}</code>
-                      <span className="ml-2 text-[#715D49]">{hint}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <span aria-hidden="true" className="font-mono-code max-w-[25%] truncate text-xs font-bold text-[#126549]">{sim.headBranch} $</span>
-              <input
-                ref={prompt}
-                data-testid="terminal-input"
-                role="combobox"
-                aria-label="연습할 명령어"
-                aria-expanded={showOptions}
-                aria-controls={showOptions ? 'terminal-options' : undefined}
-                aria-haspopup="listbox"
-                aria-autocomplete="list"
-                aria-activedescendant={showOptions && active !== undefined ? `terminal-option-${active}` : undefined}
-                aria-describedby="terminal-keys"
-                value={input}
-                onChange={(event) => {
-                  setInput(event.target.value);
-                  setCycle(null);
-                  setHistoryIndex(null);
-                  setDismissed(false);
-                }}
-                onFocus={() => setFocused(true)}
-                onBlur={() => { setFocused(false); setCycle(null); }}
-                onKeyDown={handleKeyDown}
-                autoComplete="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                placeholder={next?.command ?? '명령어를 입력하세요'}
-                className="font-mono-code min-w-0 flex-1 rounded border border-[#D4C0A1] bg-[#FFFDF8] px-2 py-1.5 text-base text-[#2F241D] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#166447] sm:text-sm"
-              />
-              <span id="terminal-keys" className="sr-only">Tab으로 추천 명령을 순환하고 Esc로 목록을 닫아요.</span>
-              <button type="submit" className="shrink-0 rounded-md border border-[#BF8B29] bg-[#F4B942] px-3 py-1.5 text-sm font-bold">실행</button>
-            </form>
+    <section aria-label="실습 터미널" data-expanded={open || undefined} className={`terminal-dock relative z-10 flex shrink-0 flex-col border-t border-[#CBB99C] bg-[#FBF6EC] ${open ? 'h-[min(44%,14rem)] lg:h-[min(38%,12rem)]' : ''}`}>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls="terminal-content"
+          onClick={() => setOpen(!open)}
+          className={`flex shrink-0 items-center gap-2 bg-[#EFE6D5] px-4 text-left text-sm font-bold text-[#3A2D24] hover:bg-[#F4EADB] ${open ? 'min-h-9' : 'min-h-11'}`}
+        >
+          <Terminal aria-hidden="true" className="h-4 w-4 shrink-0 text-[#126549]" />
+          {open ? '터미널 접기' : '직접 입력해 보기'}
+          {open ? <ChevronDown aria-hidden="true" className="ml-auto h-4 w-4" /> : <ChevronUp aria-hidden="true" className="ml-auto h-4 w-4" />}
+        </button>
+        {notice && <p role="status" className="shrink-0 border-b border-[#DDBE8A] bg-[#FFF2D7] px-3 py-1 text-xs font-semibold text-[#73450E]">{notice}</p>}
+        <div id="terminal-content" hidden={!open} className={open ? 'flex min-h-0 flex-1 flex-col' : undefined}>
+          <div role="group" aria-label="빠른 실행" className="terminal-quick-actions flex max-h-[44%] shrink-0 flex-wrap items-start gap-1.5 overflow-y-auto overscroll-y-contain border-y border-[#E3D5BE] bg-[#F6EDDE] px-3 py-1.5">
+            <span className="mr-1 text-xs font-semibold text-[#715D49]">빠른 실행</span>
+            {scenario.chips.map((chip) => {
+              const step = chip.stepIndex === undefined ? undefined : scenario.steps[chip.stepIndex];
+              const recommended = next?.command === chip.command;
+              const done = step && isStepCompleted(sim, step);
+              return (
+                <button
+                  key={chip.command}
+                  type="button"
+                  onClick={() => { runCommand(chip.command); setDismissed(true); }}
+                  title={chip.command}
+                  className={`inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-1 text-left text-xs ${recommended ? 'border-[#BF8B29] bg-[#FFE7A8] font-bold' : 'border-[#D7C7AE] bg-[#FFFDF8]'}`}
+                >
+                  {done && <Check aria-hidden="true" className="h-3 w-3 shrink-0 text-[#147A5B]" />}
+                  {chip.label}
+                </button>
+              );
+            })}
           </div>
+          <div ref={log} role="log" aria-label="명령 실행 결과" aria-live="polite" tabIndex={0}
+            className="font-mono-code min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2 text-xs">
+            {sim.terminal.map((entry) => (
+              <div key={entry.id}>
+                <p className="break-words font-semibold">
+                  {entry.command === 'welcome' ? '연습 저장소'
+                    : entry.command === DOCUMENT_SAVE_LABEL ? entry.command : '$ ' + entry.command}
+                </p>
+                {entry.lines.map((line, index) => (
+                  <p key={index} className={`whitespace-pre-wrap pl-3 [overflow-wrap:anywhere] ${TONE_CLASS[line.tone]}`}>{line.text}</p>
+                ))}
+              </div>
+            ))}
+          </div>
+          <form onSubmit={(event) => { event.preventDefault(); submit(); }} className="relative flex min-h-10 shrink-0 items-center gap-2 border-t border-[#E0D1B8] bg-[#F1E8D8] px-3 py-1">
+            {showOptions && (
+              <ul id="terminal-options" role="listbox" aria-label="자동완성 후보"
+                className="absolute inset-x-3 bottom-full mb-1 max-h-42 overflow-y-auto rounded-md border border-[#CBB99C] bg-[#FFFDF8] shadow-lg">
+                {options.map(({ cmd, hint }, index) => (
+                  <li key={cmd} id={`terminal-option-${index}`} role="option" aria-selected={index === active}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => { setInput(cmd); setCycle(null); setDismissed(true); prompt.current?.focus(); }}
+                    className={`cursor-pointer border-b border-[#ECE1CF] px-3 py-2 text-xs hover:bg-[#FFF3D1] ${index === active ? 'bg-[#FFE7A8]' : ''}`}>
+                    <code className="font-mono-code font-semibold [overflow-wrap:anywhere]">{cmd}</code>
+                    <span className="ml-2 text-[#715D49]">{hint}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <span aria-hidden="true" className="font-mono-code max-w-[25%] truncate text-xs font-bold text-[#126549]">{sim.headBranch} $</span>
+            <input
+              ref={prompt}
+              data-testid="terminal-input"
+              role="combobox"
+              aria-label="연습할 명령어"
+              aria-expanded={showOptions}
+              aria-controls={showOptions ? 'terminal-options' : undefined}
+              aria-haspopup="listbox"
+              aria-autocomplete="list"
+              aria-activedescendant={showOptions && active !== undefined ? `terminal-option-${active}` : undefined}
+              aria-describedby="terminal-keys"
+              value={input}
+              onChange={(event) => {
+                setInput(event.target.value);
+                setCycle(null);
+                setHistoryIndex(null);
+                setDismissed(false);
+              }}
+              onFocus={() => setFocused(true)}
+              onBlur={() => { setFocused(false); setCycle(null); }}
+              onKeyDown={handleKeyDown}
+              autoComplete="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              placeholder={next?.command ?? '명령어를 입력하세요'}
+              className="font-mono-code min-w-0 flex-1 rounded border border-[#D4C0A1] bg-[#FFFDF8] px-2 py-1.5 text-base text-[#2F241D] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#166447] sm:text-sm"
+            />
+            <span id="terminal-keys" className="sr-only">Tab으로 추천 명령을 순환하고 Esc로 목록을 닫아요.</span>
+            <button type="submit" className="shrink-0 rounded-md border border-[#BF8B29] bg-[#F4B942] px-3 py-1.5 text-sm font-bold">실행</button>
+          </form>
         </div>
-      </section>
-    </>
+      </div>
+    </section>
   );
 }

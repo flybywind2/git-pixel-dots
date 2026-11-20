@@ -50,7 +50,7 @@ import {
 
 const SPEAKER_NAMES: Record<BubbleSpeaker, string> = {
   buddy: '도트 버디',
-  cloud: '깃허브 구름',
+  cloud: 'GitHub',
   guard: '보안 수문장',
   ai: '에이전트 봇',
   system: '도트 안내',
@@ -90,6 +90,27 @@ function makeBubble(
     bubble.actions = actions;
   }
   return bubble;
+}
+
+function mergeConflictBubble(file: string, seq: number): SpeechBubble {
+  return makeBubble(`conflict-${seq}`, 'buddy', 48, 52, `${file}의 변경이 겹쳤어요`,
+    `${file}의 같은 부분을 두 브랜치가 바꿨어요. 아래 버튼에서 남길 내용을 고르세요.`, undefined, [
+      { label: '현재 브랜치 내용 유지', command: 'resolve ours', tone: 'primary' },
+      { label: '상대 브랜치 내용 사용', command: 'resolve theirs', tone: 'amber' },
+      { label: '두 내용 함께 담기', command: 'resolve both', tone: 'mint' },
+    ]);
+}
+
+export function resumePracticeBubbles(state: PixelSimState): SpeechBubble[] {
+  if (Array.isArray(state.bubbles) && state.bubbles.length > 0) return state.bubbles;
+  if (state.conflict && !state.conflict.revert && state.conflict.resolvedChoice === 'none') {
+    return [mergeConflictBubble(state.conflict.file, state.lastAnim.seq)];
+  }
+  if (state.lastAnim.seq === 0) return createStageState(state.stageId).bubbles;
+  const next = getNextPendingStep(state);
+  return [makeBubble('resume', 'system', 50, 50,
+    next ? '하던 실습을 이어 가요' : '이 장의 실습을 마쳤어요',
+    next?.goal ?? STAGE_MAP[state.stageId].takeaway)];
 }
 
 function defaultTokenState(): TokenWorldState {
@@ -295,7 +316,7 @@ function stageSeed(id: StageId): StageSeed {
         token: defaultTokenState(),
         ghes: defaultGhesState(),
         ai: defaultAiState(),
-        lastAnim: { kind: 'IDLE', seq: 0, label: '작업실 준비 완료' },
+        lastAnim: { kind: 'IDLE', seq: 0, label: '작업 폴더 준비 완료' },
         completedActions: [],
         bubbles: [
           makeBubble(
@@ -304,14 +325,14 @@ function stageSeed(id: StageId): StageSeed {
             32,
             54,
             '두 파일이 바뀌었어요',
-            '작업 공간에는 고친 app.js와 새로 만든 style.css가 있어요. 그림에서 바구니는 다음 커밋에 포함할 변경을 고르는 곳이에요.',
+            '작업 공간에는 고친 app.js와 새로 만든 style.css가 있어요. 다음 커밋에 넣을 변경을 골라 스테이징 영역에 담아 보세요.',
             '아래 추천 버튼을 누르거나 git add . 를 입력해 보세요!',
-            [{ label: '🧺 장바구니 담기 (git add .)', command: 'git add .', tone: 'mint' }],
+            [{ label: '공유할 변경 담기', command: 'git add .', tone: 'mint' }],
           ),
         ],
         terminal: [
           makeLogEntry(0, 'welcome', 'main', [
-            { text: '수정된 파일(app.js)과 새 파일(style.css)이 작업실에 기다리고 있어요.', tone: 'muted' },
+            { text: '수정된 파일(app.js)과 새 파일(style.css)이 작업 폴더에 기다리고 있어요.', tone: 'muted' },
           ]),
         ],
       };
@@ -385,7 +406,7 @@ function stageSeed(id: StageId): StageSeed {
         token: defaultTokenState(),
         ghes: defaultGhesState(),
         ai: defaultAiState(),
-        lastAnim: { kind: 'IDLE', seq: 0, label: '서랍 준비 완료' },
+        lastAnim: { kind: 'IDLE', seq: 0, label: '임시 보관 준비 완료' },
         completedActions: [],
         bubbles: [
           makeBubble(
@@ -395,8 +416,8 @@ function stageSeed(id: StageId): StageSeed {
             54,
             '작업 중에 급한 수정이 생겼어요',
             '마지막 커밋에 테스트 코드를 실수로 넣었어요. 고치던 app.js는 stash에 임시 보관해 두세요.',
-            'git stash 를 입력해서 작업 중인 코드를 서랍에 보관해 보세요!',
-            [{ label: '📦 서랍에 보관 (git stash)', command: 'git stash', tone: 'amber' }],
+            'git stash로 작업 중인 변경을 임시 보관해 보세요.',
+            [{ label: '작업 임시 보관', command: 'git stash', tone: 'amber' }],
           ),
         ],
         terminal: [
@@ -491,10 +512,10 @@ function stageSeed(id: StageId): StageSeed {
             'cloud',
             68,
             48,
-            'GitHub 구름에 팀원 소식이 왔어요! ☁️',
+            '팀원이 GitHub에 새 커밋을 올렸어요',
             '원격 저장소가 한 칸 앞서 있어요. 먼저 git fetch 로 소식을 확인한 뒤 내 브랜치를 올려 PR을 열어 볼까요?',
             'git fetch 를 입력해서 원격 최신 소식을 확인해 보세요!',
-            [{ label: '🔭 원격 소식 확인 (git fetch)', command: 'git fetch', tone: 'primary' }],
+            [{ label: '최신 기록 확인', command: 'git fetch', tone: 'primary' }],
           ),
         ],
         terminal: [
@@ -595,7 +616,7 @@ function stageSeed(id: StageId): StageSeed {
             '토큰 보안 관문에 오신 걸 환영해요! 🛡️',
             '예제에서는 gitdots/app 한 곳에만 쓸 수 있으면 돼요. 두 토큰으로 각각 어느 저장소를 열 수 있는지 확인해 보세요.',
             'token classic 으로 예제 토큰의 권한을 확인해 보세요!',
-            [{ label: '🗝️ Classic 토큰 보기', command: 'token classic', tone: 'coral' }],
+            [{ label: '넓은 권한 살펴보기', command: 'token classic', tone: 'coral' }],
           ),
         ],
         terminal: [
@@ -639,7 +660,7 @@ function stageSeed(id: StageId): StageSeed {
             '이 회사는 사내 GitHub를 써요',
             '이 예제 회사의 방화벽은 github.com 전송을 막아요. 사내 GitHub의 주소는 github.corp.internal이에요.',
             'ghes test-public 으로 외부 차단부터 확인해 보세요!',
-            [{ label: '🧱 외부 차단 테스트', command: 'ghes test-public', tone: 'coral' }],
+            [{ label: '외부 전송 차단 확인', command: 'ghes test-public', tone: 'coral' }],
           ),
         ],
         terminal: [
@@ -689,9 +710,9 @@ function stageSeed(id: StageId): StageSeed {
             66,
             52,
             '삐빅! AI 에이전트 준비 완료 🤖',
-            'buggy.ts의 덧셈 버그를 고쳐드릴게요! 다만 main 폴더를 바로 건드리면 위험하니 저만의 작업실(worktree)부터 만들어 주세요.',
-            'git worktree add -b ai/fix wt-ai 로 AI 작업실을 만들어 보세요!',
-            [{ label: '🏗️ AI 작업실 생성', command: 'git worktree add -b ai/fix wt-ai', tone: 'mint' }],
+            'buggy.ts의 덧셈 버그를 고쳐드릴게요! 다만 main 폴더를 바로 건드리면 위험하니 별도 작업 폴더(worktree)를 먼저 열어 주세요.',
+            'git worktree add -b ai/fix wt-ai 로 AI 작업 폴더을 만들어 보세요!',
+            [{ label: 'AI 작업 폴더 만들기', command: 'git worktree add -b ai/fix wt-ai', tone: 'mint' }],
           ),
         ],
         terminal: [
@@ -991,11 +1012,11 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       [
         {
           text: exists
-            ? `✏️ ${targetName} 파일을 작업실(Working Dir)에서 수정했어요.`
-            : `✨ 새 파일 ${targetName} 을 작업실에 만들었어요.`,
+            ? `✏️ ${targetName} 파일을 작업 폴더에서 수정했어요.`
+            : `✨ 새 파일 ${targetName} 을 작업 폴더에 만들었어요.`,
           tone: 'amber',
         },
-        { text: '이제 git add . 로 장바구니(Staging)에 담아 보세요.', tone: 'muted' },
+        { text: '이제 git add .로 다음 커밋에 담아 보세요.', tone: 'muted' },
       ],
       makeBubble(
         `edit-${seqNext}`,
@@ -1003,9 +1024,9 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         30,
         54,
         `${targetName} 파일을 뚝딱 고쳤어요! ✏️`,
-        '작업실 파일이 바뀌었어요. 아직 저장(커밋)되기 전이라 장바구니에 먼저 담아야 해요!',
-        'git add . 를 입력해 바뀐 파일을 장바구니에 담아 보세요!',
-        [{ label: '🧺 장바구니 담기 (git add .)', command: 'git add .', tone: 'mint' }],
+        '작업 파일을 수정했어요. 이 변경을 기록하려면 먼저 스테이징 영역에 담으세요.',
+        'git add .로 바뀐 파일을 다음 커밋에 담을 수 있어요.',
+        [{ label: '공유할 변경 담기', command: 'git add .', tone: 'mint' }],
       ),
     );
   }
@@ -1079,7 +1100,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       cmd,
       [
         { text: `🧩 ${conflictFile} 충돌 해결: ${choiceLabel}`, tone: 'mint' },
-        { text: `✓ 해결된 ${conflictFile} 이 장바구니(Staging)에 담겼어요.`, tone: 'sky' },
+        { text: `✓ 해결된 ${conflictFile}을 스테이징 영역에 담았어요.`, tone: 'sky' },
         { text: `${finish}로 해결한 내용을 기록하세요.`, tone: 'muted' },
       ],
       makeBubble(
@@ -1088,7 +1109,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         46,
         52,
         `충돌 해결 완료! (${choiceLabel}) 🧩`,
-        `${conflictFile} 파일의 충돌 표시를 깔끔하게 정리하고 장바구니에 담았어요!`,
+        `${conflictFile} 파일의 충돌을 해결하고 다음 커밋에 담았어요.`,
         `${finish}로 기록을 마무리하세요.`,
         [{ label: '해결한 내용 기록하기', command: finish, tone: 'mint' }],
       ),
@@ -1127,7 +1148,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           '이 토큰에는 삭제 권한도 있어요',
           '이 예제 토큰에는 delete_repo 범위를 선택했어요. 실제로 할 수 있는 일은 계정의 권한과 토큰에 부여한 범위에 따라 달라져요.',
           'token fine 으로 Fine-Grained 최소 권한 토큰으로 교체해 보세요!',
-          [{ label: '✨ Fine-Grained로 바꾸기', command: 'token fine', tone: 'mint' }],
+          [{ label: '필요한 권한만 주기', command: 'token fine', tone: 'mint' }],
         ),
       );
     }
@@ -1161,7 +1182,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           '예제 토큰은 gitdots/app에만 내용을 쓸 수 있고 30일 뒤에 만료돼요. 다른 저장소의 권한은 따로 부여해야 해요.',
           nextStepHintText({ ...draft, completedActions: withCompletedAction(draft.completedActions, 'TOKEN_FINE') }),
           !state.token.ssoAuthorized
-            ? [{ label: '🏢 SAML SSO 승인받기', command: 'token sso', tone: 'primary' }]
+            ? [{ label: '회사 계정 인증하기', command: 'token sso', tone: 'primary' }]
             : undefined,
         ),
       );
@@ -1179,7 +1200,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         state,
         draft,
         'TOKEN_SSO',
-        'SAML SSO 승인',
+        '회사 계정 인증 완료',
         'SSO OK',
         cmd,
         [
@@ -1195,7 +1216,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           'SAML SSO를 쓰는 조직에서는 회사 계정과 GitHub 계정을 연결해요. Fine-grained 토큰의 조직 인증은 토큰을 만들 때 이뤄져요.',
           nextStepHintText({ ...draft, completedActions: withCompletedAction(draft.completedActions, 'TOKEN_SSO') }),
           !state.token.sshReady
-            ? [{ label: '🔐 SSH 키 설정하기', command: 'token ssh', tone: 'mint' }]
+            ? [{ label: '연결 키 준비하기', command: 'token ssh', tone: 'mint' }]
             : undefined,
         ),
       );
@@ -1303,7 +1324,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           'gh auth login --hostname github.corp.internal 로 사내 서버에 로그인해 보세요!',
           [
             {
-              label: '🔓 사내망 GHES 로그인',
+              label: '사내 서버 로그인',
               command: 'gh auth login --hostname github.corp.internal',
               tone: 'primary',
             },
@@ -1327,7 +1348,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         state,
         draft,
         'GHES_RUNNER',
-        'Private Runner 실행',
+        '사내 실행기로 빌드',
         'corp-runner-01',
         cmd,
         [
@@ -1339,8 +1360,8 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           'cloud',
           68,
           48,
-          '사내 Private Runner 빌드 성공! ⚙️',
-          '코드가 회사 밖으로 한 발짝도 나가지 않고 사내 전용 서버 안에서 자동 테스트까지 끝냈어요!',
+          '사내에서 자동 빌드와 테스트를 마쳤어요',
+          '이 예제에서는 사내 실행기가 회사 서버 안에서 빌드와 테스트를 처리했어요.',
           nextStepHintText({ ...draft, completedActions: withCompletedAction(draft.completedActions, 'GHES_RUNNER') }),
         ),
       );
@@ -1395,7 +1416,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           state,
           state,
           'IDLE',
-          '작업실 먼저 필요',
+          '별도 작업 폴더 필요',
           undefined,
           cmd,
           [
@@ -1406,12 +1427,12 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             'ai',
             66,
             52,
-            '잠깐! AI 작업실부터 만들어 주세요 🏗️',
-            '사람이 쓰는 main 작업실을 바로 건드리면 충돌이 날 수 있어요. 독립된 worktree 공간을 먼저 열어 주세요!',
+            '잠깐! AI 작업 폴더부터 만들어 주세요 🏗️',
+            '사람이 쓰는 main 작업 폴더을 바로 건드리면 충돌이 날 수 있어요. 독립된 worktree 공간을 먼저 열어 주세요!',
             'git worktree add -b ai/fix wt-ai 를 실행해 보세요!',
             [
               {
-                label: '🏗️ AI 작업실 생성',
+                label: 'AI 작업 폴더 만들기',
                 command: 'git worktree add -b ai/fix wt-ai',
                 tone: 'mint',
               },
@@ -1459,7 +1480,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           'AI 작업 폴더에서 덧셈을 고쳤어요',
           'wt-ai 폴더 안에서만 코드를 고치고 테스트까지 통과했어요. 이제 main에 바로 푸시하면 어떻게 될까요?',
           'ai push-main 을 실행해서 브랜치 보호 가드레일을 시험해 보세요!',
-          [{ label: '🛑 main 푸시 테스트 (ai push-main)', command: 'ai push-main', tone: 'coral' }],
+          [{ label: '직접 공유 제한 확인', command: 'ai push-main', tone: 'coral' }],
         ),
       );
     }
@@ -1489,7 +1510,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           '스톱! main 직접 푸시 차단! 🛑',
           'Branch Protection 가드레일 덕분에 AI 에이전트도 main을 멋대로 바꿀 수 없어요. 안전하게 PR로 올려야 해요!',
           'ai pr 을 입력해 Draft PR과 자동 CI 검증을 돌려 보세요!',
-          [{ label: '📋 Draft PR 올리기 (ai pr)', command: 'ai pr', tone: 'primary' }],
+          [{ label: '검토 초안과 테스트 확인', command: 'ai pr', tone: 'primary' }],
         ),
       );
     }
@@ -1535,7 +1556,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           `Draft PR #${nextNum} + CI 초록불! 📋`,
           '자동 테스트를 모두 통과했어요! 이제 사람이 변경 내역을 최종 확인하고 승인해 주시면 main에 합칠게요.',
           '말풍선 버튼을 누르거나 ai approve 를 입력해 승인해 주세요!',
-          [{ label: '✅ 사람 승인 & 머지 (ai approve)', command: 'ai approve', tone: 'mint' }],
+          [{ label: '승인하고 합치기', command: 'ai approve', tone: 'mint' }],
         ),
       );
     }
@@ -1558,7 +1579,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             '먼저 Draft PR을 올려야 해요! 📋',
             '아직 리뷰할 PR이 없어요. ai pr 명령어로 PR과 자동 테스트를 먼저 실행해 볼까요?',
             'ai pr 을 입력해 Draft PR을 만들어 보세요!',
-            [{ label: '📋 Draft PR 올리기 (ai pr)', command: 'ai pr', tone: 'primary' }],
+            [{ label: '검토 초안과 테스트 확인', command: 'ai pr', tone: 'primary' }],
           ),
         );
       }
@@ -1666,17 +1687,17 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         modifiedFiles.length === 0 &&
         untrackedFiles.length === 0
       ) {
-        lines.push({ text: '✨ 작업실이 깨끗해요 (nothing to commit, working tree clean)', tone: 'mint' });
+        lines.push({ text: '커밋할 변경이 없어요 (nothing to commit, working tree clean)', tone: 'mint' });
       }
 
       const statusSummary =
         conflictFiles.length > 0
           ? `충돌 난 파일이 ${conflictFiles.length}개 있어요! 먼저 해결해 볼까요?`
           : stagedFiles.length > 0
-            ? `장바구니에 ${stagedFiles.length}개 파일이 담겨 있어요. 이제 커밋할 차례예요!`
+            ? `스테이징 영역에 ${stagedFiles.length}개 파일이 담겨 있어요. 이제 기록을 남길 차례예요.`
             : modifiedFiles.length + untrackedFiles.length > 0
-              ? `아직 장바구니에 안 담긴 파일이 ${modifiedFiles.length + untrackedFiles.length}개 있어요!`
-              : '작업실이 아주 깨끗해요!';
+              ? `아직 스테이징하지 않은 파일이 ${modifiedFiles.length + untrackedFiles.length}개 있어요.`
+              : '커밋할 변경이 없어요.';
 
       return finalizeTransition(
         state,
@@ -1691,7 +1712,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           'buddy',
           32,
           54,
-          '현재 작업실 상태 보고서 📋',
+          '현재 파일의 변경 상태예요',
           statusSummary,
           nextStepHintText(state),
         ),
@@ -1975,8 +1996,8 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           'buddy',
           44,
           52,
-          '세이브 타임라인을 열었어요! 📜',
-          `지금까지 쌓인 ${recent.length}개의 세이브(커밋) 기록이에요. 언제든 원하는 시점을 확인할 수 있어요!`,
+          '커밋 기록을 열었어요',
+          `최근 커밋 ${recent.length}개예요. 해시를 사용해 해당 시점의 파일을 열 수 있어요.`,
           nextStepHintText(state),
         ),
       );
@@ -2393,18 +2414,13 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         };
         const conflictText = `<<<<<<< ${state.headBranch}\n${oursCode}\n=======\n${theirsCode}\n>>>>>>> ${targetName}\n`;
         const draft = updateWorkspace({ ...state, conflict }, { ...checkout.working, [file]: conflictText }, checkout.index);
-        const message = `${file}의 같은 부분을 두 브랜치가 바꿨어요. 아래 설명 카드에서 남길 내용을 고르세요.`;
         return finalizeTransition(
           state, draft, 'CONFLICT', '병합 충돌 발생', file, cmd,
           [
             { text: `CONFLICT (content): ${file}`, tone: 'coral' },
             { text: '화면의 충돌 안내에서 남길 버전을 선택해 주세요.', tone: 'amber' },
           ],
-          makeBubble(`conflict-${seqNext}`, 'buddy', 48, 52, `${file}의 변경이 겹쳤어요`, message, undefined, [
-            { label: '현재 브랜치 내용 유지', command: 'resolve ours', tone: 'primary' },
-            { label: '상대 브랜치 내용 사용', command: 'resolve theirs', tone: 'amber' },
-            { label: '두 내용 함께 담기', command: 'resolve both', tone: 'mint' },
-          ]),
+          mergeConflictBubble(file, seqNext),
         );
       }
 
@@ -2501,7 +2517,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         state,
         draft,
         'AI_WORKTREE',
-        `작업실 ${dirName} 생성`,
+        `작업 폴더 ${dirName} 생성`,
         branchName,
         cmd,
         [
@@ -2513,10 +2529,10 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           'ai',
           66,
           52,
-          `전용 작업실(${dirName}) 입주 완료! 🏗️`,
+          `AI 작업 폴더(${dirName})를 열었어요`,
           `${dirName}에서 ${branchName} 브랜치의 파일을 편집할 수 있어요. 두 작업 폴더는 같은 저장소의 커밋 기록을 공유해요.`,
           'ai code 를 입력해서 AI가 코드를 수정하도록 시켜 보세요!',
-          [{ label: '🪄 AI 코드 작성 (ai code)', command: 'ai code', tone: 'mint' }],
+          [{ label: '덧셈 오류 고치기', command: 'ai code', tone: 'mint' }],
         ),
       );
     }
@@ -2997,7 +3013,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           state,
           draft,
           'GHES_API',
-          'GHES /api/v3 호출',
+          '사내 서버에서 계정 정보 확인',
           '200 OK',
           cmd,
           [
@@ -3099,15 +3115,15 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 }
 
 const GENERAL_CATALOG: { cmd: string; hint: string }[] = [
-  { cmd: 'git status', hint: '작업실·장바구니 상태 보기' },
+  { cmd: 'git status', hint: '작업 파일과 스테이징 상태 보기' },
   { cmd: 'edit app.js', hint: 'app.js 파일 수정하기' },
-  { cmd: 'git add .', hint: '수정 파일 장바구니(Staging) 담기' },
-  { cmd: 'git commit -m "첫 세이브"', hint: '내 저장소에 세이브(커밋)하기' },
-  { cmd: 'git push', hint: 'GitHub 구름으로 푸시하기' },
+  { cmd: 'git add .', hint: '변경을 다음 커밋에 담기' },
+  { cmd: 'git commit -m "변경 사항 기록"', hint: '내 저장소에 커밋 남기기' },
+  { cmd: 'git push', hint: '팀의 GitHub 저장소에 공유하기' },
   { cmd: 'git log', hint: '커밋 타임라인 기록 보기' },
   { cmd: 'git diff', hint: '수정 전후 차이 비교하기' },
-  { cmd: 'git stash', hint: '작업 중인 변경 서랍에 임시 보관' },
-  { cmd: 'git stash pop', hint: '서랍에서 작업 다시 꺼내기' },
+  { cmd: 'git stash', hint: '작업 중인 변경 임시 보관' },
+  { cmd: 'git stash pop', hint: '임시 보관한 작업 복원' },
   { cmd: 'git revert HEAD', hint: '기록을 남기며 안전하게 취소' },
   { cmd: 'git reset --soft HEAD~1', hint: '커밋만 한 칸 되감기' },
   { cmd: 'git branch', hint: '브랜치 목록 보기' },
@@ -3131,14 +3147,14 @@ const GENERAL_CATALOG: { cmd: string; hint: string }[] = [
   { cmd: 'gh api repos/gitdots/app', hint: 'GitHub REST API 조회하기' },
   { cmd: 'token classic', hint: '예제 classic 토큰의 권한 확인' },
   { cmd: 'token fine', hint: 'Fine-Grained 최소 권한 토큰' },
-  { cmd: 'token sso', hint: '조직 SAML SSO 승인 도장' },
+  { cmd: 'token sso', hint: '회사 계정으로 조직 인증하기' },
   { cmd: 'token ssh', hint: 'SSH 암호화 키 인증 설정' },
   { cmd: 'token leak-test', hint: 'Push Protection 유출 차단 체험' },
   { cmd: 'gh auth login --with-token', hint: '표준 입력으로 안전 토큰 로그인' },
   { cmd: 'ghes test-public', hint: '사내 방화벽 외부 차단 테스트' },
   { cmd: 'gh auth login --hostname github.corp.internal', hint: '사내 GHES 서버 로그인' },
   { cmd: 'gh api user --hostname github.corp.internal', hint: '사내 GitHub 계정 정보 조회' },
-  { cmd: 'ghes runner', hint: '사내 Private Runner 빌드 실행' },
+  { cmd: 'ghes runner', hint: '사내 실행기로 자동 빌드하기' },
   { cmd: 'ghes cloud', hint: 'Cloud vs GHES 비교 보기' },
   { cmd: 'git worktree add -b ai/fix wt-ai', hint: 'AI 브랜치의 별도 작업 폴더 만들기' },
   { cmd: 'ai code', hint: 'AI가 버그 수정 코드 작성' },
