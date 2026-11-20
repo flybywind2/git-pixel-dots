@@ -44,10 +44,10 @@ export function TopStageBar() {
         </span>
       </div>
 
-      {/* Center: 8 cozy numbered stage pills */}
+      {/* Scrollable lesson navigation */}
       <nav
         aria-label="학습 스테이지"
-        className="flex-1 min-w-0 flex items-center justify-start lg:justify-center gap-1.5 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex-1 min-w-0 flex items-center justify-start lg:[justify-content:safe_center] gap-1.5 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {STAGE_SCENARIOS.map((scenario) => {
           const isActive = scenario.id === stageId;

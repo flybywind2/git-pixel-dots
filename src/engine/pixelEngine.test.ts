@@ -8,7 +8,9 @@ import {
   getCommandAutocomplete,
   getNextPendingStep,
   isStepCompleted,
+  savePracticeDocument,
 } from './index';
+import { diffDocumentLines, DOCUMENT_COMPARISONS, getDocumentComparison, ORIGINAL_DOCUMENT } from './documentDiff';
 
 function deepFreeze<T>(obj: T): T {
   if (obj && typeof obj === 'object' && !Object.isFrozen(obj)) {
@@ -48,8 +50,9 @@ function runSequence(stageId: StageId, commands: string[]): PixelSimState {
 }
 
 describe('GitDots scenarios & initial stage presets', () => {
-  it('defines all 8 stages in STAGE_SCENARIOS and STAGE_MAP with cheat sheets', () => {
-    expect(STAGE_SCENARIOS).toHaveLength(8);
+  it('defines the ordered stages with cheat sheets', () => {
+    expect(STAGE_SCENARIOS.map((scenario) => scenario.id)).toEqual(ALL_STAGE_IDS);
+    expect(STAGE_SCENARIOS.map((scenario) => scenario.number)).toEqual(ALL_STAGE_IDS.map((_, index) => index + 1));
     for (const id of ALL_STAGE_IDS) {
       const scenario = STAGE_MAP[id];
       expect(scenario).toBeDefined();
@@ -60,7 +63,7 @@ describe('GitDots scenarios & initial stage presets', () => {
     }
   });
 
-  it('creates tailored initial world state and safe opening bubbles for all 8 stages', () => {
+  it('creates tailored initial world state and safe opening bubbles for all stages', () => {
     for (const id of ALL_STAGE_IDS) {
       const state = createStageState(id);
       expect(state.stageId).toBe(id);
@@ -73,7 +76,7 @@ describe('GitDots scenarios & initial stage presets', () => {
   });
 });
 
-describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
+describe('Full stage walkthroughs', () => {
   it.each(STAGE_SCENARIOS)('advances one goal per guided command in $id', (lesson) => {
     let state = createStageState(lesson.id);
     for (const [index, step] of lesson.steps.entries()) {
@@ -158,7 +161,7 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     expect(s.lastAnim.kind).toBe('REVERT');
     expect(s.commits).toHaveLength(initialCommitCount + 1);
     expect(s.commits[s.commits.length - 1]?.isRevert).toBe(true);
-    expect(s.bubbles[0]?.title).toContain('2장 실습 완료');
+    expect(s.bubbles[0]?.title).toContain('3장 실습 완료');
 
     // Bonus: reset --soft marks latest commit as ghost and stages file
     const beforeResetHead = s.branches.main;
@@ -232,7 +235,7 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     expect(s.conflict).toBeNull();
     expect(s.commits[s.commits.length - 1]?.isMerge).toBe(true);
     expect(s.commits[s.commits.length - 1]?.parents.length).toBe(2);
-    expect(s.bubbles[0]?.title).toContain('3장 실습 완료');
+    expect(s.bubbles[0]?.title).toContain('4장 실습 완료');
 
     // Rebase works cleanly too
     s = deepFreeze(executePixelCommand(s, 'git rebase main'));
@@ -267,7 +270,7 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     expect(s.prs).toHaveLength(1);
     expect(s.prs[0]?.title).toBe('새 기능');
     expect(s.prs[0]?.status).toBe('merged');
-    expect(s.bubbles[0]?.title).toContain('4장 실습 완료');
+    expect(s.bubbles[0]?.title).toContain('5장 실습 완료');
   });
 
   it('Ch5: gh CLI full walkthrough (auth, repo, pr, issue, run watch, api)', () => {
@@ -278,7 +281,7 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     s = deepFreeze(executePixelCommand(s, 'gh auth status'));
     expect(s.lastAnim.kind).toBe('GH_CMD');
     // Should NOT prematurely celebrate after step 1 even though multiple steps use GH_CMD
-    expect(s.bubbles[0]?.title).not.toContain('5장 실습 완료');
+    expect(s.bubbles[0]?.title).not.toContain('6장 실습 완료');
 
     s = deepFreeze(executePixelCommand(s, 'gh repo view'));
     expect(s.lastAnim.kind).toBe('GH_CMD');
@@ -298,11 +301,11 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
 
     s = deepFreeze(executePixelCommand(s, 'gh run watch'));
     expect(s.lastAnim.kind).toBe('GH_CMD');
-    expect(s.bubbles[0]?.title).not.toContain('5장 실습 완료');
+    expect(s.bubbles[0]?.title).not.toContain('6장 실습 완료');
 
     s = deepFreeze(executePixelCommand(s, 'gh api repos/gitdots/app'));
     expect(s.lastAnim.kind).toBe('GH_CMD');
-    expect(s.bubbles[0]?.title).toContain('5장 실습 완료');
+    expect(s.bubbles[0]?.title).toContain('6장 실습 완료');
   });
 
   it('Ch6: token classic vs fine-grained, SSO, SSH, Push Protection leak-test, --with-token', () => {
@@ -325,7 +328,7 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     s = deepFreeze(executePixelCommand(s, 'token ssh'));
     expect(s.lastAnim.kind).toBe('TOKEN_SSH');
     expect(s.token.sshReady).toBe(true);
-    expect(s.bubbles[0]?.title).toContain('6장 실습 완료');
+    expect(s.bubbles[0]?.title).toContain('7장 실습 완료');
 
     s = deepFreeze(executePixelCommand(s, 'token leak-test'));
     expect(s.lastAnim.kind).toBe('TOKEN_BLOCK');
@@ -369,7 +372,7 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     s = deepFreeze(executePixelCommand(s, 'ghes runner'));
     expect(s.lastAnim.kind).toBe('GHES_RUNNER');
     expect(s.ghes.lastFlow).toBe('runner');
-    expect(s.bubbles[0]?.title).toContain('7장 실습 완료');
+    expect(s.bubbles[0]?.title).toContain('8장 실습 완료');
 
     s = deepFreeze(executePixelCommand(s, 'ghes cloud'));
     expect(s.lastAnim.kind).toBe('GH_CMD');
@@ -418,7 +421,75 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     expect(s.ai.merged).toBe(true);
     expect(s.prs[0]?.status).toBe('merged');
     expect(s.branches.main).not.toBe(initialMainCommit);
-    expect(s.bubbles[0]?.title).toContain('8장 실습 완료');
+    expect(s.bubbles[0]?.title).toContain('9장 실습 완료');
+  });
+});
+
+describe('Document editing and comparison', () => {
+  it('commits the staged document and preserves a later working edit', () => {
+    const firstEdit = ORIGINAL_DOCUMENT.replace('금요일 저녁 7시', '수요일 오후 2시');
+    const laterEdit = firstEdit.replace('1층 회의실', '도서관');
+    let state = deepFreeze(createStageState('docs'));
+    state = deepFreeze(executePixelCommand(state, DOCUMENT_COMPARISONS.commits.command));
+    expect(state.completedActions).not.toContain('DOCUMENT_COMMIT_DIFF');
+
+    state = deepFreeze(savePracticeDocument(state, firstEdit));
+    state = deepFreeze(executePixelCommand(state, 'git diff README.md'));
+    const workingLines = state.terminal.at(-1)?.lines.map(({ text }) => text);
+    expect(workingLines).toContain('-다음 모임은 금요일 저녁 7시예요.');
+    expect(workingLines).toContain('+다음 모임은 수요일 오후 2시예요.');
+
+    state = deepFreeze(executePixelCommand(state, 'git add -- ./README.md'));
+    expect(getDocumentComparison(state, 'working')).toEqual({ before: firstEdit, after: firstEdit });
+    state = deepFreeze(savePracticeDocument(state, laterEdit));
+    expect(getDocumentComparison(state, 'staged')).toEqual({ before: ORIGINAL_DOCUMENT, after: firstEdit });
+    expect(getDocumentComparison(state, 'working')).toEqual({ before: firstEdit, after: laterEdit });
+    state = deepFreeze(executePixelCommand(state, 'git status'));
+    const status = state.terminal.at(-1)?.lines.map(({ text }) => text).join('\n');
+    expect(status).toContain('Staged): README.md');
+    expect(status).toContain('Modified): README.md');
+
+    state = deepFreeze(executePixelCommand(state, 'git diff --cached -- README.md'));
+    expect(state.document?.comparison).toBe('staged');
+    state = deepFreeze(executePixelCommand(state, 'git commit -m "안내 수정 -a 아님"'));
+    expect(state.commits.at(-1)?.documentContent).toBe(firstEdit);
+    expect(state.files[0]).toMatchObject({ content: laterEdit, status: 'modified' });
+    expect(state.staged).toEqual([]);
+    expect(getDocumentComparison(state, 'staged')).toEqual({ before: firstEdit, after: firstEdit });
+
+    state = deepFreeze(executePixelCommand(state, DOCUMENT_COMPARISONS.commits.command));
+    expect(getDocumentComparison(state, 'commits')).toEqual({ before: ORIGINAL_DOCUMENT, after: firstEdit });
+    expect(state.terminal.at(-1)?.lines.map(({ text }) => text)).not.toContain('+장소는 도서관이에요.');
+    expect(getNextPendingStep(state)).toBeNull();
+    expect(executePixelCommand(state, 'reset').files[0]?.content).toBe(ORIGINAL_DOCUMENT);
+  });
+
+  it('stages an empty document and clears staging when the original is added again', () => {
+    let state = savePracticeDocument(createStageState('docs'), '');
+    state = executePixelCommand(state, 'git add README.md');
+    expect(state.document?.index).toBe('');
+    expect(state.staged).toEqual(['README.md']);
+    state = savePracticeDocument(state, ORIGINAL_DOCUMENT);
+    state = executePixelCommand(state, 'git add README.md');
+    expect(state.staged).toEqual([]);
+    expect(state.files[0]?.status).toBe('committed');
+    state = executePixelCommand(state, 'git commit -m "변경 없음"');
+    expect(state.commits).toHaveLength(1);
+  });
+
+  it('diffs multiline edits, empty text, and a missing final newline', () => {
+    const lines = diffDocumentLines('제목\n삭제\n유지\n', '제목\n추가\n유지\n뒤에 더 쓰기');
+    expect(lines.map(({ kind, text }) => [kind, text])).toEqual([
+      ['unchanged', '제목'],
+      ['removed', '삭제'],
+      ['added', '추가'],
+      ['unchanged', '유지'],
+      ['added', '뒤에 더 쓰기'],
+    ]);
+    expect(lines.at(-1)).toMatchObject({ afterLine: 4, noFinalNewline: true });
+    expect(diffDocumentLines('줄\n', '')).toMatchObject([{ kind: 'removed', text: '줄' }]);
+    expect(diffDocumentLines('줄\n', '줄').map(({ kind }) => kind)).toEqual(['removed', 'added']);
+    expect(diffDocumentLines('줄\n', '줄\n')).toEqual([]);
   });
 });
 

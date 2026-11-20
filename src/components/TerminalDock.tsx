@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { Check, CornerDownLeft } from 'lucide-react';
 import { STAGE_MAP, getCommandAutocomplete, isStepCompleted } from '../engine';
+import { DOCUMENT_SAVE_LABEL } from '../engine/documentDiff';
 import { usePixelStore } from '../store/usePixelStore';
 import type { TerminalLineTone } from '../types/sim';
 
@@ -216,7 +217,9 @@ export function TerminalDock() {
           sim.terminal.map((entry) => (
             <div key={entry.id} className="space-y-1">
               <div className="flex items-center gap-1.5 text-[#2F241D]">
-                {entry.command !== 'welcome' && <span className="text-[#147A5B] font-bold select-none">$</span>}
+                {entry.command !== 'welcome' && entry.command !== DOCUMENT_SAVE_LABEL && (
+                  <span className="text-[#147A5B] font-bold select-none">$</span>
+                )}
                 <span className="font-semibold break-all">{entry.command === 'welcome' ? '연습 저장소' : entry.command}</span>
                 {entry.branch && (
                   <span className="text-[10px] text-[#92806E] ml-auto shrink-0">

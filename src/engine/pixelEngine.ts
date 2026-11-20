@@ -2,6 +2,7 @@ import type {
   AiWorldState,
   BubbleAction,
   BubbleSpeaker,
+  DocumentComparison,
   GhesWorldState,
   LessonAction,
   PixelAnimKind,
@@ -18,6 +19,18 @@ import type {
   TokenWorldState,
 } from '../types/sim';
 import { STAGE_MAP } from './scenarios';
+import {
+  diffDocumentLines,
+  DOCUMENT_COMPARISONS,
+  DOCUMENT_LIMIT,
+  DOCUMENT_PATH,
+  DOCUMENT_SAVE_LABEL,
+  EXAMPLE_DOCUMENT,
+  getDocumentComparison,
+  getDocumentWorkingText,
+  ORIGINAL_DOCUMENT,
+  withDocumentVersions,
+} from './documentDiff';
 
 const SPEAKER_NAMES: Record<BubbleSpeaker, string> = {
   buddy: '도트 버디',
@@ -26,6 +39,8 @@ const SPEAKER_NAMES: Record<BubbleSpeaker, string> = {
   ai: '에이전트 봇',
   system: '도트 안내',
 };
+
+const DOCUMENT_GIT_COMMANDS = new Set(['status', 'diff', 'add', 'commit', 'log', 'push']);
 
 function clampAnchor(value: number): number {
   return Math.max(22, Math.min(78, Math.round(value)));
@@ -266,6 +281,46 @@ export function createStageState(id: StageId): PixelSimState {
         terminal: [
           makeLogEntry(0, 'welcome', 'main', [
             { text: '수정된 파일(app.js)과 새 파일(style.css)이 작업실에 기다리고 있어요.', tone: 'muted' },
+          ]),
+        ],
+      };
+
+    case 'docs':
+      return {
+        stageId: 'docs',
+        files: [{ name: DOCUMENT_PATH, status: 'committed', content: ORIGINAL_DOCUMENT }],
+        document: { index: ORIGINAL_DOCUMENT, comparison: 'working' },
+        staged: [],
+        commits: [{
+          id: 'c1',
+          hash: '4a9cda1',
+          message: '스터디 안내 초안',
+          branch: 'main',
+          parents: [],
+          documentContent: ORIGINAL_DOCUMENT,
+        }],
+        branches: { main: 'c1' },
+        headBranch: 'main',
+        remoteBranches: { main: 'c1' },
+        stashes: [],
+        stashCount: 0,
+        prs: [],
+        issues: [],
+        conflict: null,
+        ghHost: 'github.com',
+        ghUser: 'dot-dev',
+        token: defaultTokenState(),
+        ghes: defaultGhesState(),
+        ai: defaultAiState(),
+        lastAnim: { kind: 'IDLE', seq: 0, label: '문서 편집 준비' },
+        completedActions: [],
+        bubbles: [
+          makeBubble('init-docs', 'buddy', 32, 54, '스터디 안내를 고쳐 볼까요?',
+            '편집기에서 README.md를 고친 뒤 어떤 줄이 바뀌었는지 확인하세요.'),
+        ],
+        terminal: [
+          makeLogEntry(0, 'welcome', 'main', [
+            { text: '첫 커밋에 스터디 안내가 들어 있어요. README.md를 고쳐 보세요.', tone: 'muted' },
           ]),
         ],
       };
@@ -610,6 +665,107 @@ export function createStageState(id: StageId): PixelSimState {
   }
 }
 
+function documentNotice(state: PixelSimState, command: string, title: string, message: string): PixelSimState {
+  return finalizeTransition(
+    state, state, 'IDLE', title, undefined, command,
+    [{ text: message, tone: 'muted' }],
+    makeBubble(`document-notice-${state.lastAnim.seq + 1}`, 'buddy', 32, 54, title, message),
+  );
+}
+
+export function savePracticeDocument(
+  state: PixelSimState,
+  text: string,
+  command = DOCUMENT_SAVE_LABEL,
+): PixelSimState {
+  if (!state.document) return state;
+
+  const working = text.replace(/\r\n?/g, '\n');
+  if (working.length > DOCUMENT_LIMIT) {
+    return documentNotice(state, command, '문서 길이를 확인해 주세요', `편집기에서는 ${DOCUMENT_LIMIT}자까지 저장할 수 있어요.`);
+  }
+  if (working === getDocumentWorkingText(state)) {
+    return documentNotice(state, command, '같은 문서 내용', '이미 저장한 작업 문서와 내용이 같아요.');
+  }
+
+  const draft = withDocumentVersions(state, working, state.document.index);
+  return finalizeTransition(
+    state, draft, 'EDIT', '작업 문서 저장', DOCUMENT_PATH, command,
+    [
+      { text: 'README.md를 작업 파일에 저장했어요.', tone: 'mint' },
+      { text: 'git diff -- README.md로 바뀐 줄을 확인할 수 있어요.', tone: 'muted' },
+    ],
+    makeBubble(`document-save-${state.lastAnim.seq + 1}`, 'buddy', 32, 54, '작업 파일에 저장했어요',
+      '현재 문서와 스테이징 영역을 비교해 바뀐 줄을 확인해 보세요.'),
+  );
+}
+
+function getDocumentDiffMode(args: string[]): DocumentComparison | null {
+  const options = [...args];
+  const path = options.at(-1);
+  if (path === DOCUMENT_PATH || path === `./${DOCUMENT_PATH}` || path === '.') options.pop();
+  if (options.at(-1) === '--') options.pop();
+
+  switch (options.join(' ')) {
+    case '':
+      return 'working';
+    case '--staged':
+    case '--cached':
+    case '--staged HEAD':
+    case '--cached HEAD':
+      return 'staged';
+    case 'HEAD~1 HEAD':
+    case 'HEAD^ HEAD':
+    case 'HEAD~1..HEAD':
+    case 'HEAD^..HEAD':
+      return 'commits';
+    default:
+      return null;
+  }
+}
+
+function comparePracticeDocument(state: PixelSimState, cmd: string, args: string[]): PixelSimState {
+  const mode = getDocumentDiffMode(args);
+  if (!mode || !state.document) {
+    return documentNotice(state, cmd, '비교할 대상을 골라 주세요',
+      '이 장에서 쓸 수 있는 git diff 명령은 비교 패널과 명령어 사전에 있어요.');
+  }
+
+  const view = DOCUMENT_COMPARISONS[mode];
+  const comparison = getDocumentComparison(state, mode);
+  const changes = comparison ? diffDocumentLines(comparison.before, comparison.after) : [];
+  const lines: TerminalLine[] = [{ text: `${view.before} → ${view.after}`, tone: 'sky' }];
+  const message = !comparison
+    ? '문서를 커밋하면 이전 기록과 비교할 수 있어요.'
+    : changes.length === 0
+      ? view.empty
+      : '−는 빠진 줄, +는 들어간 줄이에요.';
+
+  if (changes.length === 0) {
+    lines.push({ text: message, tone: 'muted' });
+  } else {
+    lines.push({ text: `--- a/${DOCUMENT_PATH}\n+++ b/${DOCUMENT_PATH}`, tone: 'muted' });
+    for (const change of changes) {
+      const prefix = change.kind === 'added' ? '+' : change.kind === 'removed' ? '-' : ' ';
+      const tone = change.kind === 'added' ? 'mint' : change.kind === 'removed' ? 'coral' : 'default';
+      lines.push({ text: `${prefix}${change.text}`, tone });
+      if (change.noFinalNewline) lines.push({ text: '  (문서 끝에 줄바꿈 없음)', tone: 'muted' });
+    }
+  }
+
+  const draft: PixelSimState = {
+    ...state,
+    document: { ...state.document, comparison: mode },
+    completedActions: comparison
+      ? withCompletedAction(state.completedActions, view.action)
+      : state.completedActions,
+  };
+  return finalizeTransition(
+    state, draft, 'IDLE', `${view.label} 비교`, DOCUMENT_PATH, cmd, lines,
+    makeBubble(`document-diff-${state.lastAnim.seq + 1}`, 'buddy', 34, 52, `${view.label} 비교`, message),
+  );
+}
+
 export function executePixelCommand(state: PixelSimState, rawCmd: string): PixelSimState {
   const cmd = rawCmd.trim();
   if (!cmd) return state;
@@ -701,6 +857,16 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           : undefined,
       ),
     );
+  }
+
+  if (state.document) {
+    if (lower === 'edit' || lower === 'edit readme.md') {
+      return savePracticeDocument(state, EXAMPLE_DOCUMENT, cmd);
+    }
+    const sub = tokens[1]?.toLowerCase();
+    if (tokens[0].toLowerCase() !== 'git' || !sub || !DOCUMENT_GIT_COMMANDS.has(sub)) {
+      return documentNotice(state, cmd, '문서 실습 명령어', 'README.md 편집과 비교에 쓰는 명령은 명령어 사전에서 확인할 수 있어요.');
+    }
   }
 
   // ── Edit command ─────────────────────────────────────────────────────────
@@ -1374,7 +1540,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
     // git status
     if (sub === 'status') {
-      const stagedFiles = state.files.filter((f) => f.status === 'staged');
+      const stagedFiles = state.files.filter((f) => state.staged.includes(f.name));
       const modifiedFiles = state.files.filter((f) => f.status === 'modified');
       const untrackedFiles = state.files.filter((f) => f.status === 'untracked');
       const conflictFiles = state.files.filter((f) => f.status === 'conflict');
@@ -1472,8 +1638,11 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         );
       }
 
-      const target = tokens[2] ?? '.';
+      const target = (tokens[tokens[2] === '--' ? 3 : 2] ?? '.').replace(/^\.\//, '');
       const stageAll = target === '.' || target === '-A' || target === '--all';
+      if (state.document && !stageAll && target !== DOCUMENT_PATH) {
+        return documentNotice(state, cmd, '실습 문서 확인', '이 연습 저장소에는 README.md가 있어요. git add README.md를 실행해 보세요.');
+      }
       const newlyStaged: string[] = [];
       const nextFiles: PixelFile[] = state.files.map((f) => {
         const shouldStage =
@@ -1487,11 +1656,24 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       });
 
       const nextStaged = Array.from(new Set([...state.staged, ...newlyStaged]));
-      const draft: PixelSimState = {
+      let draft: PixelSimState = {
         ...state,
         files: nextFiles,
         staged: nextStaged,
       };
+
+      if (state.document) {
+        const working = getDocumentWorkingText(state);
+        draft = withDocumentVersions(draft, working, working);
+        if (draft.staged.length === 0) {
+          const message = '스테이징 영역의 문서가 최근 커밋과 같아요. 작업 문서에 변경을 만들고 다시 담아 보세요.';
+          return finalizeTransition(
+            state, draft, 'IDLE', '담을 문서 변경 없음', undefined, cmd,
+            [{ text: message, tone: 'muted' }],
+            makeBubble(`document-add-empty-${seqNext}`, 'buddy', 34, 54, '담을 문서 변경이 없어요', message),
+          );
+        }
+      }
 
       if (newlyStaged.length === 0) {
         return finalizeTransition(
@@ -1576,11 +1758,19 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         );
       }
 
-      const isAutoStage = /\s-[a-z]*a[a-z]*\b/.test(cmd);
+      const isAutoStage = /\s(?:-[a-z]*a[a-z]*|--all)(?=\s|$)/.test(cmd.replace(/"[^"]*"|'[^']*'/g, ''));
       let workingFiles = state.files;
       let workingStaged = state.staged;
+      const workingDocument = getDocumentWorkingText(state);
+      const documentContent = state.document
+        ? isAutoStage ? workingDocument : state.document.index
+        : undefined;
 
-      if (isAutoStage) {
+      if (isAutoStage && state.document) {
+        const snapshot = withDocumentVersions(state, workingDocument, workingDocument);
+        workingFiles = snapshot.files;
+        workingStaged = snapshot.staged;
+      } else if (isAutoStage) {
         const autoAdded: string[] = [];
         workingFiles = state.files.map((f) => {
           if (f.status === 'modified') {
@@ -1595,6 +1785,9 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       const isMergeCommit = Boolean(state.conflict && state.conflict.resolvedChoice !== 'none');
 
       if (workingStaged.length === 0 && !isMergeCommit) {
+        if (state.document) {
+          return documentNotice(state, cmd, '커밋할 문서 변경이 없어요', '변경한 문서를 저장하고 git add README.md로 먼저 담아 주세요.');
+        }
         return finalizeTransition(
           state,
           state,
@@ -1640,6 +1833,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         message: parsedMsg,
         branch: state.headBranch,
         parents,
+        ...(documentContent !== undefined ? { documentContent } : {}),
         ...(isMergeCommit ? { isMerge: true } : {}),
       };
 
@@ -1647,7 +1841,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         f.status === 'staged' ? { ...f, status: 'committed' } : f,
       );
 
-      const draft: PixelSimState = {
+      let draft: PixelSimState = {
         ...state,
         files: nextFiles,
         staged: [],
@@ -1655,6 +1849,9 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         branches: { ...state.branches, [state.headBranch]: newCommitId },
         conflict: null,
       };
+      if (documentContent !== undefined) {
+        draft = withDocumentVersions(draft, workingDocument, documentContent);
+      }
 
       if (isMergeCommit) {
         draft.completedActions = withCompletedAction(draft.completedActions, 'MERGE_COMMIT');
@@ -1905,6 +2102,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
     // git diff
     if (sub === 'diff') {
+      if (state.document) return comparePracticeDocument(state, cmd, tokens.slice(2));
       const dirty = state.files.filter((f) => f.status === 'modified');
       const lines: TerminalLine[] =
         dirty.length === 0
@@ -3317,6 +3515,10 @@ export function getCommandAutocomplete(
     pushUnique(chip.command, chip.label);
   }
   for (const item of GENERAL_CATALOG) {
+    if (state.document) {
+      const [program, sub] = item.cmd.split(' ');
+      if (sub && (program !== 'git' || !DOCUMENT_GIT_COMMANDS.has(sub))) continue;
+    }
     pushUnique(item.cmd, item.hint);
   }
 

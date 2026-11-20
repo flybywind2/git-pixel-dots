@@ -5,9 +5,11 @@ import { PixelStageCanvas } from './pixel/PixelStageCanvas';
 import { TerminalDock } from './components/TerminalDock';
 import { HelpDrawer } from './components/HelpDrawer';
 import { LessonGuide } from './components/LessonGuide';
+import { DocumentLab } from './components/DocumentLab';
 
 export function App() {
   const setStage = usePixelStore((s) => s.setStage);
+  const stageId = usePixelStore((s) => s.stageId);
 
   useEffect(() => {
     const onHash = () => {
@@ -23,7 +25,7 @@ export function App() {
       <TopStageBar />
       <main className="flex flex-1 flex-col">
         <LessonGuide />
-        <PixelStageCanvas />
+        {stageId === 'docs' ? <DocumentLab /> : <PixelStageCanvas />}
         <TerminalDock />
       </main>
       <HelpDrawer />

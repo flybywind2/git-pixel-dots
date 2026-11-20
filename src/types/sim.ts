@@ -1,5 +1,6 @@
 export type StageId =
   | 'ch1'
+  | 'docs'
   | 'ch2'
   | 'ch3'
   | 'ch4'
@@ -10,6 +11,7 @@ export type StageId =
 
 export const ALL_STAGE_IDS: readonly StageId[] = [
   'ch1',
+  'docs',
   'ch2',
   'ch3',
   'ch4',
@@ -54,6 +56,7 @@ export interface PixelCommit {
   message: string;
   branch: string;
   parents: string[];
+  documentContent?: string;
   isMerge?: boolean;
   isRevert?: boolean;
   ghost?: boolean;
@@ -183,7 +186,23 @@ export interface StageStep {
   doneAction: LessonAction | LessonAction[];
 }
 
-export type LessonAction = PixelAnimKind | 'MERGE_COMMIT' | 'AUTH_STATUS' | 'ISSUE_CREATE' | 'REPO_API' | 'FIREWALL_TEST';
+export type LessonAction =
+  | PixelAnimKind
+  | 'MERGE_COMMIT'
+  | 'AUTH_STATUS'
+  | 'ISSUE_CREATE'
+  | 'REPO_API'
+  | 'FIREWALL_TEST'
+  | 'DOCUMENT_WORKING_DIFF'
+  | 'DOCUMENT_STAGED_DIFF'
+  | 'DOCUMENT_COMMIT_DIFF';
+
+export type DocumentComparison = 'working' | 'staged' | 'commits';
+
+export interface DocumentPracticeState {
+  index: string;
+  comparison: DocumentComparison;
+}
 
 export interface StageScenario {
   id: StageId;
@@ -202,6 +221,7 @@ export interface StageScenario {
 export interface PixelSimState {
   stageId: StageId;
   files: PixelFile[];
+  document?: DocumentPracticeState;
   staged: string[];
   commits: PixelCommit[];
   branches: Record<string, string>; // branch -> commitId

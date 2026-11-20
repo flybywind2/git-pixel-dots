@@ -1,4 +1,4 @@
-import { ArrowRight, Play } from 'lucide-react';
+import { ArrowRight, Pencil, Play } from 'lucide-react';
 import { getNextPendingStep, isPracticeCommand, isStepCompleted, STAGE_MAP, STAGE_SCENARIOS } from '../engine';
 import { usePixelStore } from '../store/usePixelStore';
 
@@ -10,6 +10,18 @@ export function LessonGuide() {
   const nextStep = getNextPendingStep(sim);
   const nextLesson = STAGE_SCENARIOS[lesson.number];
   const doneCount = lesson.steps.filter((step) => isStepCompleted(sim, step)).length;
+  const editDocument = lesson.id === 'docs' && nextStep?.doneAction === 'EDIT';
+
+  function runGuidedStep(command: string) {
+    if (editDocument) {
+      document.getElementById('practice-document-editor')?.focus();
+      return;
+    }
+    runCommand(command);
+    if (lesson.id === 'docs' && command.startsWith('git diff ')) {
+      document.getElementById('document-comparison')?.focus();
+    }
+  }
 
   return (
     <section aria-labelledby="lesson-title" className="shrink-0 border-b border-[#D7C7AE] bg-[#FFFDF8]">
@@ -38,14 +50,23 @@ export function LessonGuide() {
               <button
                 type="button"
                 data-testid="guided-command"
-                onClick={() => runCommand(nextStep.command)}
+                onClick={() => runGuidedStep(nextStep.command)}
                 className="pixel-btn inline-flex max-w-full items-center gap-2 rounded-md border-[#C78B1E] bg-[#F4B942] px-3 py-1.5 text-left text-xs text-[#362711] hover:bg-[#F7C55D]"
               >
-                <Play aria-hidden="true" className="h-3.5 w-3.5 shrink-0 fill-current" />
-                <code className="font-mono-code break-all font-semibold">{nextStep.command}</code>
-                <span className="shrink-0 border-l border-[#C89436] pl-2 font-semibold">실행</span>
+                {editDocument ? (
+                  <>
+                    <Pencil aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                    <span className="font-semibold">문서 편집하기</span>
+                  </>
+                ) : (
+                  <>
+                    <Play aria-hidden="true" className="h-3.5 w-3.5 shrink-0 fill-current" />
+                    <code className="font-mono-code break-all font-semibold">{nextStep.command}</code>
+                    <span className="shrink-0 border-l border-[#C89436] pl-2 font-semibold">실행</span>
+                  </>
+                )}
               </button>
-              {isPracticeCommand(nextStep.command) && <span className="ml-2 inline-block text-xs text-[#715A43]">실습 전용</span>}
+              {!editDocument && isPracticeCommand(nextStep.command) && <span className="ml-2 inline-block text-xs text-[#715A43]">실습 전용</span>}
             </>
           ) : (
             <button

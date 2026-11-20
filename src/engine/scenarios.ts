@@ -1,4 +1,7 @@
 import type { StageId, StageScenario } from '../types/sim';
+import { DOCUMENT_COMPARISONS } from './documentDiff';
+
+const { working, staged, commits } = DOCUMENT_COMPARISONS;
 
 export function isPracticeCommand(command: string): boolean {
   return !/^(git|gh)\s/.test(command);
@@ -53,8 +56,45 @@ export const STAGE_SCENARIOS: StageScenario[] = [
     ],
   },
   {
-    id: 'ch2',
+    id: 'docs',
     number: 2,
+    shortTitle: '문서 편집과 비교',
+    title: '문서를 고치면 어떤 줄이 바뀔까요?',
+    tagline: 'README.md의 스터디 시간이나 장소를 바꾸고 저장해 보세요. 비교 결과에서 빠진 줄(−)과 들어간 줄(+)을 확인할 수 있어요.',
+    takeaway: '같은 문서도 비교 기준에 따라 결과가 달라져요. 작업 파일, 스테이징 영역, 커밋에 담긴 버전을 각각 확인했어요.',
+    accent: '#14a878',
+    terms: [
+      { name: 'README.md', meaning: '프로젝트나 작업을 소개하는 문서예요. .md는 제목과 목록 등을 문자로 표현하는 Markdown 파일 확장자예요.' },
+      { name: 'diff', meaning: '두 버전 사이에서 어느 줄이 빠지거나 들어갔는지 보여줘요. 바꾼 줄은 기존 줄의 삭제와 새 줄의 추가로 표시돼요.' },
+    ],
+    steps: [
+      { id: 'docs-edit', goal: 'README.md에서 모임 안내를 바꾸고 저장하기', command: 'edit README.md', doneAction: 'EDIT' },
+      { id: 'docs-diff', goal: '현재 문서와 스테이징 영역 비교하기', command: working.command, doneAction: working.action },
+      { id: 'docs-add', goal: '검토한 README.md를 다음 커밋에 담기', command: 'git add README.md', doneAction: 'ADD' },
+      { id: 'docs-staged', goal: '최근 커밋과 비교해 다음 커밋에 들어갈 줄 확인하기', command: staged.command, doneAction: staged.action },
+      { id: 'docs-commit', goal: '스테이징 영역의 문서를 새 커밋에 기록하기', command: 'git commit -m "모임 안내 수정"', doneAction: 'COMMIT' },
+      { id: 'docs-history', goal: '이전 커밋과 최근 커밋에서 문서 비교하기', command: commits.command, doneAction: commits.action },
+    ],
+    chips: [
+      { command: 'git status', label: '문서 상태' },
+      { command: working.command, label: '작업 중 비교', stepIndex: 1 },
+      { command: 'git add README.md', label: '스테이징', stepIndex: 2 },
+      { command: staged.command, label: '스테이징 비교', stepIndex: 3 },
+      { command: 'git commit -m "모임 안내 수정"', label: '문서 커밋', stepIndex: 4 },
+      { command: commits.command, label: '커밋 비교', stepIndex: 5 },
+    ],
+    cheatSheet: [
+      { cmd: 'edit README.md', desc: '스터디 시간이 바뀐 예시를 작업 문서에 바로 저장해요. 원하는 글은 편집기에 직접 쓸 수 있어요.' },
+      { cmd: working.command, desc: '스테이징 영역과 현재 작업 문서를 비교해요. 스테이징 이후에 문서를 더 고쳤을 때 어떤 내용이 추가로 바뀌었는지 알 수 있어요.' },
+      { cmd: 'git add README.md', desc: '지금 저장한 문서의 복사본을 다음 커밋에 담아요.' },
+      { cmd: staged.command, desc: '최근 커밋과 스테이징 영역을 비교해 다음 커밋에 들어갈 변경을 확인해요.' },
+      { cmd: 'git commit -m "모임 안내 수정"', desc: '스테이징 영역에 담긴 문서를 새 커밋으로 기록해요.' },
+      { cmd: commits.command, desc: 'HEAD는 최근 커밋, HEAD~1은 그 바로 이전 커밋이에요. 두 기록의 문서에서 어느 줄이 바뀌었는지 보여줘요.' },
+    ],
+  },
+  {
+    id: 'ch2',
+    number: 3,
     shortTitle: '보관과 취소',
     title: '작업 도중에 지난 커밋을 취소하려면?',
     tagline: 'app.js를 수정하던 중 지난 커밋의 실수를 발견했어요. 지금 작업을 잠시 보관해 두면 지난 변경부터 되돌릴 수 있어요.',
@@ -103,7 +143,7 @@ export const STAGE_SCENARIOS: StageScenario[] = [
   },
   {
     id: 'ch3',
-    number: 3,
+    number: 4,
     shortTitle: '브랜치와 충돌',
     title: '두 사람이 같은 줄을 고쳤다면?',
     tagline: '브랜치는 각자 작업할 수 있는 기록의 갈래예요. 두 갈래에서 다르게 고친 theme.js를 합치며 어느 내용을 남길지 골라 보세요.',
@@ -160,7 +200,7 @@ export const STAGE_SCENARIOS: StageScenario[] = [
   },
   {
     id: 'ch4',
-    number: 4,
+    number: 5,
     shortTitle: 'GitHub 협업',
     title: '내 브랜치의 변경을 팀에 제안하기',
     tagline: '새 기능을 feat/sparkle 브랜치에 커밋해 두었어요. GitHub에서 변경을 검토하고 합치자고 제안하는 글을 풀 리퀘스트(PR)라고 해요.',
@@ -213,7 +253,7 @@ export const STAGE_SCENARIOS: StageScenario[] = [
   },
   {
     id: 'ch5',
-    number: 5,
+    number: 6,
     shortTitle: 'GitHub CLI',
     title: '터미널에서 PR과 이슈 만들기',
     tagline: 'gh는 GitHub를 터미널에서 쓰는 도구예요. 다크 모드 변경은 PR로 제안하고, 따로 고칠 버그는 이슈로 남겨 보세요.',
@@ -268,7 +308,7 @@ export const STAGE_SCENARIOS: StageScenario[] = [
   },
   {
     id: 'ch6',
-    number: 6,
+    number: 7,
     shortTitle: '인증과 권한',
     title: '토큰이 접근할 저장소와 권한 고르기',
     tagline: '토큰은 프로그램이 내 계정으로 작업할 때 쓰는 인증 수단이에요. 예제 토큰 두 개를 비교하고 회사 로그인과 SSH 키의 역할도 살펴보세요.',
@@ -323,7 +363,7 @@ export const STAGE_SCENARIOS: StageScenario[] = [
   },
   {
     id: 'ch7',
-    number: 7,
+    number: 8,
     shortTitle: '사내 GitHub',
     title: '회사에서 운영하는 GitHub에 접속하기',
     tagline: 'GitHub Enterprise Server(GHES)는 조직이 직접 운영하는 GitHub예요. 이 예제 회사에서는 VPN에 연결한 뒤 사내 주소로 로그인해요.',
@@ -376,7 +416,7 @@ export const STAGE_SCENARIOS: StageScenario[] = [
   },
   {
     id: 'ch8',
-    number: 8,
+    number: 9,
     shortTitle: 'AI와 협업',
     title: 'AI가 고친 코드를 검토하고 합치기',
     tagline: '덧셈 함수가 빼기를 하고 있어요. AI가 별도 폴더에서 고치고, 테스트 결과와 코드 변경을 사람이 확인하는 과정을 따라가 보세요.',
