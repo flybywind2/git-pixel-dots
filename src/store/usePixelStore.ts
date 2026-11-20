@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { ALL_STAGE_IDS, type StageId, type PixelSimState } from '../types/sim';
 import { createStageState, executePixelCommand } from '../engine';
 
-function readInitialStage(): StageId {
+export function readStageFromLocation(): StageId {
   if (typeof window === 'undefined') return 'ch1';
   const raw = window.location.hash.replace(/^#\/?/, '') as StageId;
   return (ALL_STAGE_IDS as readonly string[]).includes(raw) ? raw : 'ch1';
@@ -22,7 +22,7 @@ export interface PixelStore {
   markStageCleared: (id: StageId) => void;
 }
 
-const initialStage = readInitialStage();
+const initialStage = readStageFromLocation();
 
 export const usePixelStore = create<PixelStore>((set, get) => ({
   stageId: initialStage,
@@ -32,7 +32,7 @@ export const usePixelStore = create<PixelStore>((set, get) => ({
   clearedStages: {},
 
   setStage: (id) => {
-    if (typeof window !== 'undefined' && window.location.hash !== `#/${id}`) {
+    if (typeof window !== 'undefined' && readStageFromLocation() !== id) {
       window.location.hash = `#/${id}`;
     }
     set({

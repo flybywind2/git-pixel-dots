@@ -188,7 +188,8 @@ function drawCh1Scene(
           : 0;
 
   const workingCount = sim.files.filter((f) => f.status === 'modified' || f.status === 'untracked').length;
-  const remoteCommitCount = Object.keys(sim.remoteBranches).length > 0 ? Math.max(1, sim.commits.length) : 0;
+  const remoteHead = sim.remoteBranches[sim.headBranch];
+  const shared = Boolean(remoteHead && remoteHead === sim.branches[sim.headBranch]);
 
   drawZonePad(
     ctx,
@@ -196,7 +197,7 @@ function drawCh1Scene(
     padY,
     padW,
     '1. 작업 공간',
-    workingCount > 0 ? `수정 파일 ${workingCount}개` : '파일 작업 중',
+    workingCount > 0 ? `변경 파일 ${workingCount}개` : '추가 변경 없음',
     PALETTE.butter,
     activeIdx === 0,
     time,
@@ -229,7 +230,7 @@ function drawCh1Scene(
     padY,
     padW,
     '4. 원격 GitHub',
-    remoteCommitCount > 0 ? '구름 동기화 완료' : '아직 비어있음',
+    shared ? '같은 커밋' : remoteHead ? '푸시 대기' : '원격 브랜치 없음',
     PALETTE.lavender,
     activeIdx === 3,
     time,
@@ -945,8 +946,8 @@ function drawCh6Scene(
     buddyZoneX,
     padY,
     clamp(w * 0.21, 120, 168),
-    isClassic ? '클래식 마스터키' : '전용 카드키',
-    `위험도 ${sim.token.riskScore}%`,
+    isClassic ? 'Classic 토큰' : 'Fine-grained 토큰',
+    isClassic ? '넓게 부여한 권한' : '한 저장소에 쓰기',
     isClassic ? PALETTE.coral : PALETTE.mint,
     true,
     time,

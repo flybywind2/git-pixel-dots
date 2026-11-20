@@ -81,6 +81,7 @@ export interface PixelConflict {
   theirsLabel: string;
   oursCode: string;
   theirsCode: string;
+  bothCode: string;
   resolvedChoice: 'none' | 'ours' | 'theirs' | 'both';
 }
 
@@ -179,8 +180,10 @@ export interface StageStep {
   id: string;
   goal: string;
   command: string;
-  doneAction: PixelAnimKind | PixelAnimKind[];
+  doneAction: LessonAction | LessonAction[];
 }
+
+export type LessonAction = PixelAnimKind | 'MERGE_COMMIT' | 'AUTH_STATUS' | 'ISSUE_CREATE' | 'REPO_API' | 'FIREWALL_TEST';
 
 export interface StageScenario {
   id: StageId;
@@ -188,6 +191,8 @@ export interface StageScenario {
   shortTitle: string;
   title: string;
   tagline: string;
+  takeaway: string;
+  terms: { name: string; meaning: string }[];
   accent: string;
   steps: StageStep[];
   chips: CommandChip[];
@@ -202,6 +207,7 @@ export interface PixelSimState {
   branches: Record<string, string>; // branch -> commitId
   headBranch: string;
   remoteBranches: Record<string, string>;
+  stashes: PixelFile[][];
   stashCount: number;
   prs: PixelPr[];
   issues: PixelIssue[];
@@ -212,7 +218,7 @@ export interface PixelSimState {
   ghes: GhesWorldState;
   ai: AiWorldState;
   lastAnim: PixelAnimEvent;
-  completedActions: PixelAnimKind[];
+  completedActions: LessonAction[];
   bubbles: SpeechBubble[];
   terminal: TerminalLogEntry[];
 }

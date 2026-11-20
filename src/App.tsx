@@ -1,34 +1,29 @@
 import { useEffect } from 'react';
-import { ALL_STAGE_IDS, type StageId } from './types/sim';
-import { usePixelStore } from './store/usePixelStore';
+import { readStageFromLocation, usePixelStore } from './store/usePixelStore';
 import { TopStageBar } from './components/TopStageBar';
 import { PixelStageCanvas } from './pixel/PixelStageCanvas';
 import { TerminalDock } from './components/TerminalDock';
 import { HelpDrawer } from './components/HelpDrawer';
+import { LessonGuide } from './components/LessonGuide';
 
 export function App() {
   const setStage = usePixelStore((s) => s.setStage);
 
   useEffect(() => {
     const onHash = () => {
-      const raw = window.location.hash.replace(/^#\/?/, '') as StageId;
-      if ((ALL_STAGE_IDS as readonly string[]).includes(raw)) {
-        if (usePixelStore.getState().stageId !== raw) {
-          setStage(raw);
-        }
-      }
+      const stage = readStageFromLocation();
+      if (usePixelStore.getState().stageId !== stage) setStage(stage);
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, [setStage]);
 
   return (
-    <div className="h-screen w-full overflow-hidden bg-[#F6EFE2] text-[#2F241D] flex flex-col">
+    <div className="flex min-h-dvh w-full flex-col bg-[#F6EFE2] text-[#2F241D]">
       <TopStageBar />
-      <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div className="flex-1 min-h-[260px] relative overflow-hidden">
-          <PixelStageCanvas />
-        </div>
+      <main className="flex flex-1 flex-col">
+        <LessonGuide />
+        <PixelStageCanvas />
         <TerminalDock />
       </main>
       <HelpDrawer />

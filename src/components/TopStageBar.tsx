@@ -1,33 +1,27 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { BookOpen, RotateCcw } from 'lucide-react';
-import { STAGE_MAP, STAGE_SCENARIOS } from '../engine';
+import { getNextPendingStep, STAGE_SCENARIOS } from '../engine';
 import { usePixelStore } from '../store/usePixelStore';
-import type { PixelAnimKind, StageStep } from '../types/sim';
-
-function isStepDone(step: StageStep, completed: PixelAnimKind[]): boolean {
-  if (Array.isArray(step.doneAction)) {
-    return step.doneAction.some((act) => completed.includes(act));
-  }
-  return completed.includes(step.doneAction);
-}
 
 export function TopStageBar() {
   const stageId = usePixelStore((s) => s.stageId);
-  const completedActions = usePixelStore((s) => s.sim.completedActions);
+  const allDone = usePixelStore((s) => getNextPendingStep(s.sim) === null);
   const clearedStages = usePixelStore((s) => s.clearedStages);
   const setStage = usePixelStore((s) => s.setStage);
   const resetStage = usePixelStore((s) => s.resetStage);
   const setHelpOpen = usePixelStore((s) => s.setHelpOpen);
   const markStageCleared = usePixelStore((s) => s.markStageCleared);
+  const activeTab = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    const scenario = STAGE_MAP[stageId];
-    if (!scenario || scenario.steps.length === 0 || clearedStages[stageId]) return;
-    const allDone = scenario.steps.every((step) => isStepDone(step, completedActions));
-    if (allDone) {
+    activeTab.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [stageId]);
+
+  useEffect(() => {
+    if (allDone && !clearedStages[stageId]) {
       markStageCleared(stageId);
     }
-  }, [stageId, completedActions, clearedStages, markStageCleared]);
+  }, [stageId, allDone, clearedStages, markStageCleared]);
 
   return (
     <header className="h-12 shrink-0 bg-[#EFE6D5] border-b-2 border-[#D7C7AE] px-3 sm:px-4 flex items-center justify-between gap-2">
@@ -61,11 +55,12 @@ export function TopStageBar() {
           return (
             <button
               key={scenario.id}
+              ref={isActive ? activeTab : undefined}
               type="button"
               data-testid={`stage-pill-${scenario.id}`}
               aria-current={isActive ? 'page' : undefined}
               title={scenario.title}
-              onClick={() => setStage(scenario.id)}
+              onClick={() => { if (!isActive) setStage(scenario.id); }}
               className={[
                 'shrink-0 px-2.5 py-1 rounded-full text-xs border flex items-center gap-1.5 cursor-pointer whitespace-nowrap',
                 isActive
@@ -102,7 +97,8 @@ export function TopStageBar() {
         <button
           type="button"
           onClick={resetStage}
-          title="현재 스테이지 초기화"
+          title="현재 장 초기화"
+          aria-label="현재 장 초기화"
           className="h-8 px-2.5 rounded-md bg-[#FAF4E8] border border-[#D4C3A8] text-[#5D4C3E] hover:text-[#2F241D] hover:bg-[#FFFDF8] hover:border-[#B8A07E] text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
         >
           <RotateCcw className="w-3.5 h-3.5 shrink-0" />
@@ -115,8 +111,8 @@ export function TopStageBar() {
           className="h-8 px-2.5 rounded-md bg-[#FAF4E8] border border-[#D4C3A8] text-[#2F241D] hover:bg-[#FFFDF8] hover:border-[#C98A1B] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
         >
           <BookOpen className="w-3.5 h-3.5 shrink-0 text-[#B86E10]" />
-          <span className="hidden sm:inline">? 명령어 사전</span>
-          <span className="sm:hidden">? 사전</span>
+          <span className="hidden sm:inline">명령어 사전</span>
+          <span className="sm:hidden">사전</span>
         </button>
       </div>
     </header>

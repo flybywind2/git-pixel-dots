@@ -1,14 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Check, Sparkles } from 'lucide-react';
-import { STAGE_MAP } from '../engine';
+import { useEffect, useRef, type CSSProperties } from 'react';
+import { getNextPendingStep, STAGE_MAP } from '../engine';
 import { usePixelStore } from '../store/usePixelStore';
-import {
-  ALL_STAGE_IDS,
-  type BubbleAction,
-  type PixelAnimKind,
-  type PixelSimState,
-  type StageStep,
-} from '../types/sim';
+import type { BubbleAction, PixelSimState } from '../types/sim';
 import { SPEAKER_THEMES } from './palette';
 import { PixelParticlePool, drawDotGridBackground } from './dotMatrixRenderer';
 import {
@@ -17,13 +10,6 @@ import {
   getParticleCuesForAnim,
 } from './sceneDrawers';
 
-function isStepDone(step: StageStep, completed: PixelAnimKind[]): boolean {
-  if (Array.isArray(step.doneAction)) {
-    return step.doneAction.some((act) => completed.includes(act));
-  }
-  return completed.includes(step.doneAction);
-}
-
 const ACTION_TONE_CLASSES: Readonly<Record<NonNullable<BubbleAction['tone']>, string>> = {
   primary: 'bg-[#A8DCFA] hover:bg-[#8ED0F8] text-[#174669] border-[#3292CE]',
   mint: 'bg-[#9BEED5] hover:bg-[#7DE5C6] text-[#115843] border-[#22A882]',
@@ -31,15 +17,10 @@ const ACTION_TONE_CLASSES: Readonly<Record<NonNullable<BubbleAction['tone']>, st
   amber: 'bg-[#FFE08A] hover:bg-[#FFD363] text-[#6E4004] border-[#D18D20]',
 };
 
-function clamp(v: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, v));
-}
-
 export function PixelStageCanvas() {
   const stageId = usePixelStore((s) => s.stageId);
   const sim = usePixelStore((s) => s.sim);
   const runCommand = usePixelStore((s) => s.runCommand);
-  const setStage = usePixelStore((s) => s.setStage);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -47,9 +28,7 @@ export function PixelStageCanvas() {
   const simRef = useRef<PixelSimState>(sim);
   simRef.current = sim;
 
-  const [stageSize, setStageSize] = useState({ width: 960, height: 420 });
-  const stageSizeRef = useRef(stageSize);
-  stageSizeRef.current = stageSize;
+  const stageSizeRef = useRef({ width: 960, height: 420 });
 
   // Track container dimensions cleanly via ResizeObserver
   useEffect(() => {
@@ -58,11 +37,9 @@ export function PixelStageCanvas() {
 
     const updateSize = () => {
       const rect = el.getBoundingClientRect();
-      const width = Math.max(240, Math.round(rect.width));
-      const height = Math.max(220, Math.round(rect.height));
-      setStageSize((prev) =>
-        prev.width === width && prev.height === height ? prev : { width, height },
-      );
+      const width = Math.max(1, Math.round(rect.width));
+      const height = Math.max(1, Math.round(rect.height));
+      stageSizeRef.current = { width, height };
     };
 
     updateSize();
@@ -95,6 +72,9 @@ export function PixelStageCanvas() {
 
       const currentSim = simRef.current;
       const { width, height } = stageSizeRef.current;
+      const sceneScale = Math.min(1, width / 520);
+      const sceneWidth = width / sceneScale;
+      const sceneHeight = height / sceneScale;
 
       // Sync HiDPI backing store only when size or DPR changes
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -121,8 +101,8 @@ export function PixelStageCanvas() {
         const cues = getParticleCuesForAnim(
           currentSim.stageId,
           currentSim.lastAnim.kind,
-          width,
-          height,
+          sceneWidth,
+          sceneHeight,
         );
         for (const cue of cues) {
           if (cue.kind === 'sparkles') {
@@ -155,7 +135,8 @@ export function PixelStageCanvas() {
       drawDotGridBackground(ctx, width, height, elapsed);
 
       // 2. Live 8-stage Pixel-Dots scene
-      drawStageScene(ctx, width, height, currentSim, animProgress, elapsed, motion);
+      ctx.scale(sceneScale, sceneScale);
+      drawStageScene(ctx, sceneWidth, sceneHeight, currentSim, animProgress, elapsed, motion);
 
       // 3. Foreground celebratory pixel particles
       particles.draw(ctx);
@@ -169,145 +150,35 @@ export function PixelStageCanvas() {
     return () => window.cancelAnimationFrame(rafId);
   }, []);
 
-  // Step progress & next-chapter celebration logic
   const scenario = STAGE_MAP[stageId];
-  const { totalSteps, doneCount, allDone, nextStageId } = useMemo(() => {
-    const steps = scenario?.steps ?? [];
-    const done = steps.filter((step) => isStepDone(step, sim.completedActions)).length;
-    const total = steps.length;
-    const completedAll = total > 0 && done >= total;
-    const currentIdx = ALL_STAGE_IDS.indexOf(stageId);
-    const nextId =
-      currentIdx >= 0 && currentIdx < ALL_STAGE_IDS.length - 1
-        ? ALL_STAGE_IDS[currentIdx + 1]
-        : null;
-    return {
-      totalSteps: total,
-      doneCount: done,
-      allDone: completedAll,
-      nextStageId: nextId,
-    };
-  }, [scenario, sim.completedActions, stageId]);
-
-  const currentStepDisplay = totalSteps > 0 ? Math.min(doneCount + (allDone ? 0 : 1), totalSteps) : 1;
-
-  // Position floating Korean pixel speech bubbles safely inside top airy sky (never clipped!)
-  const positionedBubbles = useMemo(() => {
-    const list = sim.bubbles.slice(0, 2);
-    const minSafeBottomPct =
-      stageSize.height > 0 ? Math.min(52, (150 / stageSize.height) * 100) : 38;
-
-    return list.map((bubble, idx) => {
-      let leftPct = clamp(bubble.anchorX, 18, 82);
-      // Prevent two simultaneous bubbles from overlapping horizontally
-      if (list.length === 2) {
-        leftPct = idx === 0 ? clamp(leftPct, 22, 42) : clamp(leftPct, 58, 78);
-      }
-      const rawTopPct = clamp(bubble.anchorY, 22, 52);
-      const topPct = Math.max(rawTopPct, minSafeBottomPct);
-      return { bubble, leftPct, topPct };
-    });
-  }, [sim.bubbles, stageSize.height]);
+  const nextStep = getNextPendingStep(sim);
 
   return (
-    <div
-      ref={containerRef}
-      className="relative w-full h-full overflow-hidden bg-[#F6EFE2] select-none"
-    >
-      {/* Full-bleed HiDPI Pixel-Dots Canvas */}
-      <canvas
-        ref={canvasRef}
-        data-testid="pixel-stage-canvas"
-        className="block w-full h-full"
-        aria-label={scenario ? `${scenario.title} 픽셀 애니메이션 무대` : '픽셀 애니메이션 무대'}
-      />
-
-      {/* Top-Left: Compact Step Tracker Badge */}
-      {scenario && totalSteps > 0 && (
-        <div
-          data-testid="stage-step-badge"
-          className="absolute top-3 left-3 z-20 flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-[#FFFDF8]/95 border-2 border-[#CBB89B] shadow-[0_3px_0_rgba(124,98,70,0.22)] backdrop-blur-xs"
-        >
-          <div className="flex items-center gap-1" aria-hidden="true">
-            {scenario.steps.map((step, idx) => {
-              const done = isStepDone(step, sim.completedActions);
-              const isCurrent = !done && idx === doneCount;
-              return (
-                <span
-                  key={step.id}
-                  className={[
-                    'w-2 h-2 rounded-[2px] transition-all duration-200',
-                    done
-                      ? 'bg-[#22A882]'
-                      : isCurrent
-                        ? 'bg-[#F2A93B] animate-pulse'
-                        : 'bg-[#DFD2BC]',
-                  ].join(' ')}
-                />
-              );
-            })}
-          </div>
-          <span className="font-pixel text-[11px] sm:text-xs font-bold text-[#2F241D] whitespace-nowrap">
-            {allDone ? (
-              <span className="text-[#147A5B] inline-flex items-center gap-1">
-                <Check className="w-3.5 h-3.5" />
-                {totalSteps}단계 / {totalSteps}단계 완료
-              </span>
-            ) : (
-              <span>
-                {currentStepDisplay}단계 / {totalSteps}단계
-              </span>
-            )}
-          </span>
-        </div>
-      )}
-
-      {/* Top-Right: Celebratory "다음 챕터로 →" Pill ONLY when chapter completed */}
-      {allDone && (
-        <div className="absolute top-3 right-3 z-20">
-          {nextStageId ? (
-            <button
-              type="button"
-              data-testid="next-chapter-btn"
-              onClick={() => setStage(nextStageId)}
-              className="pixel-btn px-3.5 py-1.5 rounded-full bg-[#22A882] hover:bg-[#1C9673] text-[#FFFDF8] border-[#147A5B] font-pixel text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5 shrink-0" />
-              <span>다음 챕터로</span>
-              <ArrowRight className="w-3.5 h-3.5 shrink-0" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              data-testid="all-chapters-done-btn"
-              onClick={() => setStage('ch1')}
-              className="pixel-btn px-3.5 py-1.5 rounded-full bg-[#F2A93B] hover:bg-[#E89B28] text-[#2F241D] border-[#B86E10] font-pixel text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5 shrink-0" />
-              <span>모든 챕터 완주!</span>
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Floating Crisp Korean Pixel Speech Bubbles Overlay */}
-      <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
-        {positionedBubbles.map(({ bubble, leftPct, topPct }) => {
+    <div className="relative flex flex-1 flex-col bg-[#F6EFE2]">
+      <div ref={containerRef} className="relative order-2 min-h-[165px] flex-1 sm:min-h-[280px]">
+        <canvas
+          ref={canvasRef}
+          data-testid="pixel-stage-canvas"
+          className="absolute inset-0 block h-full w-full"
+          aria-label={`${scenario.title} 픽셀 애니메이션`}
+        />
+      </div>
+      <div className="order-1 px-3 pt-3 sm:pointer-events-none sm:absolute sm:inset-0 sm:z-10 sm:p-0" aria-live="polite">
+        {sim.bubbles.map((bubble) => {
           const theme = SPEAKER_THEMES[bubble.speaker];
-          const cleanHint = bubble.nextHint
-            ? bubble.nextHint.replace(/^(👉\s*)?(다음\s*:\s*)?/, '')
-            : null;
+          const actions = bubble.actions?.filter((action) =>
+            (bubble.actions?.length ?? 0) > 1 || (action.command !== nextStep?.command && action.command !== 'reset')
+          );
+          const hint = nextStep && bubble.nextHint && !bubble.nextHint.includes(nextStep.command)
+            && !bubble.actions?.some((action) => bubble.nextHint?.includes(action.command))
+            ? bubble.nextHint : null;
 
           return (
             <div
-              key={`${bubble.id}-${sim.lastAnim.seq}`}
+              key={bubble.id}
               data-testid="speech-bubble"
-              style={{
-                left: `${leftPct}%`,
-                top: `${topPct}%`,
-                borderColor: theme.border,
-              }}
-              className="pointer-events-auto animate-bubble-pop pixel-bubble absolute w-[min(90vw,365px)] rounded-xl bg-[#FFFDF8]/96 backdrop-blur-xs px-3.5 py-2.5 text-left"
+              style={{ '--speaker-x': `${bubble.anchorX}%`, borderColor: theme.border } as CSSProperties}
+              className="scene-bubble pixel-bubble relative mx-auto w-full max-w-[365px] rounded-xl bg-[#FFFDF8] px-3.5 py-2.5 text-left sm:pointer-events-auto"
             >
               {/* Speaker Pill + Title */}
               <div className="flex items-center gap-2 mb-1">
@@ -325,30 +196,21 @@ export function PixelStageCanvas() {
                   />
                   {bubble.speakerName}
                 </span>
-                <h3 className="font-pixel text-[12.5px] sm:text-[13px] font-bold text-[#2F241D] truncate">
+                <h2 className="min-w-0 break-keep text-sm font-bold text-[#2F241D]">
                   {bubble.title}
-                </h3>
+                </h2>
               </div>
 
               {/* Warm 1-2 line Korean explanation */}
-              <p className="text-[12px] sm:text-[12.5px] leading-snug text-[#4E3E33] break-keep">
+              <p className="break-keep text-sm leading-relaxed text-[#4E3E33]">
                 {bubble.message}
               </p>
 
-              {/* Gentle Next Hint Pill */}
-              {cleanHint && (
-                <div className="mt-2 flex items-start gap-1.5 px-2.5 py-1 rounded-md bg-[#F4EBDC] border border-[#DECDB2] text-[11px] text-[#7A4B0C]">
-                  <span className="shrink-0 font-semibold">👉 다음:</span>
-                  <code className="font-mono-code font-semibold text-[#147A5B] break-words min-w-0">
-                    {cleanHint}
-                  </code>
-                </div>
-              )}
+              {hint && <p className="mt-1.5 break-words text-xs leading-relaxed text-[#79521D]">{hint}</p>}
 
-              {/* Optional Clickable Quick Action Buttons */}
-              {bubble.actions && bubble.actions.length > 0 && (
+              {actions && actions.length > 0 && (
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {bubble.actions.map((act) => {
+                  {actions.map((act) => {
                     const toneCls = ACTION_TONE_CLASSES[act.tone ?? 'amber'];
                     return (
                       <button

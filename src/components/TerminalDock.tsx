@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { Check, CornerDownLeft } from 'lucide-react';
-import { STAGE_MAP, getCommandAutocomplete } from '../engine';
+import { STAGE_MAP, getCommandAutocomplete, isStepCompleted } from '../engine';
 import { usePixelStore } from '../store/usePixelStore';
-import type { PixelAnimKind, StageStep, TerminalLineTone } from '../types/sim';
+import type { TerminalLineTone } from '../types/sim';
 
 const TONE_CLASS: Record<TerminalLineTone, string> = {
   default: 'text-[#3A2D24]',
@@ -14,13 +14,6 @@ const TONE_CLASS: Record<TerminalLineTone, string> = {
   lavender: 'text-[#623AA8]',
   muted: 'text-[#83705E]',
 };
-
-function isStepDone(step: StageStep, completed: PixelAnimKind[]): boolean {
-  if (Array.isArray(step.doneAction)) {
-    return step.doneAction.some((act) => completed.includes(act));
-  }
-  return completed.includes(step.doneAction);
-}
 
 export function TerminalDock() {
   const stageId = usePixelStore((s) => s.stageId);
@@ -40,10 +33,7 @@ export function TerminalDock() {
 
   const scenario = STAGE_MAP[stageId];
 
-  const nextStepIndex = useMemo(() => {
-    if (!scenario) return -1;
-    return scenario.steps.findIndex((step) => !isStepDone(step, sim.completedActions));
-  }, [scenario, sim.completedActions]);
+  const nextStepIndex = scenario.steps.findIndex((step) => !isStepCompleted(sim, step));
 
   const nextStep = nextStepIndex >= 0 ? scenario?.steps[nextStepIndex] : undefined;
 
@@ -78,6 +68,9 @@ export function TerminalDock() {
   }, [sim.terminal.length, lastEntryId]);
 
   useEffect(() => {
+    setInput('');
+    setDraftInput('');
+    setHistoryIdx(-1);
     setPopupDismissed(false);
     setTabCycleIdx(0);
   }, [stageId]);
@@ -101,12 +94,11 @@ export function TerminalDock() {
   const handleChipClick = (cmd: string) => {
     runCommand(cmd);
     setPopupDismissed(true);
-    inputRef.current?.focus();
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Tab') {
-      if (suggestions.length > 0) {
+      if (!e.shiftKey && showPopup) {
         e.preventDefault();
         const exactIdx = suggestions.findIndex((s) => s.cmd === input.trim());
         const nextIdx = exactIdx >= 0 ? (exactIdx + 1) % suggestions.length : 0;
@@ -165,7 +157,7 @@ export function TerminalDock() {
       {/* Top Strip: Friendly 1-Click Command Chips */}
       <div className="px-3 sm:px-4 py-1.5 border-b border-[#E3D5BE] bg-[#EFE6D5] flex items-center gap-1.5 overflow-x-auto shrink-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <span className="shrink-0 text-[11px] font-semibold text-[#7A6856] mr-0.5 select-none">
-          추천 명령
+          빠른 실행
         </span>
         {scenario?.chips.map((chip) => {
           const isRecommended =
@@ -180,7 +172,7 @@ export function TerminalDock() {
           const isChipDone =
             !isRecommended &&
             stepForChip !== undefined &&
-            isStepDone(stepForChip, sim.completedActions);
+            isStepCompleted(sim, stepForChip);
 
           return (
             <button
@@ -217,15 +209,15 @@ export function TerminalDock() {
         className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-2.5 space-y-2.5 font-mono-code text-xs cursor-text"
       >
         {sim.terminal.length === 0 ? (
-          <p className="text-[#786758] leading-relaxed font-sans text-xs sm:text-[13px] py-1">
-            ✨ 위 추천 버튼을 클릭하거나 아래에 명령어를 직접 입력해보세요! (도움말: help)
+          <p className="text-[#695643] leading-relaxed font-sans text-xs sm:text-[13px] py-1">
+            위 버튼을 누르거나 입력창에 명령어를 쓰고 Enter를 누르세요.
           </p>
         ) : (
           sim.terminal.map((entry) => (
             <div key={entry.id} className="space-y-1">
               <div className="flex items-center gap-1.5 text-[#2F241D]">
-                <span className="text-[#147A5B] font-bold select-none">$</span>
-                <span className="font-semibold break-all">{entry.command}</span>
+                {entry.command !== 'welcome' && <span className="text-[#147A5B] font-bold select-none">$</span>}
+                <span className="font-semibold break-all">{entry.command === 'welcome' ? '연습 저장소' : entry.command}</span>
                 {entry.branch && (
                   <span className="text-[10px] text-[#92806E] ml-auto shrink-0">
                     ({entry.branch})
@@ -275,7 +267,7 @@ export function TerminalDock() {
                   }}
                   className={[
                     'w-full px-3 py-1.5 text-left flex items-center justify-between gap-3 transition-colors cursor-pointer',
-                    idx === 0
+                    idx === tabCycleIdx % suggestions.length
                       ? 'bg-[#FFF3D1] hover:bg-[#FFEAB3]'
                       : 'hover:bg-[#FAF4E8]',
                   ].join(' ')}
@@ -318,6 +310,7 @@ export function TerminalDock() {
               id="gitdots-terminal-input"
               ref={inputRef}
               data-testid="terminal-input"
+              aria-label="연습할 명령어"
               type="text"
               value={input}
               onChange={(e) => {

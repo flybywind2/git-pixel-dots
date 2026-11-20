@@ -6,6 +6,8 @@ import {
   createStageState,
   executePixelCommand,
   getCommandAutocomplete,
+  getNextPendingStep,
+  isStepCompleted,
 } from './index';
 
 function deepFreeze<T>(obj: T): T {
@@ -72,10 +74,37 @@ describe('GitDots scenarios & initial stage presets', () => {
 });
 
 describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
+  it.each(STAGE_SCENARIOS)('advances one goal per guided command in $id', (lesson) => {
+    let state = createStageState(lesson.id);
+    for (const [index, step] of lesson.steps.entries()) {
+      expect(getNextPendingStep(state)?.id).toBe(step.id);
+      state = executePixelCommand(state, step.command);
+      expect(lesson.steps.filter((item) => isStepCompleted(state, item))).toHaveLength(index + 1);
+    }
+    expect(getNextPendingStep(state)).toBeNull();
+    expect(state.bubbles[0]?.title).toBe(`${lesson.number}장 실습 완료`);
+  });
+
+  it('keeps distinct CLI goals after clearing or scrolling past terminal history', () => {
+    let state = runSequence('ch5', ['gh repo view', 'gh issue list', 'gh api unknown']);
+    const completed = () => STAGE_MAP.ch5.steps.filter((step) => isStepCompleted(state, step)).map((step) => step.id);
+    expect(completed()).toEqual([]);
+    state = executePixelCommand(state, 'gh issue create --title "다른 제목"');
+    state = executePixelCommand(state, 'clear');
+    expect(completed()).toEqual(['ch5-issue']);
+    state = executePixelCommand(state, 'gh auth status');
+    for (let i = 0; i < 30; i++) state = executePixelCommand(state, 'gh pr list');
+    expect(completed()).toEqual(['ch5-auth', 'ch5-issue']);
+    expect(getNextPendingStep(state)?.id).toBe('ch5-pr');
+    state = executePixelCommand(state, 'reset');
+    expect(completed()).toEqual([]);
+  });
+
   it('Ch1: Working Dir -> Staging -> Local Repo -> Remote GitHub', () => {
     let s = deepFreeze(createStageState('ch1'));
     expect(s.files.some((f) => f.status === 'modified')).toBe(true);
     expect(s.files.some((f) => f.status === 'untracked')).toBe(true);
+    expect(executePixelCommand(s, 'git push').completedActions).not.toContain('PUSH');
 
     s = deepFreeze(executePixelCommand(s, 'git status'));
     expect(s.lastAnim.kind).toBe('IDLE');
@@ -100,12 +129,13 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     expect(s.lastAnim.kind).toBe('PUSH');
     expect(s.remoteBranches.main).toBe(s.branches.main);
     expect(s.completedActions).toEqual(expect.arrayContaining(['ADD', 'COMMIT', 'PUSH']));
-    expect(s.bubbles[0]?.title).toContain('Stage 1 클리어');
+    expect(s.bubbles[0]?.title).toContain('1장 실습 완료');
   });
 
   it('Ch2: git log, diff, stash, stash pop, reset --soft, revert HEAD', () => {
     let s = deepFreeze(createStageState('ch2'));
     const initialCommitCount = s.commits.length;
+    const originalChange = s.files[0]?.content;
 
     s = deepFreeze(executePixelCommand(s, 'git log'));
     expect(s.lastAnim.kind).toBe('IDLE');
@@ -122,12 +152,13 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     expect(s.lastAnim.kind).toBe('STASH_POP');
     expect(s.stashCount).toBe(0);
     expect(s.files[0]?.status).toBe('modified');
+    expect(s.files[0]?.content).toBe(originalChange);
 
     s = deepFreeze(executePixelCommand(s, 'git revert HEAD'));
     expect(s.lastAnim.kind).toBe('REVERT');
     expect(s.commits).toHaveLength(initialCommitCount + 1);
     expect(s.commits[s.commits.length - 1]?.isRevert).toBe(true);
-    expect(s.bubbles[0]?.title).toContain('Stage 2 클리어');
+    expect(s.bubbles[0]?.title).toContain('2장 실습 완료');
 
     // Bonus: reset --soft marks latest commit as ghost and stages file
     const beforeResetHead = s.branches.main;
@@ -136,6 +167,24 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     expect(s.branches.main).not.toBe(beforeResetHead);
     expect(s.commits.find((c) => c.id === beforeResetHead)?.ghost).toBe(true);
     expect(s.staged.length).toBeGreaterThan(0);
+  });
+
+  it('restores the files in each stash and keeps the entry when newer edits overlap', () => {
+    const initial = createStageState('ch1');
+    let s = executePixelCommand(initial, 'git stash');
+    expect(s.files.find((file) => file.name === 'style.css')?.status).toBe('untracked');
+    s = executePixelCommand(s, 'edit app.js');
+    const edited = s.files.find((file) => file.name === 'app.js')?.content;
+    s = executePixelCommand(s, 'git stash pop');
+    expect(s.stashCount).toBe(1);
+    expect(s.files.find((file) => file.name === 'app.js')?.content).toBe(edited);
+    s = executePixelCommand(s, 'git stash -u');
+    expect(s.stashCount).toBe(2);
+    expect(s.files.some((file) => file.name === 'style.css')).toBe(false);
+    s = executePixelCommand(s, 'git stash pop');
+    expect(s.stashCount).toBe(1);
+    expect(s.files.find((file) => file.name === 'style.css')).toEqual(initial.files[1]);
+    expect(s.files.find((file) => file.name === 'app.js')?.content).toBe(edited);
   });
 
   it('Ch3: branch switch, deterministic merge conflict with 1-click actions, resolve, commit, rebase', () => {
@@ -172,6 +221,10 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     expect(s.lastAnim.kind).toBe('RESOLVE');
     expect(s.conflict?.resolvedChoice).toBe('both');
     expect(s.staged).toContain('theme.js');
+    const resolved = s.files.find((file) => file.name === 'theme.js')?.content;
+    expect(resolved).toContain('dark-midnight');
+    expect(resolved).toContain('sunset-coral');
+    expect(resolved?.match(/export const theme =/g)).toHaveLength(1);
 
     // Commit without -m completes merge commit and clears Stage 3
     s = deepFreeze(executePixelCommand(s, 'git commit'));
@@ -179,7 +232,7 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     expect(s.conflict).toBeNull();
     expect(s.commits[s.commits.length - 1]?.isMerge).toBe(true);
     expect(s.commits[s.commits.length - 1]?.parents.length).toBe(2);
-    expect(s.bubbles[0]?.title).toContain('Stage 3 클리어');
+    expect(s.bubbles[0]?.title).toContain('3장 실습 완료');
 
     // Rebase works cleanly too
     s = deepFreeze(executePixelCommand(s, 'git rebase main'));
@@ -214,7 +267,7 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     expect(s.prs).toHaveLength(1);
     expect(s.prs[0]?.title).toBe('새 기능');
     expect(s.prs[0]?.status).toBe('merged');
-    expect(s.bubbles[0]?.title).toContain('Stage 4 클리어');
+    expect(s.bubbles[0]?.title).toContain('4장 실습 완료');
   });
 
   it('Ch5: gh CLI full walkthrough (auth, repo, pr, issue, run watch, api)', () => {
@@ -225,7 +278,7 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     s = deepFreeze(executePixelCommand(s, 'gh auth status'));
     expect(s.lastAnim.kind).toBe('GH_CMD');
     // Should NOT prematurely celebrate after step 1 even though multiple steps use GH_CMD
-    expect(s.bubbles[0]?.title).not.toContain('Stage 5 클리어');
+    expect(s.bubbles[0]?.title).not.toContain('5장 실습 완료');
 
     s = deepFreeze(executePixelCommand(s, 'gh repo view'));
     expect(s.lastAnim.kind).toBe('GH_CMD');
@@ -245,11 +298,11 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
 
     s = deepFreeze(executePixelCommand(s, 'gh run watch'));
     expect(s.lastAnim.kind).toBe('GH_CMD');
-    expect(s.bubbles[0]?.title).not.toContain('Stage 5 클리어');
+    expect(s.bubbles[0]?.title).not.toContain('5장 실습 완료');
 
     s = deepFreeze(executePixelCommand(s, 'gh api repos/gitdots/app'));
     expect(s.lastAnim.kind).toBe('GH_CMD');
-    expect(s.bubbles[0]?.title).toContain('Stage 5 클리어');
+    expect(s.bubbles[0]?.title).toContain('5장 실습 완료');
   });
 
   it('Ch6: token classic vs fine-grained, SSO, SSH, Push Protection leak-test, --with-token', () => {
@@ -272,7 +325,7 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     s = deepFreeze(executePixelCommand(s, 'token ssh'));
     expect(s.lastAnim.kind).toBe('TOKEN_SSH');
     expect(s.token.sshReady).toBe(true);
-    expect(s.bubbles[0]?.title).toContain('Stage 6 클리어');
+    expect(s.bubbles[0]?.title).toContain('6장 실습 완료');
 
     s = deepFreeze(executePixelCommand(s, 'token leak-test'));
     expect(s.lastAnim.kind).toBe('TOKEN_BLOCK');
@@ -289,6 +342,7 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     // Calling /api/v3 before VPN login is blocked by guard
     const unauth = executePixelCommand(s, 'gh api /api/v3/user');
     expect(unauth.lastAnim.kind).toBe('GHES_BLOCK');
+    expect(getNextPendingStep(unauth)?.id).toBe('ch7-block');
     expect(unauth.ghes.lastFlow).toBe('blocked');
     expect(unauth.bubbles[0]?.actions?.[0]?.command).toBe(
       'gh auth login --hostname github.corp.internal',
@@ -305,6 +359,8 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     expect(s.ghes.connected).toBe(true);
     expect(s.ghes.lastFlow).toBe('vpn-ok');
     expect(s.ghHost).toBe('github.corp.internal');
+    const canonical = executePixelCommand(s, 'gh api user --hostname github.corp.internal');
+    expect(canonical.terminal.at(-1)?.lines[0]?.text).toBe('GET https://github.corp.internal/api/v3/user');
 
     s = deepFreeze(executePixelCommand(s, 'gh api /api/v3/user'));
     expect(s.lastAnim.kind).toBe('GHES_API');
@@ -313,7 +369,7 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     s = deepFreeze(executePixelCommand(s, 'ghes runner'));
     expect(s.lastAnim.kind).toBe('GHES_RUNNER');
     expect(s.ghes.lastFlow).toBe('runner');
-    expect(s.bubbles[0]?.title).toContain('Stage 7 클리어');
+    expect(s.bubbles[0]?.title).toContain('7장 실습 완료');
 
     s = deepFreeze(executePixelCommand(s, 'ghes cloud'));
     expect(s.lastAnim.kind).toBe('GH_CMD');
@@ -333,6 +389,8 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     expect(s.lastAnim.kind).toBe('AI_WORKTREE');
     expect(s.ai.worktreeActive).toBe(true);
     expect(s.ai.worktreeBranch).toBe('ai/fix');
+    const canonical = executePixelCommand(createStageState('ch8'), 'git worktree add -b ai/fix wt-ai');
+    expect(canonical.lastAnim.label).toContain('wt-ai');
 
     s = deepFreeze(executePixelCommand(s, 'ai code'));
     expect(s.lastAnim.kind).toBe('AI_CODE');
@@ -360,7 +418,7 @@ describe('Full stage walkthroughs (Ch1 ~ Ch8)', () => {
     expect(s.ai.merged).toBe(true);
     expect(s.prs[0]?.status).toBe('merged');
     expect(s.branches.main).not.toBe(initialMainCommit);
-    expect(s.bubbles[0]?.title).toContain('Stage 8 클리어');
+    expect(s.bubbles[0]?.title).toContain('8장 실습 완료');
   });
 });
 
