@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-pixel: "Galmuri11", "Galmuri9", "Pretendard Variable", system-ui, sans-serif;
+    --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Noto Sans KR", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    font-family: var(--font-sans);
+    background-color: #131722;
+    color: #fff8eb;
+  }
+}
+
+.font-pixel {
+  font-family: var(--font-pixel);
+}
+
+.font-mono-code {
+  font-family: var(--font-mono);
+}
+
+/* Crisp retro-friendly pixel frame shadow */
+.pixel-box {
+  border: 2px solid #2e3752;
+  box-shadow: 0 4px 0 #0a0d16;
+}
+
+.pixel-bubble {
+  border: 2px solid #3c486b;
+  box-shadow: 0 6px 0 rgba(9, 12, 20, 0.72), 0 12px 28px rgba(0, 0, 0, 0.35);
+}
+
+.pixel-btn {
+  border: 2px solid #354060;
+  box-shadow: 0 3px 0 #0a0d16;
+  transition: transform 80ms ease, box-shadow 80ms ease, background-color 120ms ease;
+}
+
+.pixel-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 0 #0a0d16;
+}
+
+.pixel-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #0a0d16;
+}
+
+.dot-bg {
+  background-image: radial-gradient(rgba(148, 163, 184, 0.14) 1.5px, transparent 1.5px);
+  background-size: 16px 16px;
+}
+
+@keyframes bubblePop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -92%) scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1);
+  }
+}
+
+.animate-bubble-pop {
+  animation: bubblePop 200ms cubic-bezier(0.22, 1.25, 0.36, 1) forwards;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #101420;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2e3752;
+  border-radius: 3px;
+}
