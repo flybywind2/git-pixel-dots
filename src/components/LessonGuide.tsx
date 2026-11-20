@@ -51,7 +51,7 @@ export function LessonGuide() {
           <h1 id="lesson-title" className="break-keep text-xl font-bold leading-tight tracking-tight sm:text-2xl">{lesson.title}</h1>
           <p className="mt-1.5 max-w-[68ch] break-keep text-sm leading-relaxed text-[#59483B]">
             {nextStep ? lesson.tagline : finishedBasic
-              ? '이제 팀 저장소의 문서를 고치고 변경을 기록한 뒤, GitHub에서 검토를 요청할 수 있어요.'
+              ? '이제 팀 저장소의 문서를 고치고 변경을 기록한 뒤, GitHub에서 검토를 요청하고 합친 내용을 내 컴퓨터로 가져올 수 있어요.'
               : lesson.takeaway}
           </p>
           {lesson.id === 'docs' && (

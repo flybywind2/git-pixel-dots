@@ -20,7 +20,7 @@
 
 편집 중인 문서, 장별 진행 상태, 마지막 캐릭터 안내는 이 브라우저에 저장돼요. 새로고침하거나 다른 장에서 돌아와도 이어서 할 수 있어요. 처음부터 다시 하려면 **현재 장 초기화**를 눌러 확인하세요.
 
-2~4장의 코드 예제를 실습한 적이 있다면 해당 장에서 **현재 장 초기화**를 눌러 새 문서 예제를 열 수 있어요. 이전 예제의 저장본은 브라우저에 보관돼요.
+2~4장의 코드 예제를 실습한 적이 있다면 해당 장에서 **현재 장 초기화**를 눌러 새 예제로 처음부터 실습할 수 있어요. 초기화하면 이전 예제의 저장본은 지워져요.
 
 ## 기본 과정
 
@@ -31,14 +31,14 @@
 | [1. 문서 편집과 비교](https://flybywind2.github.io/git-pixel-dots/#/chapter/1) | 회의록을 고치고 기록에 담긴 줄을 비교해요. |
 | [2. 변경 기록과 공유](https://flybywind2.github.io/git-pixel-dots/#/chapter/2) | 회의록과 참석 안내를 새 커밋에 담아 팀에 공유해요. |
 | [3. 보관과 취소](https://flybywind2.github.io/git-pixel-dots/#/chapter/3) | 회의록 수정을 잠시 보관하고 잘못 올린 임시 안내를 취소해요. |
-| [4. GitHub 협업](https://flybywind2.github.io/git-pixel-dots/#/chapter/4) | 새 브랜치에 모임 장소 수정을 기록하고, 풀 리퀘스트(PR)로 팀원 승인을 받아 합쳐요. |
+| [4. GitHub 협업](https://flybywind2.github.io/git-pixel-dots/#/chapter/4) | 새 브랜치에 모임 장소 수정을 기록하고, 풀 리퀘스트(PR)로 팀원 승인을 받아 합친 뒤 내 컴퓨터로 가져와요. |
 
 ## 심화 실습
 
 | 장 | 해 볼 일 |
 | --- | --- |
 | [5. 브랜치와 충돌](https://flybywind2.github.io/git-pixel-dots/#/chapter/5) | 두 브랜치가 같은 줄을 고쳤을 때 합칠 내용을 골라요. |
-| [6. GitHub CLI](https://flybywind2.github.io/git-pixel-dots/#/chapter/6) | 터미널에서 PR과 이슈를 만들고 저장소를 조회해요. |
+| [6. GitHub CLI](https://flybywind2.github.io/git-pixel-dots/#/chapter/6) | 터미널에서 이슈를 등록하고 자동 검사를 지켜보며 저장소를 조회해요. |
 | [7. 인증과 권한](https://flybywind2.github.io/git-pixel-dots/#/chapter/7) | 예제 토큰의 권한을 비교하고 SSH 키의 역할을 살펴봐요. |
 | [8. 사내 GitHub](https://flybywind2.github.io/git-pixel-dots/#/chapter/8) | 회사가 운영하는 서버에 로그인하고 사내 실행기로 빌드해요. |
 | [9. AI와 협업](https://flybywind2.github.io/git-pixel-dots/#/chapter/9) | AI가 별도 작업 폴더에서 고친 버그를 사람이 확인하고 합쳐요. |

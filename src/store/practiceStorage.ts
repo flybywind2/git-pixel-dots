@@ -251,6 +251,18 @@ export function readExternalSession(key: string, raw: string): { id: StageId; se
   }
 }
 
+export function clearLegacyPracticeSessions(id: StageId) {
+  const storage = getStorage();
+  if (!storage) return;
+  for (const key of LEGACY_KEYS) {
+    try {
+      storage.removeItem(`${key}.${id}`);
+    } catch {
+      // 저장소를 지울 수 없는 환경에서는 건너뛰어요.
+    }
+  }
+}
+
 const pendingSaves = new Map<StageId, { timer: number; session: PracticeSession }>();
 
 export function writePracticeSession(session: PracticeSession, defer = false) {

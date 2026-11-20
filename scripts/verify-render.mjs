@@ -248,13 +248,16 @@ async function practiceTracks(page, url) {
   assert.match(page.url(), /#\/chapter\/4$/);
   await helpTab.close();
 
-  for (const label of ['새 브랜치 만들기', '다음 기록에 담기', '기록 남기기', '팀에 공유하기', '검토 요청하기', '팀원 승인 확인하기', '검토한 변경 합치기']) {
+  for (const label of ['새 브랜치 만들기', '다음 기록에 담기', '기록 남기기', '팀에 공유하기', '검토 요청하기', '팀원 승인 확인하기', '검토한 변경 합치기', '기본 브랜치로 이동하기', '합친 내용 가져오기']) {
     assert.equal(await guide.innerText(), label);
     await guide.click();
   }
-  await expectProgress(page, 7, 7);
+  await expectProgress(page, 9, 9);
   await runCommand(page, 'git show origin/main:회의록.md');
   await page.getByRole('log').getByText(/장소는 2층 모임방이에요\./).waitFor();
+  // 합친 뒤 내 컴퓨터의 main에도 같은 내용이 반영돼요.
+  await runCommand(page, 'git show HEAD:회의록.md');
+  await page.getByRole('log').getByText(/장소는 2층 모임방이에요\./).last().waitFor();
 
   const advanced = page.getByRole('combobox', { name: '심화 실습 선택', exact: true });
   await advanced.selectOption('ch3');
@@ -317,12 +320,12 @@ async function storageRecovery(page, url) {
   const reset = page.getByRole('main').getByRole('button', { name: '현재 장 초기화', exact: true });
   const updated = page.getByRole('heading', { name: '이 장의 실습 예제가 바뀌었어요' });
   await updated.waitFor();
-  // 복구 화면의 초기화는 확인 창 없이 바로 동작해요.
+  // 복구 화면의 초기화는 확인 창 없이 바로 동작하고, 옛 v2 저장본은 지워져요.
   await reset.click();
-  await expectProgress(page, 0, 7);
-  assert(await page.evaluate(() => localStorage.getItem('gitdots.practice.v2.ch4') && localStorage.getItem('gitdots.practice.v3.ch4')));
+  await expectProgress(page, 0, 9);
+  assert(await page.evaluate(() => !localStorage.getItem('gitdots.practice.v2.ch4') && localStorage.getItem('gitdots.practice.v3.ch4')));
   await page.reload();
-  await expectProgress(page, 0, 7);
+  await expectProgress(page, 0, 9);
 
   // 깨진 ch3 저장본 → 읽기 불가 복구.
   await page.goto(`${url}#/chapter/5`);
@@ -469,12 +472,29 @@ async function crossTabSync(browser, url) {
   const context = await browser.newContext({ viewport: { width: 1024, height: 768 } });
   const a = await context.newPage();
   const b = await context.newPage();
-  await openChapter(a, url, 2);
-  await openChapter(b, url, 2);
+  await openChapter(a, url, 1);
+  await openChapter(b, url, 1);
+  const editorA = a.getByRole('textbox', { name: '회의록.md', exact: true });
+  const editorB = b.getByRole('textbox', { name: '회의록.md', exact: true });
+  const original = await editorA.inputValue();
+  const draftA = original + '탭 A에서 작성 중인 초안이에요.\n';
+  const draftB = original + '탭 B에서 작성 중인 초안이에요.\n';
+  const draftSaved = (page, draft) => page.waitForFunction((expected) => {
+    const raw = localStorage.getItem('gitdots.practice.v3.docs');
+    return raw !== null && JSON.parse(raw).documentDraft === expected;
+  }, draft);
+  // 두 탭이 각자 입력 중인 초안을 가져요. 서로의 초안을 받아도 내 초안은 유지돼요.
+  await editorA.fill(draftA);
+  await draftSaved(a, draftA);
+  await editorB.fill(draftB);
+  await draftSaved(b, draftB);
+  assert.equal(await editorA.inputValue(), draftA);
+  // 탭 A가 초안을 저장하면 EDIT 단계가 완료되고 저장본이 다른 탭으로 전파돼요.
   await a.getByTestId('guided-command').click();
-  await expectProgress(a, 1, 3);
-  // 다른 탭의 저장본을 storage 이벤트로 반영해 두 탭이 같은 진행 상태를 보여줘요.
-  await b.waitForFunction(() => document.querySelector('[data-testid="stage-step-badge"]')?.textContent === '실습 1/3 완료');
+  await expectProgress(a, 1, 6);
+  // 탭 B는 진행 상태를 반영하되, 이 탭에서 입력 중인 초안(draftB)은 그대로 유지해요.
+  await b.waitForFunction(() => document.querySelector('[data-testid="stage-step-badge"]')?.textContent === '실습 1/6 완료');
+  assert.equal(await editorB.inputValue(), draftB);
   await context.close();
 }
 

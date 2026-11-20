@@ -115,7 +115,7 @@ function PracticeRecovery({ issue }: { issue: PracticeSaveIssue }) {
         {updated ? '이 장의 실습 예제가 바뀌었어요' : '이 장의 저장 내용을 읽을 수 없어요'}
       </h1>
       <p className="mt-2 break-keep text-sm leading-relaxed text-[#59483B]">
-        {updated ? '이전 실습 기록은 브라우저에 보관했어요. 이 장을 초기화하면 새 예제가 열려요.'
+        {updated ? '이 장을 초기화하면 새 예제로 처음부터 실습할 수 있어요.'
           : '현재 장을 초기화하면 처음부터 다시 실습할 수 있어요.'}
       </p>
       <button type="button" onClick={resetStageImmediately} className="pixel-btn mt-4 rounded-md border-[#C78B1E] bg-[#F4B942] px-3 py-2 text-sm font-bold">

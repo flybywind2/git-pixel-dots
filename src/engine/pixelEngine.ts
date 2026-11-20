@@ -2989,9 +2989,13 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
     // gh run watch
     if (sub === 'run') {
+      const draft: PixelSimState = {
+        ...state,
+        completedActions: withCompletedAction(state.completedActions, 'RUN_WATCH'),
+      };
       return finalizeTransition(
         state,
-        state,
+        draft,
         'GH_CMD',
         '자동 검사 지켜보기',
         'PASS',
@@ -3009,7 +3013,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           48,
           '자동 검사(CI) 전원 통과! ✅',
           'gh run watch 로 자동 검사(빌드·테스트) 과정을 터미널에서 실시간으로 지켜봤어요!',
-          nextStepHintText(state),
+          nextStepHintText(draft),
         ),
       );
     }

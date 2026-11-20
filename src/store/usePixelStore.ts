@@ -3,8 +3,8 @@ import { ALL_STAGE_IDS, type PixelSimState, type StageId } from '../types/sim';
 import { createStageState, executePixelCommand, pendingHardReset, savePracticeDocument } from '../engine';
 import { EXAMPLE_DOCUMENT, getDocumentWorkingText } from '../engine/documentDiff';
 import {
-  flushPracticeSaves, practiceStorageAvailable, readPracticeSessions, setPracticeStorageFailureListener,
-  writePracticeSession, type PracticeSaveIssue, type PracticeSession,
+  clearLegacyPracticeSessions, flushPracticeSaves, practiceStorageAvailable, readPracticeSessions,
+  setPracticeStorageFailureListener, writePracticeSession, type PracticeSaveIssue, type PracticeSession,
 } from './practiceStorage';
 
 export function chapterHash(id: StageId): string {
@@ -124,12 +124,16 @@ export const usePixelStore = create<PixelStore>((set) => ({
 
   resetStage: () => set({ confirmation: { kind: 'lesson-reset' } }),
 
-  resetStageImmediately: () => set((state) => applySession(state, createStageState(state.stageId), null)),
+  resetStageImmediately: () => set((state) => {
+    clearLegacyPracticeSessions(state.stageId);
+    return applySession(state, createStageState(state.stageId), null);
+  }),
 
   resolveConfirmation: (confirmed) => set((state) => {
     if (!confirmed || !state.confirmation) return { confirmation: null };
     if (state.confirmation.kind === 'hard-reset') return execute(state, state.confirmation.command);
     if (state.confirmation.kind === 'replace-draft') return applyDocumentDraft(state, EXAMPLE_DOCUMENT);
+    clearLegacyPracticeSessions(state.stageId);
     return applySession(state, createStageState(state.stageId), null);
   }),
 
@@ -157,7 +161,9 @@ export const usePixelStore = create<PixelStore>((set) => ({
     const sessions = { ...state.sessions, [id]: session };
     const saveIssues = state.saveIssues[id] ? { ...state.saveIssues, [id]: undefined } : state.saveIssues;
     if (id !== state.stageId) return { sessions, saveIssues };
-    return { ...session, stageId: id, sessions, saveIssues, notice: null, confirmation: null };
+    // 다른 탭의 진행 상태를 받더라도 이 탭에서 입력 중인 초안은 지우지 않아요.
+    const documentDraft = state.documentDraft !== null ? state.documentDraft : session.documentDraft;
+    return { ...session, documentDraft, stageId: id, sessions, saveIssues, notice: null, confirmation: null };
   }),
 }));
 

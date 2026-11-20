@@ -109,7 +109,7 @@ describe('Full stage walkthroughs', () => {
     state = executePixelCommand(state, 'gh auth status');
     for (let i = 0; i < 30; i++) state = executePixelCommand(state, 'gh pr list');
     expect(completed()).toEqual(['ch5-auth', 'ch5-issue']);
-    expect(getNextPendingStep(state)?.id).toBe('ch5-pr');
+    expect(getNextPendingStep(state)?.id).toBe('ch5-run');
     state = executePixelCommand(state, 'reset');
     expect(completed()).toEqual([]);
   });
@@ -282,17 +282,23 @@ describe('Full stage walkthroughs', () => {
       `gh pr create --title "${MEETING_PR_TITLE}"`,
       'gh pr view',
       'gh pr merge',
+      'git switch main',
+      'git pull origin main',
     ]);
     expect(s.completedActions).toEqual(
-      expect.arrayContaining(['BRANCH', 'ADD', 'COMMIT', 'PUSH', 'PR_CREATE', 'PR_REVIEW', 'PR_MERGE']),
+      expect.arrayContaining(['BRANCH', 'ADD', 'COMMIT', 'PUSH', 'PR_CREATE', 'PR_REVIEW', 'PR_MERGE', 'SWITCH', 'PULL']),
     );
-    expect(s.headBranch).toBe(MEETING_PR_BRANCH);
+    expect(s.headBranch).toBe('main');
     expect(s.prs).toHaveLength(1);
     expect(s.prs[0]?.title).toBe(MEETING_PR_TITLE);
     expect(s.prs[0]?.status).toBe('merged');
     const remoteTree = s.commits.find((commit) => commit.id === s.remoteBranches.main)?.tree;
     expect(remoteTree?.[DOCUMENT_PATH]).toContain('2층 모임방');
     expect(remoteTree?.[ATTENDANCE_PATH]).toBe(ATTENDANCE_DOCUMENT);
+    // 합친 뒤 내 컴퓨터의 main에도 같은 내용이 반영돼요.
+    const localTree = s.commits.find((commit) => commit.id === s.branches.main)?.tree;
+    expect(localTree).toEqual(remoteTree);
+    expect(s.files.find((file) => file.name === DOCUMENT_PATH)?.content).toContain('2층 모임방');
     expect(s.bubbles[0]?.title).toContain('4장 실습 완료');
   });
 
