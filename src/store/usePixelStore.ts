@@ -130,7 +130,7 @@ export const usePixelStore = create<PixelStore>((set) => ({
     if (!command) return state;
     if (command.toLowerCase() === 'reset') return { confirmation: { kind: 'lesson-reset' } };
     const unsaved = state.documentDraft !== null && state.documentDraft !== getDocumentWorkingText(state.sim);
-    if (unsaved && /^(?:edit\b|git\s+(?:add|commit|diff|revert|reset|switch|checkout|stash)\b)/i.test(command)) {
+    if (unsaved && /^(?:(?:edit|resolve)\b|git\s+(?:add|commit|diff|revert|reset|switch|checkout|stash)\b)/i.test(command)) {
       return { notice: '먼저 문서를 저장하세요. 지금 편집한 내용은 아직 작업 파일에 반영되지 않았어요.' };
     }
     const target = pendingHardReset(state.sim, command);

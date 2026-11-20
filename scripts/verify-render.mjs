@@ -186,6 +186,32 @@ async function terminalAndScenes(page, url) {
   await checkViewport(page);
 }
 
+async function revertConflict(page) {
+  const editor = page.getByRole('textbox', { name: '회의록.md', exact: true });
+  const original = await editor.inputValue();
+  const first = original.replace('금요일 저녁 7시', '일요일 저녁 7시');
+  const second = first.replace('1층 회의실', '도서관');
+  for (const text of [first, second]) {
+    await editor.fill(text);
+    await page.getByTestId('guided-command').click();
+    await runCommand(page, 'git add 회의록.md');
+    await runCommand(page, 'git commit -m "회의록 수정"');
+    await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
+  }
+  await runCommand(page, 'git revert HEAD~1');
+  await page.getByRole('heading', { name: '커밋 취소 중 변경이 겹쳤어요', exact: true }).waitFor();
+  assert((await editor.inputValue()).includes('<<<<<<< HEAD'));
+  await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
+  await page.getByRole('button', { name: '취소 작업 중단', exact: true }).click();
+  assert.equal(await editor.inputValue(), second);
+
+  await runCommand(page, 'git revert HEAD~1');
+  await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
+  await page.getByRole('button', { name: '이전 버전 사용', exact: true }).click();
+  await page.getByRole('button', { name: '취소 커밋 기록하기', exact: true }).click();
+  assert.equal(await editor.inputValue(), original);
+}
+
 async function main() {
   fs.mkdirSync(out, { recursive: true });
   const local = publicUrl ? undefined : await startServer();
@@ -203,6 +229,7 @@ async function main() {
       page.setDefaultTimeout(9000);
       const errors = trackErrors(page, origin);
       await documentLesson(page, url, width === 1366 ? '01-documents.png' : undefined);
+      if (width === 1366) await revertConflict(page);
       await terminalAndScenes(page, url);
       assert.deepEqual(errors, []);
       console.log(`[QA] ${width} × ${height} · document, persistence, reset, autocomplete and reduced motion`);

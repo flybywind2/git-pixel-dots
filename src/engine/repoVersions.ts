@@ -168,7 +168,7 @@ function mergeText(base: string, ours: string, theirs: string): string | undefin
   const edits = [...first];
   for (const edit of textEdits(base, theirs)) {
     const overlap = first.find((other) =>
-      other.start === edit.start || (other.start < edit.end && edit.start < other.end),
+      other.start <= edit.end && edit.start <= other.end,
     );
     if (!overlap) edits.push(edit);
     else if (overlap.start !== edit.start || overlap.end !== edit.end || overlap.lines.join('') !== edit.lines.join('')) {

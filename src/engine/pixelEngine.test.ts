@@ -507,7 +507,8 @@ describe('Document editing and comparison', () => {
 describe('Git file snapshots', () => {
   it('reverts a selected old commit while preserving later edits in the same file', () => {
     const first = ORIGINAL_DOCUMENT.replace('금요일 저녁 7시', '토요일 오전 10시');
-    const second = first.replace('1층 회의실', '도서관');
+    const extra = '질문은 단체 대화방에 남겨 주세요.\n';
+    const second = first + extra;
     let state = savePracticeDocument(createStageState('docs'), first);
     state = executePixelCommand(state, 'git add 회의록.md');
     state = executePixelCommand(state, "git commit -m '시간 수정'");
@@ -517,12 +518,41 @@ describe('Git file snapshots', () => {
     state = executePixelCommand(state, "git commit -m '장소 수정'");
     const secondCommit = state.commits.at(-1);
     state = deepFreeze(executePixelCommand(state, `git revert --no-edit ${firstCommit?.hash}`));
-    const expected = ORIGINAL_DOCUMENT.replace('1층 회의실', '도서관');
+    const expected = ORIGINAL_DOCUMENT + extra;
     expect(state.files[0]?.content).toBe(expected);
     expect(state.index[DOCUMENT_PATH]).toBe(expected);
     expect(state.commits.at(-1)?.tree[DOCUMENT_PATH]).toBe(expected);
     expect(state.commits.at(-1)?.parents).toEqual([secondCommit?.id]);
     expect(state.staged).toEqual([]);
+  });
+
+  it('keeps an adjacent-line revert conflict pending until resolved or aborted', () => {
+    const first = ORIGINAL_DOCUMENT.replace('금요일 저녁 7시', '토요일 오전 10시');
+    const second = first.replace('1층 회의실', '도서관');
+    let state = savePracticeDocument(createStageState('docs'), first);
+    state = executePixelCommand(state, 'git add 회의록.md');
+    state = executePixelCommand(state, 'git commit -m "시간 수정"');
+    state = savePracticeDocument(state, second);
+    state = executePixelCommand(state, 'git add 회의록.md');
+    state = executePixelCommand(state, 'git commit -m "장소 수정"');
+    const conflicted = deepFreeze(executePixelCommand(state, 'git revert HEAD~1'));
+    expect(conflicted.commits).toHaveLength(state.commits.length);
+    expect(conflicted.conflict?.revert).toBeDefined();
+    expect(conflicted.files[0]?.content).toContain('<<<<<<< HEAD');
+    expect(executePixelCommand(conflicted, 'git revert --continue').commits).toBe(state.commits);
+
+    const aborted = executePixelCommand(conflicted, 'git revert --abort');
+    expect(aborted.conflict).toBeNull();
+    expect(aborted.files[0]?.content).toBe(second);
+    expect(aborted.index[DOCUMENT_PATH]).toBe(second);
+
+    const chosen = ORIGINAL_DOCUMENT.replace('1층 회의실', '도서관');
+    const edited = savePracticeDocument(conflicted, chosen);
+    const staged = executePixelCommand(edited, 'git add 회의록.md');
+    const finished = executePixelCommand(staged, 'git revert --continue');
+    expect(finished.lastAnim.kind).toBe('REVERT');
+    expect(finished.conflict).toBeNull();
+    expect(finished.commits.at(-1)?.tree[DOCUMENT_PATH]).toBe(chosen);
   });
 
   it('reverts tracked additions and leaves unrelated working edits intact', () => {

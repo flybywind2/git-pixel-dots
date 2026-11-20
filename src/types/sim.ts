@@ -90,7 +90,11 @@ export interface PixelConflict {
   bothCode: string;
   oursDeleted?: boolean;
   theirsDeleted?: boolean;
-  resolvedChoice: 'none' | 'ours' | 'theirs' | 'both';
+  resolvedChoice: 'none' | 'ours' | 'theirs' | 'both' | 'manual';
+  revert?: {
+    index: FileTree;
+    working: FileTree;
+  };
 }
 
 export interface TokenWorldState {

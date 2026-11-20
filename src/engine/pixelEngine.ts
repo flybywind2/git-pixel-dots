@@ -717,6 +717,40 @@ function commandNotice(
   );
 }
 
+function recordRevert(state: PixelSimState, draft: PixelSimState, target: PixelCommit, cmd: string): PixelSimState {
+  const changed = changedPaths(headTree(state), draft.index);
+  if (changed.length === 0) {
+    return commandNotice(state, cmd, '기록할 취소 변경이 없어요', '지금 버전을 유지하려면 git revert --skip으로 넘어가세요.', 'amber');
+  }
+  const head = state.branches[state.headBranch];
+  const seq = state.lastAnim.seq + 1;
+  const message = `Revert "${target.message}"`;
+  const commit: PixelCommit = {
+    id: `c${state.commits.length + 1}`,
+    hash: makeHash(seq, message),
+    message,
+    branch: state.headBranch,
+    parents: [head],
+    tree: draft.index,
+    isRevert: true,
+  };
+  const next = updateWorkspace({
+    ...draft,
+    commits: [...state.commits, commit],
+    branches: { ...state.branches, [state.headBranch]: commit.id },
+    conflict: null,
+  }, workingTree(draft), draft.index);
+  const description = `“${target.message}”의 변경을 취소했어요. 바뀐 파일은 ${changed.join(', ')}예요.`;
+  return finalizeTransition(
+    state, next, 'REVERT', '취소 커밋 기록', commit.hash, cmd,
+    [
+      { text: `[${state.headBranch} ${commit.hash}] ${message}`, tone: 'mint' },
+      { text: description, tone: 'sky' },
+    ],
+    makeBubble(`revert-${seq}`, 'buddy', 48, 52, '지난 변경을 취소하는 커밋을 만들었어요', description),
+  );
+}
+
 export function savePracticeDocument(
   state: PixelSimState,
   text: string,
@@ -933,7 +967,8 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       return savePracticeDocument(state, EXAMPLE_DOCUMENT, cmd);
     }
     const sub = tokens[1]?.toLowerCase();
-    if (tokens[0].toLowerCase() !== 'git' || !sub || !DOCUMENT_GIT_COMMANDS.has(sub)) {
+    const resolveConflict = state.conflict && lower.startsWith('resolve ');
+    if (!resolveConflict && (tokens[0].toLowerCase() !== 'git' || !sub || !DOCUMENT_GIT_COMMANDS.has(sub))) {
       return commandNotice(state, cmd, '문서 실습 명령어', '회의록 편집과 비교에 쓰는 명령은 명령어 사전에서 확인할 수 있어요.');
     }
   }
@@ -1024,6 +1059,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           : '둘 다 합치기(both)';
 
     const conflictFile = state.conflict.file;
+    const finish = state.conflict.revert ? 'git revert --continue' : 'git commit';
     const working = { ...workingTree(state) };
     const index = { ...state.index };
     const deleted = (choice === 'ours' && state.conflict.oursDeleted) || (choice === 'theirs' && state.conflict.theirsDeleted);
@@ -1044,7 +1080,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       [
         { text: `🧩 ${conflictFile} 충돌 해결: ${choiceLabel}`, tone: 'mint' },
         { text: `✓ 해결된 ${conflictFile} 이 장바구니(Staging)에 담겼어요.`, tone: 'sky' },
-        { text: '이제 git commit 으로 머지를 마무리하세요!', tone: 'muted' },
+        { text: `${finish}로 해결한 내용을 기록하세요.`, tone: 'muted' },
       ],
       makeBubble(
         `resolve-${seqNext}`,
@@ -1053,8 +1089,8 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         52,
         `충돌 해결 완료! (${choiceLabel}) 🧩`,
         `${conflictFile} 파일의 충돌 표시를 깔끔하게 정리하고 장바구니에 담았어요!`,
-        '이제 git commit 을 입력해서 머지 커밋을 완성해 보세요!',
-        [{ label: '✅ 머지 커밋 완료 (git commit)', command: 'git commit', tone: 'mint' }],
+        `${finish}로 기록을 마무리하세요.`,
+        [{ label: '해결한 내용 기록하기', command: finish, tone: 'mint' }],
       ),
     );
   }
@@ -1664,32 +1700,6 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
     // git add
     if (sub === 'add') {
-      if (state.conflict && state.conflict.resolvedChoice === 'none') {
-        return finalizeTransition(
-          state,
-          state,
-          'IDLE',
-          '충돌 해결 먼저',
-          undefined,
-          cmd,
-          [{ text: '⚠️ 충돌 표시가 남아 있어요! 먼저 resolve both / ours / theirs 로 해결해 주세요.', tone: 'coral' }],
-          makeBubble(
-            `add-conflict-${seqNext}`,
-            'buddy',
-            46,
-            52,
-            '충돌을 먼저 골라 주세요! ⚡',
-            `${state.conflict.file} 파일에 두 코드가 겹쳐 있어요. 아래 버튼 중 하나를 선택해 해결해 볼까요?`,
-            '원하는 해결 버튼을 클릭해 보세요!',
-            [
-              { label: '내 코드 유지 (ours)', command: 'resolve ours', tone: 'primary' },
-              { label: '상대 코드 채택 (theirs)', command: 'resolve theirs', tone: 'amber' },
-              { label: '둘 다 합치기 (both)', command: 'resolve both', tone: 'mint' },
-            ],
-          ),
-        );
-      }
-
       const args = tokens.slice(2).filter((arg) => arg !== '--');
       const working = workingTree(state);
       const paths = [...new Set([...Object.keys(working), ...Object.keys(state.index)])];
@@ -1711,6 +1721,17 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
       const index = { ...state.index };
       for (const path of matches) writeTreeEntry(index, path, treeEntry(working, path));
+      const conflict = state.conflict;
+      if (conflict?.resolvedChoice === 'none' && matches.has(conflict.file)) {
+        const draft = updateWorkspace({ ...state, conflict: { ...conflict, resolvedChoice: 'manual' } }, working, index);
+        return finalizeTransition(
+          state, draft, 'RESOLVE', '충돌 해결 스테이징', conflict.file, cmd,
+          [{ text: `${conflict.file}의 현재 작업 파일을 해결 결과로 담았어요.`, tone: 'mint' }],
+          makeBubble(`add-resolved-${seqNext}`, 'buddy', 38, 54, '해결한 파일을 담았어요',
+            conflict.revert ? 'git revert --continue로 취소 커밋의 기록을 마무리하세요.' : 'git commit으로 병합 결과를 기록하세요.'),
+        );
+      }
+
       const draft = updateWorkspace(state, working, index);
       if (changedPaths(state.index, index).length === 0 || draft.staged.length === 0) {
         const message = draft.staged.length > 0
@@ -1759,6 +1780,10 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         );
       }
 
+      if (state.conflict?.revert) {
+        const target = commitById(state, state.conflict.theirsCommit);
+        if (target) return recordRevert(state, state, target, cmd);
+      }
       const isAutoStage = /\s(?:-[a-z]*a[a-z]*|--all)(?=\s|$)/.test(cmd.replace(/"[^"]*"|'[^']*'/g, ''));
       const working = workingTree(state);
       const index = { ...state.index };
@@ -2135,14 +2160,32 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
     // git revert
     if (sub === 'revert') {
       const args = tokens.slice(2);
+      const pending = state.conflict?.revert;
+      if (args[0] === '--abort' || args[0] === '--skip') {
+        if (!pending) return commandNotice(state, cmd, '진행 중인 취소가 없어요', 'git revert HEAD로 취소할 커밋을 고를 수 있어요.');
+        const draft = updateWorkspace({ ...state, conflict: null }, pending.working, pending.index);
+        return finalizeTransition(
+          state, draft, 'IDLE', '커밋 취소 중단', undefined, cmd,
+          [{ text: '취소를 시작하기 전의 작업 파일과 스테이징 영역으로 돌아왔어요.', tone: 'mint' }],
+          makeBubble(`revert-abort-${seqNext}`, 'buddy', 48, 52, '취소 작업을 중단했어요', '취소를 시작하기 전의 버전을 열었어요.'),
+        );
+      }
+      if (args[0] === '--continue') {
+        const target = pending && commitById(state, state.conflict?.theirsCommit);
+        if (!target) return commandNotice(state, cmd, '진행 중인 취소가 없어요', '취소할 커밋을 먼저 골라 주세요.');
+        if (state.conflict?.resolvedChoice === 'none') {
+          return commandNotice(state, cmd, '남길 줄을 먼저 골라 주세요', '충돌을 해결해 스테이징한 뒤 git revert --continue를 실행하세요.', 'amber');
+        }
+        return recordRevert(state, state, target, cmd);
+      }
+
       const mainlineFlag = args.findIndex((arg) => arg === '-m' || arg === '--mainline');
       const mainline = mainlineFlag === -1 ? undefined : Number(args.splice(mainlineFlag, 2)[1]);
       const noCommit = args.includes('-n') || args.includes('--no-commit');
       const revisions = args.filter((arg) => !['--edit', '--no-edit', '-e', '-n', '--no-commit'].includes(arg));
       const [revision] = revisions;
       const target = revisions.length === 1 ? resolveRevision(state, revision) : undefined;
-      const current = headCommit(state);
-      if (!target || !current) {
+      if (!target || !headCommit(state)) {
         return commandNotice(state, cmd, '취소할 커밋을 확인하세요', 'git revert HEAD 또는 git revert 뒤에 취소할 커밋 ID 하나를 적으세요.', 'amber');
       }
       if (state.conflict || (!noCommit && state.staged.length > 0)) {
@@ -2157,48 +2200,58 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
       const parentTree = commitById(state, target.parents[(mainline ?? 1) - 1])?.tree ?? {};
       const reversed = mergeTrees(target.tree, state.index, parentTree);
-      if (reversed.conflicts.length > 0) {
-        return commandNotice(state, cmd, '되돌리려는 줄에 충돌이 있어요',
-          `${reversed.conflicts.join(', ')}의 현재 변경과 겹쳐 취소 커밋을 만들지 못했어요.`, 'coral');
+      const working = workingTree(state);
+      const checkout = checkoutTree(state, reversed.tree, state.index);
+      const blocked = [...checkout.blocked, ...reversed.conflicts.filter((file) => treeEntry(working, file) !== treeEntry(state.index, file))];
+      if (blocked.length > 0) {
+        return commandNotice(state, cmd, '작업 파일에 커밋하지 않은 변경이 있어요',
+          `${blocked.join(', ')}의 수정 내용을 먼저 기록하거나 임시 보관하세요.`, 'amber');
       }
+      if (reversed.conflicts.length > 1) {
+        return commandNotice(state, cmd, '여러 파일에서 취소 변경이 겹쳤어요',
+          `${reversed.conflicts.join(', ')}의 변경을 확인하세요. 한 파일씩 충돌 해결을 연습할 수 있어요.`, 'coral');
+      }
+      if (reversed.conflicts.length === 1) {
+        const file = reversed.conflicts[0];
+        const ours = treeEntry(state.index, file);
+        const theirs = treeEntry(parentTree, file);
+        const oursCode = ours ?? '';
+        const theirsCode = theirs ?? '';
+        const conflict = {
+          file, oursLabel: 'HEAD', theirsLabel: `${target.hash}의 이전 버전`, theirsCommit: target.id,
+          oursCode, theirsCode, bothCode: [oursCode.trimEnd(), theirsCode.trimEnd()].filter(Boolean).join('\n'),
+          oursDeleted: ours === undefined, theirsDeleted: theirs === undefined,
+          resolvedChoice: 'none' as const,
+          revert: { index: state.index, working },
+        };
+        const conflictText = `<<<<<<< HEAD\n${oursCode.trimEnd()}\n=======\n${theirsCode.trimEnd()}\n>>>>>>> ${conflict.theirsLabel}\n`;
+        const draft = updateWorkspace({ ...state, conflict }, { ...checkout.working, [file]: conflictText }, checkout.index);
+        return finalizeTransition(
+          state, draft, 'CONFLICT', '커밋 취소 충돌', file, cmd,
+          [{ text: `CONFLICT (content): ${file}. 해결한 뒤 git revert --continue를 실행하세요.`, tone: 'coral' }],
+          makeBubble(`revert-conflict-${seqNext}`, 'buddy', 48, 52, '취소하려는 줄에 충돌이 있어요',
+            '현재 버전과 취소하려는 변경이 같은 부분에 있어요. 남길 버전을 골라 주세요.', undefined, [
+              { label: '현재 버전 유지', command: 'resolve ours', tone: 'primary' },
+              { label: '이전 버전 사용', command: 'resolve theirs', tone: 'mint' },
+              { label: '취소 작업 중단', command: 'git revert --abort', tone: 'amber' },
+            ]),
+        );
+      }
+
       const changed = changedPaths(state.index, reversed.tree);
       if (changed.length === 0) {
         return commandNotice(state, cmd, '취소할 변경이 없어요', '현재 파일에 되돌릴 변경이 남아 있지 않아요.');
       }
-      const checkout = checkoutTree(state, reversed.tree, state.index);
-      if (checkout.blocked.length > 0) {
-        return commandNotice(state, cmd, '작업 파일에 커밋하지 않은 변경이 있어요',
-          `${checkout.blocked.join(', ')}의 수정 내용을 먼저 기록하거나 임시 보관하세요.`, 'amber');
-      }
+      const draft = updateWorkspace(state, checkout.working, reversed.tree);
       const message = `“${target.message}”에서 생긴 변경을 취소했어요. 바뀐 파일은 ${changed.join(', ')}예요.`;
       if (noCommit) {
-        const draft = updateWorkspace(state, checkout.working, reversed.tree);
         return finalizeTransition(
           state, draft, 'IDLE', '취소 변경 스테이징', target.hash, cmd,
           [{ text: `${message} git commit으로 기록할 수 있어요.`, tone: 'sky' }],
           makeBubble(`revert-no-commit-${seqNext}`, 'buddy', 48, 52, '취소 변경을 담아 뒀어요', message),
         );
       }
-
-      const revertId = `c${state.commits.length + 1}`;
-      const revertMsg = `Revert "${target.message}"`;
-      const revertCommit: PixelCommit = {
-        id: revertId, hash: makeHash(seqNext, revertMsg), message: revertMsg,
-        branch: state.headBranch, parents: [current.id], tree: reversed.tree, isRevert: true,
-      };
-      const draft = updateWorkspace({
-        ...state,
-        commits: [...state.commits, revertCommit],
-        branches: { ...state.branches, [state.headBranch]: revertId },
-      }, checkout.working, reversed.tree);
-      return finalizeTransition(
-        state, draft, 'REVERT', '취소 커밋 기록', revertCommit.hash, cmd,
-        [
-          { text: `[${state.headBranch} ${revertCommit.hash}] ${revertMsg}`, tone: 'mint' },
-          { text: message, tone: 'sky' },
-        ],
-        makeBubble(`revert-${seqNext}`, 'buddy', 48, 52, '지난 변경을 취소하는 커밋을 만들었어요', message),
-      );
+      return recordRevert(state, draft, target, cmd);
     }
 
     // git branch

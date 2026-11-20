@@ -26,6 +26,7 @@ export function DocumentLab() {
   const setDraft = usePixelStore((s) => s.setDocumentDraft);
   const saveDocument = usePixelStore((s) => s.saveDocument);
   const runCommand = usePixelStore((s) => s.runCommand);
+  const conflict = sim.conflict;
   const working = getDocumentWorkingText(sim);
   const text = draft ?? working;
   const unsaved = text !== working;
@@ -51,6 +52,26 @@ export function DocumentLab() {
   return (
     <div className="dot-bg flex flex-1 bg-[#F6EFE2]">
       <div className="mx-auto grid w-full max-w-[1440px] min-w-0 items-start gap-4 px-4 py-5 sm:px-6 lg:grid-cols-2">
+        {conflict?.revert && (
+          <section aria-labelledby="document-conflict-title" className="rounded-xl border border-[#D69B61] bg-[#FFF2D7] p-4 lg:col-span-2">
+            <h2 id="document-conflict-title" className="font-bold">커밋 취소 중 변경이 겹쳤어요</h2>
+            <p className="mt-1 text-sm">남길 내용을 고르거나, 편집기에서 충돌 표시를 정리한 뒤 저장하고 스테이징하세요.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(conflict.resolvedChoice === 'none' ? [
+                ['현재 버전 유지', 'resolve ours'], ['이전 버전 사용', 'resolve theirs'],
+              ] : [['취소 커밋 기록하기', 'git revert --continue']]).map(([label, command]) => (
+                <button key={command} type="button" onClick={() => runCommand(command)}
+                  className="rounded-md border border-[#BF8B29] bg-[#F4B942] px-3 py-1.5 text-sm font-semibold">
+                  {label}
+                </button>
+              ))}
+              <button type="button" onClick={() => runCommand('git revert --abort')}
+                className="rounded-md border border-[#CDBCA3] bg-[#FFFDF8] px-3 py-1.5 text-sm font-semibold">
+                취소 작업 중단
+              </button>
+            </div>
+          </section>
+        )}
         <form
           className="min-w-0 overflow-hidden rounded-xl border border-[#CDBCA3] bg-[#FFFDF8]"
           onSubmit={(event) => { event.preventDefault(); if (unsaved) saveDocument(); }}
