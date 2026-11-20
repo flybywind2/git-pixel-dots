@@ -5,5 +5,6 @@ export {
   getCommandAutocomplete,
   getNextPendingStep,
   isStepCompleted,
+  pendingHardReset,
   savePracticeDocument,
 } from './pixelEngine';

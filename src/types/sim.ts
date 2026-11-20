@@ -10,8 +10,8 @@ export type StageId =
   | 'ch8';
 
 export const ALL_STAGE_IDS: readonly StageId[] = [
-  'ch1',
   'docs',
+  'ch1',
   'ch2',
   'ch3',
   'ch4',
@@ -50,13 +50,15 @@ export interface PixelFile {
   content: string;
 }
 
+export type FileTree = Readonly<Record<string, string>>;
+
 export interface PixelCommit {
   id: string;
   hash: string;
   message: string;
   branch: string;
   parents: string[];
-  documentContent?: string;
+  tree: FileTree;
   isMerge?: boolean;
   isRevert?: boolean;
   ghost?: boolean;
@@ -82,9 +84,12 @@ export interface PixelConflict {
   file: string;
   oursLabel: string;
   theirsLabel: string;
+  theirsCommit: string;
   oursCode: string;
   theirsCode: string;
   bothCode: string;
+  oursDeleted?: boolean;
+  theirsDeleted?: boolean;
   resolvedChoice: 'none' | 'ours' | 'theirs' | 'both';
 }
 
@@ -181,6 +186,7 @@ export interface CommandChip {
 
 export interface StageStep {
   id: string;
+  label?: string;
   goal: string;
   command: string;
   doneAction: LessonAction | LessonAction[];
@@ -200,8 +206,13 @@ export type LessonAction =
 export type DocumentComparison = 'working' | 'staged' | 'commits';
 
 export interface DocumentPracticeState {
-  index: string;
   comparison: DocumentComparison;
+}
+
+export interface PixelStash {
+  base: FileTree;
+  index: FileTree;
+  working: FileTree;
 }
 
 export interface StageScenario {
@@ -221,13 +232,16 @@ export interface StageScenario {
 export interface PixelSimState {
   stageId: StageId;
   files: PixelFile[];
+  index: FileTree;
   document?: DocumentPracticeState;
   staged: string[];
   commits: PixelCommit[];
   branches: Record<string, string>; // branch -> commitId
   headBranch: string;
+  previousBranch?: string;
+  origHead?: string;
   remoteBranches: Record<string, string>;
-  stashes: PixelFile[][];
+  stashes: PixelStash[];
   stashCount: number;
   prs: PixelPr[];
   issues: PixelIssue[];

@@ -1,5 +1,6 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import { getNextPendingStep, STAGE_MAP } from '../engine';
+import { reachableCommits } from '../engine/repoVersions';
 import { usePixelStore } from '../store/usePixelStore';
 import type { BubbleAction, PixelSimState } from '../types/sim';
 import { SPEAKER_THEMES } from './palette';
@@ -24,6 +25,7 @@ export function PixelStageCanvas() {
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const queueDraw = useRef<(() => void) | null>(null);
 
   const simRef = useRef<PixelSimState>(sim);
   simRef.current = sim;
@@ -40,6 +42,7 @@ export function PixelStageCanvas() {
       const width = Math.max(1, Math.round(rect.width));
       const height = Math.max(1, Math.round(rect.height));
       stageSizeRef.current = { width, height };
+      queueDraw.current?.();
     };
 
     updateSize();
@@ -47,6 +50,10 @@ export function PixelStageCanvas() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  useEffect(() => {
+    queueDraw.current?.();
+  }, [sim]);
 
   // 60fps HiDPI Canvas Animation Loop
   useEffect(() => {
@@ -56,7 +63,8 @@ export function PixelStageCanvas() {
     if (!ctx) return;
 
     const particles = new PixelParticlePool();
-    const motion = createSceneMotion();
+    let motion = createSceneMotion();
+    const motionSetting = window.matchMedia('(prefers-reduced-motion: reduce)');
 
     let rafId = 0;
     let prevTs = performance.now();
@@ -66,9 +74,11 @@ export function PixelStageCanvas() {
     let lastStageId = simRef.current.stageId;
 
     const renderFrame = (now: number) => {
+      rafId = 0;
+      const reduced = motionSetting.matches;
       const dt = Math.min((now - prevTs) / 1000, 0.05);
       prevTs = now;
-      elapsed += dt;
+      elapsed = reduced ? 0 : elapsed + dt;
 
       const currentSim = simRef.current;
       const { width, height } = stageSizeRef.current;
@@ -94,7 +104,12 @@ export function PixelStageCanvas() {
       }
 
       // Trigger fresh animation curve + pixel particle bursts on every new command!
-      if (currentSim.lastAnim.seq !== lastSeq) {
+      if (reduced) {
+        particles.clear();
+        motion = createSceneMotion();
+        lastSeq = currentSim.lastAnim.seq;
+        animProgress = 1;
+      } else if (currentSim.lastAnim.seq !== lastSeq) {
         lastSeq = currentSim.lastAnim.seq;
         animProgress = 0;
 
@@ -143,15 +158,27 @@ export function PixelStageCanvas() {
 
       ctx.restore();
 
-      rafId = window.requestAnimationFrame(renderFrame);
+      if (!reduced) scheduleDraw();
     };
 
-    rafId = window.requestAnimationFrame(renderFrame);
-    return () => window.cancelAnimationFrame(rafId);
+    function scheduleDraw() {
+      if (!rafId) rafId = window.requestAnimationFrame(renderFrame);
+    }
+
+    queueDraw.current = scheduleDraw;
+    motionSetting.addEventListener('change', scheduleDraw);
+    scheduleDraw();
+    return () => {
+      queueDraw.current = null;
+      motionSetting.removeEventListener('change', scheduleDraw);
+      window.cancelAnimationFrame(rafId);
+    };
   }, []);
 
   const scenario = STAGE_MAP[stageId];
   const nextStep = getNextPendingStep(sim);
+  const head = sim.branches[sim.headBranch];
+  const visibleHistory = stageId === 'ch2' ? reachableCommits(sim, head) : null;
 
   return (
     <div className="relative flex flex-1 flex-col bg-[#F6EFE2]">
@@ -160,10 +187,11 @@ export function PixelStageCanvas() {
           ref={canvasRef}
           data-testid="pixel-stage-canvas"
           className="absolute inset-0 block h-full w-full"
-          aria-label={`${scenario.title} 픽셀 애니메이션`}
+          role="img"
+          aria-label={`${scenario.title} · ${sim.lastAnim.label}`}
         />
       </div>
-      <div className="order-1 px-3 pt-3 sm:pointer-events-none sm:absolute sm:inset-0 sm:z-10 sm:p-0" aria-live="polite">
+      <div className="order-1 px-3 pt-3 sm:px-6" aria-live="polite">
         {sim.bubbles.map((bubble) => {
           const theme = SPEAKER_THEMES[bubble.speaker];
           const actions = bubble.actions?.filter((action) =>
@@ -177,8 +205,8 @@ export function PixelStageCanvas() {
             <div
               key={bubble.id}
               data-testid="speech-bubble"
-              style={{ '--speaker-x': `${bubble.anchorX}%`, borderColor: theme.border } as CSSProperties}
-              className="scene-bubble pixel-bubble relative mx-auto w-full max-w-[365px] rounded-xl bg-[#FFFDF8] px-3.5 py-2.5 text-left sm:pointer-events-auto"
+              style={{ borderColor: theme.border } as CSSProperties}
+              className="scene-bubble pixel-bubble mx-auto max-w-[70ch] rounded-xl bg-[#FFFDF8] px-3.5 py-2.5 text-left"
             >
               {/* Speaker Pill + Title */}
               <div className="flex items-center gap-2 mb-1">
@@ -226,20 +254,21 @@ export function PixelStageCanvas() {
                 </div>
               )}
 
-              {/* Crisp Pixel Speech-Bubble Pointer Triangle */}
-              <div
-                aria-hidden="true"
-                className="absolute left-1/2 -bottom-[9px] -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[9px]"
-                style={{ borderTopColor: theme.border }}
-              />
-              <div
-                aria-hidden="true"
-                className="absolute left-1/2 -bottom-[6px] -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[7px] border-t-[#FFFDF8]"
-              />
             </div>
           );
         })}
       </div>
+      {visibleHistory && (
+        <ol aria-label="현재 브랜치의 최근 커밋" className="order-3 mx-auto flex w-full max-w-5xl flex-wrap gap-2 px-3 pb-4 text-sm">
+          {sim.commits.filter((commit) => visibleHistory.has(commit.id)).slice(-4).reverse().map((commit) => (
+            <li key={commit.id} className="max-w-full rounded-md border border-[#D8C9B0] bg-[#FFFDF8] px-2.5 py-1.5 [overflow-wrap:anywhere]">
+              {commit.id === head && <strong className="mr-2 text-[#79521D]">HEAD · {sim.headBranch}</strong>}
+              <code className="mr-2 text-xs text-[#14694F]">{commit.hash}</code>
+              {commit.message}
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   );
 }

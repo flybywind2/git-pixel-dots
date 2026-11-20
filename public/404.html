@@ -2,16 +2,22 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GitDots</title>
     <script>
       (function () {
-        var hash = window.location.hash || '#/ch1';
-        var base = window.location.pathname.replace(/[^/]*$/, '');
-        window.location.replace(base + hash);
+        var base = '/git-pixel-dots/';
+        if (window.location.pathname === base) return;
+        var path = window.location.pathname.indexOf(base) === 0
+          ? window.location.pathname.slice(base.length) : '';
+        var lesson = /^(chapter\/[1-9]|docs|ch[1-8])(?:\/|$)/.exec(path);
+        var hash = window.location.hash || (lesson ? '#/' + lesson[1] : '#/chapter/1');
+        window.location.replace(base + window.location.search + hash);
       })();
     </script>
   </head>
-  <body style="background:#F6EFE2;color:#2F241D;font-family:sans-serif;">
-    <p>Redirecting to GitDots...</p>
+  <body style="background:#F6EFE2;color:#2F241D;font-family:system-ui;padding:1rem;">
+    <p>GitDots 실습 주소로 이동하고 있어요.</p>
+    <p><a href="/git-pixel-dots/#/chapter/1">첫 장 직접 열기</a></p>
   </body>
 </html>

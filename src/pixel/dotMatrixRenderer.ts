@@ -210,14 +210,16 @@ export function drawZonePad(
   // Korean pixel label underneath
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.font = `700 12px ${PIXEL_FONT}`;
+  const sceneScale = ctx.getTransform().a / Math.min(globalThis.devicePixelRatio || 1, 2);
+  const labelSize = Math.max(12, 12 / sceneScale);
+  ctx.font = `700 ${labelSize}px ${PIXEL_FONT}`;
   ctx.fillStyle = PALETTE.textPrimary;
-  ctx.fillText(label, cx, y + padH + 9);
+  ctx.fillText(label, cx, y + padH + 9, width + 4);
 
   if (sublabel) {
-    ctx.font = `600 10.5px ${PIXEL_FONT}`;
+    ctx.font = `600 ${Math.max(10.5, 11 / sceneScale)}px ${PIXEL_FONT}`;
     ctx.fillStyle = highlighted ? accentColor : PALETTE.textSecondary;
-    ctx.fillText(sublabel, cx, y + padH + 25);
+    ctx.fillText(sublabel, cx, y + padH + 13 + labelSize, width + 4);
   }
 
   ctx.restore();

@@ -1,25 +1,32 @@
-import { ArrowRight, Pencil, Play } from 'lucide-react';
+import { ArrowRight, Pencil, Play, Save } from 'lucide-react';
 import { getNextPendingStep, isPracticeCommand, isStepCompleted, STAGE_MAP, STAGE_SCENARIOS } from '../engine';
 import { usePixelStore } from '../store/usePixelStore';
 
 export function LessonGuide() {
-  const sim = usePixelStore((s) => s.sim);
-  const runCommand = usePixelStore((s) => s.runCommand);
-  const setStage = usePixelStore((s) => s.setStage);
+  const sim = usePixelStore((state) => state.sim);
+  const draft = usePixelStore((state) => state.documentDraft);
+  const saveDocument = usePixelStore((state) => state.saveDocument);
+  const runCommand = usePixelStore((state) => state.runCommand);
+  const setStage = usePixelStore((state) => state.setStage);
   const lesson = STAGE_MAP[sim.stageId];
   const nextStep = getNextPendingStep(sim);
   const nextLesson = STAGE_SCENARIOS[lesson.number];
   const doneCount = lesson.steps.filter((step) => isStepCompleted(sim, step)).length;
   const editDocument = lesson.id === 'docs' && nextStep?.doneAction === 'EDIT';
+  const saveDraft = draft !== null;
+  const ButtonIcon = saveDraft ? Save : editDocument ? Pencil : Play;
+  const label = saveDraft ? '문서 저장' : editDocument ? '문서 편집하기' : nextStep?.label ?? nextStep?.goal;
 
-  function runGuidedStep(command: string) {
-    if (editDocument) {
+  function runGuidedStep() {
+    if (saveDraft) {
+      saveDocument();
+    } else if (editDocument) {
       document.getElementById('practice-document-editor')?.focus();
-      return;
-    }
-    runCommand(command);
-    if (lesson.id === 'docs' && command.startsWith('git diff ')) {
-      document.getElementById('document-comparison')?.focus();
+    } else if (nextStep) {
+      runCommand(nextStep.command);
+      if (lesson.id === 'docs' && nextStep.command.startsWith('git diff ') && !usePixelStore.getState().notice) {
+        document.getElementById('document-comparison')?.focus();
+      }
     }
   }
 
@@ -27,13 +34,14 @@ export function LessonGuide() {
     <section aria-labelledby="lesson-title" className="shrink-0 border-b border-[#D7C7AE] bg-[#FFFDF8]">
       <div className="mx-auto grid max-w-[1440px] gap-3 px-4 py-3.5 sm:px-6 lg:grid-cols-[1.35fr_1fr] lg:items-center lg:gap-8 lg:py-5">
         <div>
-          <p className="mb-1 text-xs font-semibold text-[#80613B]">Git · GitHub 연습장 · {lesson.number}장 / {STAGE_SCENARIOS.length}장</p>
-          <h1 id="lesson-title" className="break-keep text-xl font-bold leading-tight tracking-tight sm:text-2xl">
-            {lesson.title}
-          </h1>
+          <p className="mb-1 text-xs font-semibold text-[#80613B]">{lesson.number}장 / {STAGE_SCENARIOS.length}장</p>
+          <h1 id="lesson-title" className="break-keep text-xl font-bold leading-tight tracking-tight sm:text-2xl">{lesson.title}</h1>
           <p className="mt-1.5 max-w-[68ch] break-keep text-sm leading-relaxed text-[#59483B]">
             {nextStep ? lesson.tagline : lesson.takeaway}
           </p>
+          {lesson.id === 'docs' && (
+            <p className="mt-1.5 text-xs text-[#715A43]">이 브라우저 안의 연습 저장소에서 진행해요.</p>
+          )}
         </div>
         <div className="min-w-0 border-l-[3px] border-[#D69724] pl-3.5">
           <div className="flex items-center gap-2 text-xs font-medium text-[#715A43]" aria-live="polite">
@@ -44,40 +52,43 @@ export function LessonGuide() {
             </span>
             <span data-testid="stage-step-badge">실습 {doneCount}/{lesson.steps.length} 완료</span>
           </div>
-          {nextStep ? (
+          {label ? (
             <>
-              <p className="my-1.5 break-keep text-sm font-semibold">{nextStep.goal}</p>
+              {nextStep?.label && !saveDraft && <p className="mt-1.5 break-keep text-sm">{nextStep.goal}</p>}
               <button
                 type="button"
                 data-testid="guided-command"
-                onClick={() => runGuidedStep(nextStep.command)}
-                className="pixel-btn inline-flex max-w-full items-center gap-2 rounded-md border-[#C78B1E] bg-[#F4B942] px-3 py-1.5 text-left text-xs text-[#362711] hover:bg-[#F7C55D]"
+                onClick={runGuidedStep}
+                className="pixel-btn mt-2 inline-flex max-w-full items-center gap-2 rounded-md border-[#C78B1E] bg-[#F4B942] px-3 py-1.5 text-left text-sm font-bold text-[#362711] hover:bg-[#F7C55D]"
               >
-                {editDocument ? (
-                  <>
-                    <Pencil aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-                    <span className="font-semibold">문서 편집하기</span>
-                  </>
-                ) : (
-                  <>
-                    <Play aria-hidden="true" className="h-3.5 w-3.5 shrink-0 fill-current" />
-                    <code className="font-mono-code break-all font-semibold">{nextStep.command}</code>
-                    <span className="shrink-0 border-l border-[#C89436] pl-2 font-semibold">실행</span>
-                  </>
-                )}
+                <ButtonIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
+                <span className="break-keep">{label}</span>
               </button>
-              {!editDocument && isPracticeCommand(nextStep.command) && <span className="ml-2 inline-block text-xs text-[#715A43]">실습 전용</span>}
+              {nextStep && !editDocument && !saveDraft && (
+                <p className="mt-2 text-xs text-[#715A43]">
+                  <code className="font-mono-code break-words">{nextStep.command}</code>
+                  {isPracticeCommand(nextStep.command) && <span className="ml-2">실습 전용</span>}
+                </p>
+              )}
             </>
           ) : (
-            <button
-              type="button"
-              data-testid={nextLesson ? 'next-chapter-btn' : 'all-chapters-done-btn'}
-              onClick={() => setStage(nextLesson?.id ?? 'ch1')}
-              className="pixel-btn mt-2 inline-flex items-center gap-2 rounded-md border-[#116349] bg-[#197957] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#14694F]"
-            >
-              {nextLesson ? `다음 장 · ${nextLesson.shortTitle}` : '1장으로 돌아가기'}
-              <ArrowRight aria-hidden="true" className="h-4 w-4" />
-            </button>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                data-testid={nextLesson ? 'next-chapter-btn' : 'all-chapters-done-btn'}
+                onClick={() => setStage(nextLesson?.id ?? 'docs')}
+                className="pixel-btn inline-flex items-center gap-2 rounded-md border-[#116349] bg-[#197957] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#14694F]"
+              >
+                {nextLesson ? `다음 장 · ${nextLesson.shortTitle}` : '1장으로 돌아가기'}
+                <ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0" />
+              </button>
+              {lesson.id === 'docs' && !sim.completedActions.includes('REVERT') && (
+                <button type="button" onClick={() => runCommand('git revert HEAD')}
+                  className="rounded-md border border-[#CDBCA3] px-3 py-1.5 text-sm font-semibold">
+                  마지막 변경 취소해 보기
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

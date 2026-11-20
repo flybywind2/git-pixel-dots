@@ -1,10 +1,17 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Galmuri11";
+  src: url("./assets/fonts/Galmuri11.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
 @layer base {
   :root {
-    --font-pixel: "Galmuri11", "Galmuri9", "Pretendard Variable", system-ui, sans-serif;
-    --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Noto Sans KR", system-ui, sans-serif;
-    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-pixel: "Galmuri11", system-ui, sans-serif;
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans KR", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 
   html,
@@ -57,15 +64,6 @@
   background-size: 16px 16px;
 }
 
-@media (min-width: 40rem) {
-  .scene-bubble {
-    position: absolute;
-    top: clamp(0.75rem, 8%, 3rem);
-    left: clamp(12.25rem, var(--speaker-x), calc(100% - 12.25rem));
-    transform: translateX(-50%);
-  }
-}
-
 @media (prefers-reduced-motion: no-preference) {
   .scene-bubble {
     animation: show-bubble 160ms ease-out;
@@ -73,6 +71,16 @@
   @keyframes show-bubble {
     from { opacity: 0; }
     to { opacity: 1; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pixel-btn {
+    transition: none;
+  }
+
+  .pixel-btn:is(:hover, :active) {
+    transform: none;
   }
 }
 

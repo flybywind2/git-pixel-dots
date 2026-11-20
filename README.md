@@ -1,45 +1,42 @@
 # GitDots
 
-수정한 파일은 언제 GitHub에 올라갈까요? GitDots는 버튼을 누르거나 명령어를 입력하면서 픽셀 그림으로 결과를 확인하는 한국어 Git·GitHub 연습장이에요. 실습은 브라우저 속 예제 저장소에서 진행돼요. 설치나 GitHub 로그인 없이 시작할 수 있어요.
+회의록을 고치다 보면 어느 줄이 바뀌었는지 찾거나, 실수로 바꾼 내용을 돌려놓아야 할 때가 있어요. GitDots에서 스터디 회의록을 직접 고치고, 바뀐 줄을 비교한 뒤 새 기록으로 남겨 보세요. 이 브라우저 안의 예제 저장소에서 실습해요.
 
-**[첫 커밋 실습 시작하기](https://flybywind2.github.io/git-pixel-dots/#/ch1)**
+**[1장 회의록 실습 시작하기](https://flybywind2.github.io/git-pixel-dots/#/chapter/1)**
 
-## 첫 커밋 만들어 보기
+## 회의록 고치고 비교하기
 
-1장에는 이미 고친 `app.js`와 새로 만든 `style.css`가 준비되어 있어요. 화면 위쪽의 **실행** 버튼을 차례로 누르고, 단계마다 바구니와 두 저장소가 어떻게 달라지는지 살펴보세요.
+1. `회의록.md`에서 스터디 시간이나 장소를 바꾼 뒤 **문서 저장**을 누르세요.
+2. **바뀐 줄 확인하기**를 눌러 빠진 줄(−)과 들어간 줄(+)을 찾아보세요.
+3. **다음 기록에 담기**로 변경을 고른 뒤 **기록 남기기**를 누르면 새 커밋이 생겨요. 마지막 변경을 취소해 보면 파일이 예전 내용으로 돌아오는 것도 확인할 수 있어요.
 
-| 실행할 명령 | 확인할 변화 |
+| 비교 기준 | 확인할 수 있는 내용 |
 | --- | --- |
-| `git add .` | 두 파일의 변경이 바구니에 담겨요. 이 바구니가 다음 커밋에 넣을 내용을 고르는 **스테이징 영역**이에요. |
-| `git commit -m "첫 세이브"` | 내 컴퓨터를 나타내는 **로컬 저장소**에 커밋이 하나 늘어요. 따옴표 안의 글은 변경에 붙이는 메시지예요. |
-| `git push` | GitHub를 나타내는 **원격 저장소**가 방금 만든 커밋을 가리켜요. 이제 팀원도 그 변경을 받아 갈 수 있어요. |
+| 작업 중 · `git diff -- 회의록.md` | 지금 저장한 문서에서 스테이징 영역과 다른 줄 |
+| 스테이징 · `git diff --staged -- 회의록.md` | 최근 커밋 이후 다음 기록에 담아 둔 변경 |
+| 커밋 이력 · `git diff HEAD~1 HEAD -- 회의록.md` | 바로 이전 커밋과 최근 커밋 사이에 바뀐 줄 |
 
-직접 입력하려면 아래 터미널에 명령을 쓰고 Enter를 누르세요. **명령어 사전**에는 지금 배우는 용어와 실행할 수 있는 예제가 있어요. `resolve both`, `token fine`, `ai code`처럼 **실습 전용**으로 표시된 동작은 GitDots에서 상황을 재현하는 버튼이에요.
+화면 아래 **직접 입력해 보기**를 누르면 실습 터미널이 열려요. 명령을 입력하고 Tab을 눌러 후보를 순환하거나, **명령어 사전**에서 다른 장의 예제까지 검색할 수 있어요.
 
-## 문서 편집과 비교
+편집한 내용과 장별 진행 상태는 이 브라우저에 저장돼요. 다른 장을 방문했다 돌아오거나 새로고침해도 이어서 할 수 있어요. 처음부터 다시 하려면 **현재 장 초기화**를 눌러 확인하세요.
 
-예제 `README.md`에서 스터디 시간이나 장소를 고치고 **문서 저장**을 누르세요. **변경 비교**의 `−`는 빠진 줄, `+`는 들어간 줄이에요. 직접 내용을 고치거나 **예시 수정 넣기**로 시작할 수 있어요. [문서 실습 시작하기](https://flybywind2.github.io/git-pixel-dots/#/docs)
-
-| 비교 기준 | 무엇을 확인할 수 있나요? |
-| --- | --- |
-| 작업 중 · `git diff -- README.md` | 스테이징 영역을 기준으로, 저장한 작업 문서에서 더 바뀐 줄을 봐요. |
-| 스테이징 · `git diff --staged -- README.md` | `git add README.md`로 다음 커밋에 담은 줄을 최근 커밋과 비교해요. |
-| 커밋 이력 · `git diff HEAD~1 HEAD -- README.md` | 문서를 커밋한 뒤, 그 커밋과 바로 앞 커밋 사이에서 바뀐 줄을 봐요. |
-
-## 배우고 싶은 장으로 이동하기
-
-각 장은 준비된 예제로 시작해요. 처음 방문했다면 1~5장에서 첫 커밋부터 문서 비교와 팀 협업까지 이어서 연습할 수 있어요.
+## 배우고 싶은 장 열기
 
 | 장 | 해 볼 일 |
 | --- | --- |
-| [1. 첫 커밋](https://flybywind2.github.io/git-pixel-dots/#/ch1) | 변경을 고르고, 커밋하고, GitHub에 올려요. |
-| [2. 문서 편집과 비교](https://flybywind2.github.io/git-pixel-dots/#/docs) | README.md를 고쳐서 작업 문서, 스테이징 영역, 커밋의 변경을 비교해요. |
-| [3. 보관과 취소](https://flybywind2.github.io/git-pixel-dots/#/ch2) | 하던 작업을 잠시 보관하고 실수로 넣은 변경을 되돌려요. |
-| [4. 브랜치와 충돌](https://flybywind2.github.io/git-pixel-dots/#/ch3) | 두 브랜치가 같은 줄을 고쳤을 때 병합할 내용을 골라요. |
-| [5. GitHub 협업](https://flybywind2.github.io/git-pixel-dots/#/ch4) | 팀에 변경을 제안하는 풀 리퀘스트(PR)를 열고 합쳐요. |
-| [6. GitHub CLI](https://flybywind2.github.io/git-pixel-dots/#/ch5) | 터미널에서 PR과 이슈를 만들고 저장소 정보를 조회해요. |
-| [7. 인증과 권한](https://flybywind2.github.io/git-pixel-dots/#/ch6) | 예제 토큰 두 개의 권한을 비교하고 SSH 키의 역할을 살펴봐요. |
-| [8. 사내 GitHub](https://flybywind2.github.io/git-pixel-dots/#/ch7) | 회사가 운영하는 서버에 로그인하고 사내 실행기로 빌드해요. |
-| [9. AI와 협업](https://flybywind2.github.io/git-pixel-dots/#/ch8) | AI가 별도 작업 폴더에서 고친 버그를 사람이 확인하고 합쳐요. |
+| [1. 문서 편집과 비교](https://flybywind2.github.io/git-pixel-dots/#/chapter/1) | 회의록을 고치고 기록에 담긴 줄을 비교해요. |
+| [2. 변경 기록과 공유](https://flybywind2.github.io/git-pixel-dots/#/chapter/2) | 변경을 골라 새 커밋을 만들고 GitHub에 올려요. |
+| [3. 보관과 취소](https://flybywind2.github.io/git-pixel-dots/#/chapter/3) | 하던 작업을 임시 보관하고, 실수로 넣은 변경을 취소해요. |
+| [4. 브랜치와 충돌](https://flybywind2.github.io/git-pixel-dots/#/chapter/4) | 두 브랜치가 같은 줄을 고쳤을 때 합칠 내용을 골라요. |
+| [5. GitHub 협업](https://flybywind2.github.io/git-pixel-dots/#/chapter/5) | 풀 리퀘스트(PR)를 열어 팀에 변경을 제안하고 합쳐요. |
+| [6. GitHub CLI](https://flybywind2.github.io/git-pixel-dots/#/chapter/6) | 터미널에서 PR과 이슈를 만들고 저장소를 조회해요. |
+| [7. 인증과 권한](https://flybywind2.github.io/git-pixel-dots/#/chapter/7) | 예제 토큰의 권한을 비교하고 SSH 키의 역할을 살펴봐요. |
+| [8. 사내 GitHub](https://flybywind2.github.io/git-pixel-dots/#/chapter/8) | 회사가 운영하는 서버에 로그인하고 사내 실행기로 빌드해요. |
+| [9. AI와 협업](https://flybywind2.github.io/git-pixel-dots/#/chapter/9) | AI가 별도 작업 폴더에서 고친 버그를 사람이 확인하고 합쳐요. |
 
-현재 장을 다시 연습하려면 상단의 **초기화**를 누르세요. 다른 장으로 이동했다 돌아오거나 페이지를 새로 고치면 해당 장의 예제가 처음 상태로 열려요.
+## GitHub 웹에서 이어 하기
+
+- 파일을 열고 연필 버튼으로 수정한 뒤 **Commit changes**에서 변경 메시지를 남길 수 있어요. 다른 브랜치나 포크로 변경을 제안할 때는 **Propose changes**가 표시될 수 있어요. [GitHub 파일 편집 안내](https://docs.github.com/en/repositories/working-with-files/managing-files/editing-files)
+- 새 브랜치의 변경을 제안하려면 **Compare & pull request**에서 대상 브랜치를 확인하고 **Create pull request**를 누르세요. [GitHub 풀 리퀘스트 안내](https://docs.github.com/en/pull-requests/how-tos/create-pull-requests/creating-a-pull-request)
+
+픽셀 글꼴은 Galmuri11 2.40.3을 사용해요. [Galmuri 라이선스](public/licenses/Galmuri-OFL.txt)

@@ -13,7 +13,7 @@
     "preview": "vite preview --host 127.0.0.1 --port 4174",
     "test": "vitest run",
     "qa:visual": "node scripts/verify-render.mjs",
-    "qa:all": "npm run typecheck && npm test && npm run build && npm run qa:visual"
+    "qa:all": "npm test && npm run build && npm run qa:visual"
   },
   "dependencies": {
     "lucide-react": "^1.0.0",

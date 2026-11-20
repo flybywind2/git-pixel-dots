@@ -10,7 +10,7 @@ import {
   isStepCompleted,
   savePracticeDocument,
 } from './index';
-import { diffDocumentLines, DOCUMENT_COMPARISONS, getDocumentComparison, ORIGINAL_DOCUMENT } from './documentDiff';
+import { diffDocumentLines, DOCUMENT_COMPARISONS, DOCUMENT_PATH, getDocumentComparison, ORIGINAL_DOCUMENT } from './documentDiff';
 
 function deepFreeze<T>(obj: T): T {
   if (obj && typeof obj === 'object' && !Object.isFrozen(obj)) {
@@ -132,7 +132,7 @@ describe('Full stage walkthroughs', () => {
     expect(s.lastAnim.kind).toBe('PUSH');
     expect(s.remoteBranches.main).toBe(s.branches.main);
     expect(s.completedActions).toEqual(expect.arrayContaining(['ADD', 'COMMIT', 'PUSH']));
-    expect(s.bubbles[0]?.title).toContain('1장 실습 완료');
+    expect(s.bubbles[0]?.title).toContain('2장 실습 완료');
   });
 
   it('Ch2: git log, diff, stash, stash pop, reset --soft, revert HEAD', () => {
@@ -237,9 +237,9 @@ describe('Full stage walkthroughs', () => {
     expect(s.commits[s.commits.length - 1]?.parents.length).toBe(2);
     expect(s.bubbles[0]?.title).toContain('4장 실습 완료');
 
-    // Rebase works cleanly too
+    const before = s.branches['feat/dark'];
     s = deepFreeze(executePixelCommand(s, 'git rebase main'));
-    expect(s.lastAnim.kind).toBe('REBASE');
+    expect(s.branches['feat/dark']).toBe(before);
   });
 
   it('Ch3: supports resolve ours, resolve theirs, and git checkout -b alias', () => {
@@ -259,7 +259,7 @@ describe('Full stage walkthroughs', () => {
   it('Ch4: fetch, pull, push, gh pr create, gh pr merge', () => {
     let s = runSequence('ch4', [
       'git fetch',
-      'git pull',
+      'git pull origin main',
       'git push',
       'gh pr create --title "새 기능"',
       'gh pr merge',
@@ -398,7 +398,8 @@ describe('Full stage walkthroughs', () => {
     s = deepFreeze(executePixelCommand(s, 'ai code'));
     expect(s.lastAnim.kind).toBe('AI_CODE');
     expect(s.ai.codeWritten).toBe(true);
-    expect(s.files.find((f) => f.name === 'buggy.ts')?.content).toContain('a + b');
+    expect(s.files.find((f) => f.name === 'buggy.ts')?.content).toContain('a - b');
+    expect(s.commits.at(-1)?.tree['buggy.ts']).toContain('a + b');
     expect(s.branches.main).toBe(initialMainCommit);
 
     s = deepFreeze(executePixelCommand(s, 'ai push-main'));
@@ -420,12 +421,22 @@ describe('Full stage walkthroughs', () => {
     expect(s.ai.humanApproved).toBe(true);
     expect(s.ai.merged).toBe(true);
     expect(s.prs[0]?.status).toBe('merged');
-    expect(s.branches.main).not.toBe(initialMainCommit);
+    expect(s.branches.main).toBe(initialMainCommit);
+    expect(s.remoteBranches.main).not.toBe(initialMainCommit);
+    expect(s.commits.at(-1)?.tree['buggy.ts']).toContain('a + b');
     expect(s.bubbles[0]?.title).toContain('9장 실습 완료');
   });
 });
 
 describe('Document editing and comparison', () => {
+  it('only credits a comparison when it is the next document task', () => {
+    let state = executePixelCommand(createStageState('docs'), 'edit 회의록.md');
+    state = executePixelCommand(state, DOCUMENT_COMPARISONS.staged.command);
+    expect(state.document?.comparison).toBe('staged');
+    expect(state.completedActions).not.toContain('DOCUMENT_STAGED_DIFF');
+    expect(getNextPendingStep(state)?.id).toBe('docs-diff');
+  });
+
   it('commits the staged document and preserves a later working edit', () => {
     const firstEdit = ORIGINAL_DOCUMENT.replace('금요일 저녁 7시', '수요일 오후 2시');
     const laterEdit = firstEdit.replace('1층 회의실', '도서관');
@@ -434,25 +445,25 @@ describe('Document editing and comparison', () => {
     expect(state.completedActions).not.toContain('DOCUMENT_COMMIT_DIFF');
 
     state = deepFreeze(savePracticeDocument(state, firstEdit));
-    state = deepFreeze(executePixelCommand(state, 'git diff README.md'));
+    state = deepFreeze(executePixelCommand(state, 'git diff 회의록.md'));
     const workingLines = state.terminal.at(-1)?.lines.map(({ text }) => text);
     expect(workingLines).toContain('-다음 모임은 금요일 저녁 7시예요.');
     expect(workingLines).toContain('+다음 모임은 수요일 오후 2시예요.');
 
-    state = deepFreeze(executePixelCommand(state, 'git add -- ./README.md'));
+    state = deepFreeze(executePixelCommand(state, 'git add -- ./회의록.md'));
     expect(getDocumentComparison(state, 'working')).toEqual({ before: firstEdit, after: firstEdit });
     state = deepFreeze(savePracticeDocument(state, laterEdit));
     expect(getDocumentComparison(state, 'staged')).toEqual({ before: ORIGINAL_DOCUMENT, after: firstEdit });
     expect(getDocumentComparison(state, 'working')).toEqual({ before: firstEdit, after: laterEdit });
     state = deepFreeze(executePixelCommand(state, 'git status'));
     const status = state.terminal.at(-1)?.lines.map(({ text }) => text).join('\n');
-    expect(status).toContain('Staged): README.md');
-    expect(status).toContain('Modified): README.md');
+    expect(status).toContain('Staged): 회의록.md');
+    expect(status).toContain('Modified): 회의록.md');
 
-    state = deepFreeze(executePixelCommand(state, 'git diff --cached -- README.md'));
+    state = deepFreeze(executePixelCommand(state, 'git diff --cached -- 회의록.md'));
     expect(state.document?.comparison).toBe('staged');
     state = deepFreeze(executePixelCommand(state, 'git commit -m "안내 수정 -a 아님"'));
-    expect(state.commits.at(-1)?.documentContent).toBe(firstEdit);
+    expect(state.commits.at(-1)?.tree[DOCUMENT_PATH]).toBe(firstEdit);
     expect(state.files[0]).toMatchObject({ content: laterEdit, status: 'modified' });
     expect(state.staged).toEqual([]);
     expect(getDocumentComparison(state, 'staged')).toEqual({ before: firstEdit, after: firstEdit });
@@ -466,11 +477,11 @@ describe('Document editing and comparison', () => {
 
   it('stages an empty document and clears staging when the original is added again', () => {
     let state = savePracticeDocument(createStageState('docs'), '');
-    state = executePixelCommand(state, 'git add README.md');
-    expect(state.document?.index).toBe('');
-    expect(state.staged).toEqual(['README.md']);
+    state = executePixelCommand(state, 'git add 회의록.md');
+    expect(state.index[DOCUMENT_PATH]).toBe('');
+    expect(state.staged).toEqual([DOCUMENT_PATH]);
     state = savePracticeDocument(state, ORIGINAL_DOCUMENT);
-    state = executePixelCommand(state, 'git add README.md');
+    state = executePixelCommand(state, 'git add 회의록.md');
     expect(state.staged).toEqual([]);
     expect(state.files[0]?.status).toBe('committed');
     state = executePixelCommand(state, 'git commit -m "변경 없음"');
@@ -490,6 +501,79 @@ describe('Document editing and comparison', () => {
     expect(diffDocumentLines('줄\n', '')).toMatchObject([{ kind: 'removed', text: '줄' }]);
     expect(diffDocumentLines('줄\n', '줄').map(({ kind }) => kind)).toEqual(['removed', 'added']);
     expect(diffDocumentLines('줄\n', '줄\n')).toEqual([]);
+  });
+});
+
+describe('Git file snapshots', () => {
+  it('reverts a selected old commit while preserving later edits in the same file', () => {
+    const first = ORIGINAL_DOCUMENT.replace('금요일 저녁 7시', '토요일 오전 10시');
+    const second = first.replace('1층 회의실', '도서관');
+    let state = savePracticeDocument(createStageState('docs'), first);
+    state = executePixelCommand(state, 'git add 회의록.md');
+    state = executePixelCommand(state, "git commit -m '시간 수정'");
+    const firstCommit = state.commits.at(-1);
+    state = savePracticeDocument(state, second);
+    state = executePixelCommand(state, 'git add 회의록.md');
+    state = executePixelCommand(state, "git commit -m '장소 수정'");
+    const secondCommit = state.commits.at(-1);
+    state = deepFreeze(executePixelCommand(state, `git revert --no-edit ${firstCommit?.hash}`));
+    const expected = ORIGINAL_DOCUMENT.replace('1층 회의실', '도서관');
+    expect(state.files[0]?.content).toBe(expected);
+    expect(state.index[DOCUMENT_PATH]).toBe(expected);
+    expect(state.commits.at(-1)?.tree[DOCUMENT_PATH]).toBe(expected);
+    expect(state.commits.at(-1)?.parents).toEqual([secondCommit?.id]);
+    expect(state.staged).toEqual([]);
+  });
+
+  it('reverts tracked additions and leaves unrelated working edits intact', () => {
+    const before = createStageState('ch2');
+    const state = executePixelCommand(before, 'git revert 7e8f9a0');
+    expect(state.files.some((file) => file.name === 'test-mode.js')).toBe(false);
+    expect(state.files.find((file) => file.name === 'app.js')).toEqual(before.files[0]);
+    expect(state.index).toEqual(before.commits[1]?.tree);
+  });
+
+  it('hard resets to the requested ref, restores the index and keeps unrelated untracked files', () => {
+    let state = runSequence('ch2', [
+      "git branch original",
+      "edit 'draft file.md'",
+      'edit app.js',
+      'git add app.js',
+    ]);
+    const rejected = executePixelCommand(state, 'git reset --hard unknown');
+    expect(rejected.files).toBe(state.files);
+    expect(rejected.index).toBe(state.index);
+    state = executePixelCommand(state, 'git reset --hard HEAD~2');
+    expect(state.branches.main).toBe('c1');
+    expect(state.index).toEqual(state.commits[0]?.tree);
+    expect(state.files.find((file) => file.name === 'app.js')?.content).toBe('// 프로젝트 시작');
+    expect(state.files.find((file) => file.name === 'draft file.md')?.status).toBe('untracked');
+    expect(state.files.some((file) => file.name === 'test-mode.js')).toBe(false);
+    expect(state.staged).toEqual([]);
+
+    state = executePixelCommand(state, 'git reset --hard original');
+    expect(state.branches.main).toBe('c3');
+    expect(state.files.find((file) => file.name === 'test-mode.js')?.content).toBe('export const testMode = true;');
+  });
+
+  it('switches tracked versions, preserves independent edits and refuses to overwrite local work', () => {
+    const initial = createStageState('ch3');
+    let state = executePixelCommand(initial, 'edit app.js');
+    state = executePixelCommand(state, 'git add app.js');
+    const stagedApp = state.index['app.js'];
+    state = executePixelCommand(state, 'git switch feature/ui');
+    expect(state.headBranch).toBe('feature/ui');
+    expect(state.files.find((file) => file.name === 'theme.js')?.content).toContain('sunset-coral');
+    expect(state.index['app.js']).toBe(stagedApp);
+    expect(state.staged).toEqual(['app.js']);
+    state = executePixelCommand(state, 'edit theme.js');
+    const blocked = executePixelCommand(state, 'git switch main');
+    expect(blocked.headBranch).toBe('feature/ui');
+    expect(blocked.files).toBe(state.files);
+    expect(blocked.index).toBe(state.index);
+    state = executePixelCommand(state, 'git reset --hard HEAD');
+    state = executePixelCommand(state, 'git checkout main');
+    expect(state.files.find((file) => file.name === 'theme.js')?.content).toContain('dark-midnight');
   });
 });
 

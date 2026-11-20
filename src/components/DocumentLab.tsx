@@ -11,6 +11,7 @@ import {
 } from '../engine/documentDiff';
 import { usePixelStore } from '../store/usePixelStore';
 import type { DocumentComparison } from '../types/sim';
+import { treeEntry } from '../engine/repoVersions';
 
 const COMPARISON_MODES: DocumentComparison[] = ['working', 'staged', 'commits'];
 const DIFF_STYLES = {
@@ -42,7 +43,7 @@ export function DocumentLab() {
 
   const staged = sim.staged.includes(DOCUMENT_PATH);
   let fileStatus = staged ? '다음 커밋에 담김' : '최근 커밋과 같음';
-  if (working !== sim.document?.index) {
+  if (working !== treeEntry(sim.index, DOCUMENT_PATH)) {
     fileStatus = staged ? '스테이징한 뒤 추가로 수정됨' : '작업 문서에 저장됨';
   }
   if (unsaved) fileStatus = '저장할 수정이 있어요';
@@ -114,7 +115,7 @@ export function DocumentLab() {
             </div>
           </header>
           <div className="border-b border-[#E9DFCE] px-4 py-3">
-            <p className="text-sm font-semibold">{view.before} <span aria-hidden="true">→</span><span className="sr-only">에서 </span> {view.after}</p>
+            <p className="text-sm font-semibold">{view.before} 기준으로 {view.after} 비교</p>
             <code className="font-mono-code break-words text-xs text-[#705638]">{view.command}</code>
           </div>
           <div role="status" className="px-4 py-2.5 text-sm text-[#59483B]">
@@ -125,7 +126,7 @@ export function DocumentLab() {
                 : <><span className="font-semibold text-[#8C2630]">− 빠진 줄 {removals}개</span><span className="mx-2" aria-hidden="true">·</span><span className="font-semibold text-[#155C40]">+ 들어간 줄 {additions}개</span></>}
           </div>
           {lines.length > 0 && (
-            <ul tabIndex={0} aria-label="README.md 변경 내용" className="font-mono-code max-h-72 overflow-auto rounded-b-xl border-t border-[#E9DFCE] text-xs leading-6 sm:text-sm">
+            <ul tabIndex={0} aria-label={`${DOCUMENT_PATH} 변경 내용`} className="font-mono-code max-h-72 overflow-auto rounded-b-xl border-t border-[#E9DFCE] text-xs leading-6 sm:text-sm">
               {lines.map((line) => {
                 const style = DIFF_STYLES[line.kind];
                 return (

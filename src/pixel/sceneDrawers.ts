@@ -439,26 +439,8 @@ function drawCh2Scene(
     ctx.fillStyle = c.ghost ? PALETTE.slateMuted : PALETTE.textPrimary;
     ctx.fillText(c.hash.slice(0, 6), gx, gy + dot * 7);
 
-    ctx.font = `600 9.5px ${PIXEL_FONT}`;
-    ctx.fillStyle = c.ghost ? PALETTE.slateMuted : c.isRevert ? PALETTE.mintDark : PALETTE.textSecondary;
-    const shortMsg = c.ghost ? '(reset됨)' : c.message.length > 9 ? `${c.message.slice(0, 8)}…` : c.message;
-    ctx.fillText(shortMsg, gx, gy + dot * 10.6);
-
     ctx.restore();
   });
-
-  // Bouncing HEAD flag above active commit
-  const flagBob = Math.sin(time * 5.5) * 3;
-  drawPixelBadge(
-    ctx,
-    headX,
-    railY - dot * 10.5 + flagBob,
-    `HEAD · ${sim.headBranch}`,
-    PALETTE.butter,
-    PALETTE.ink,
-    PALETTE.cream,
-    10.5,
-  );
 
   // Cozy pixel Stash drawer on bottom-left
   const stashX = w * 0.2;
@@ -499,7 +481,7 @@ function drawCh2Scene(
 
   // Buddy stands near Stash during stash ops, otherwise alongside HEAD
   const targetNormX = stashActive ? 0.32 : clamp((headX - dot * 11) / w, 0.14, 0.86);
-  const targetNormY = stashActive ? 0.77 : 0.56;
+  const targetNormY = stashActive ? 0.77 : 0.3;
   const b = moveBuddySmooth(motion, 'ch2', targetNormX, targetNormY);
   const pose: BuddyPose =
     kind === 'RESET' && animProgress < 0.8

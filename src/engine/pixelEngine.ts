@@ -3,11 +3,11 @@ import type {
   BubbleAction,
   BubbleSpeaker,
   DocumentComparison,
+  FileTree,
   GhesWorldState,
   LessonAction,
   PixelAnimKind,
   PixelCommit,
-  PixelFile,
   PixelIssue,
   PixelPr,
   PixelSimState,
@@ -29,8 +29,24 @@ import {
   getDocumentComparison,
   getDocumentWorkingText,
   ORIGINAL_DOCUMENT,
-  withDocumentVersions,
 } from './documentDiff';
+import {
+  changedPaths,
+  checkoutTree,
+  commitById,
+  headCommit,
+  headTree,
+  mergeBase,
+  mergeTrees,
+  reachableCommits,
+  resolveRevision,
+  restoreWorktree,
+  trackedChanges,
+  treeEntry,
+  updateWorkspace,
+  workingTree,
+  writeTreeEntry,
+} from './repoVersions';
 
 const SPEAKER_NAMES: Record<BubbleSpeaker, string> = {
   buddy: '도트 버디',
@@ -40,7 +56,9 @@ const SPEAKER_NAMES: Record<BubbleSpeaker, string> = {
   system: '도트 안내',
 };
 
-const DOCUMENT_GIT_COMMANDS = new Set(['status', 'diff', 'add', 'commit', 'log', 'push']);
+const DOCUMENT_GIT_COMMANDS = new Set([
+  'status', 'diff', 'add', 'commit', 'log', 'push', 'revert', 'reset', 'branch', 'switch', 'checkout', 'stash', 'show',
+]);
 
 function clampAnchor(value: number): number {
   return Math.max(22, Math.min(78, Math.round(value)));
@@ -230,7 +248,19 @@ function finalizeTransition(
   return nextState;
 }
 
+type StageSeed = Omit<PixelSimState, 'commits' | 'index'> & {
+  commits: (Omit<PixelCommit, 'tree'> & { tree?: FileTree })[];
+};
+
 export function createStageState(id: StageId): PixelSimState {
+  const seed = stageSeed(id);
+  const committed = workingTree({ files: seed.files.filter((file) => file.status === 'committed') });
+  const commits = seed.commits.map((commit) => ({ ...commit, tree: commit.tree ?? committed }));
+  const state = { ...seed, commits, index: {} };
+  return updateWorkspace(state, workingTree(seed), headTree(state));
+}
+
+function stageSeed(id: StageId): StageSeed {
 
   switch (id) {
     case 'ch1':
@@ -249,6 +279,7 @@ export function createStageState(id: StageId): PixelSimState {
             message: '프로젝트 시작',
             branch: 'main',
             parents: [],
+            tree: { 'app.js': 'console.log("프로젝트 시작");', 'README.md': '# GitDots 프로젝트' },
           },
         ],
         branches: { main: 'c1' },
@@ -289,15 +320,14 @@ export function createStageState(id: StageId): PixelSimState {
       return {
         stageId: 'docs',
         files: [{ name: DOCUMENT_PATH, status: 'committed', content: ORIGINAL_DOCUMENT }],
-        document: { index: ORIGINAL_DOCUMENT, comparison: 'working' },
+        document: { comparison: 'working' },
         staged: [],
         commits: [{
           id: 'c1',
           hash: '4a9cda1',
-          message: '스터디 안내 초안',
+          message: '스터디 회의록 초안',
           branch: 'main',
           parents: [],
-          documentContent: ORIGINAL_DOCUMENT,
         }],
         branches: { main: 'c1' },
         headBranch: 'main',
@@ -316,11 +346,11 @@ export function createStageState(id: StageId): PixelSimState {
         completedActions: [],
         bubbles: [
           makeBubble('init-docs', 'buddy', 32, 54, '스터디 안내를 고쳐 볼까요?',
-            '편집기에서 README.md를 고친 뒤 어떤 줄이 바뀌었는지 확인하세요.'),
+            '편집기에서 회의록을 고친 뒤 어떤 줄이 바뀌었는지 확인하세요.'),
         ],
         terminal: [
           makeLogEntry(0, 'welcome', 'main', [
-            { text: '첫 커밋에 스터디 안내가 들어 있어요. README.md를 고쳐 보세요.', tone: 'muted' },
+            { text: '연습 저장소에 스터디 회의록의 초안이 기록돼 있어요.', tone: 'muted' },
           ]),
         ],
       };
@@ -331,12 +361,16 @@ export function createStageState(id: StageId): PixelSimState {
         files: [
           { name: 'app.js', status: 'modified', content: '// 작업 중인 임시 코드...' },
           { name: 'README.md', status: 'committed', content: '# GitDots 필수 명령어' },
+          { name: 'test-mode.js', status: 'committed', content: 'export const testMode = true;' },
         ],
         staged: [],
         commits: [
-          { id: 'c1', hash: '1a2b3c4', message: '초기 세팅', branch: 'main', parents: [] },
-          { id: 'c2', hash: '4d5e6f7', message: '로그인 버튼 추가', branch: 'main', parents: ['c1'] },
-          { id: 'c3', hash: '7e8f9a0', message: '실수로 넣은 테스트 코드', branch: 'main', parents: ['c2'] },
+          { id: 'c1', hash: '1a2b3c4', message: '초기 세팅', branch: 'main', parents: [],
+            tree: { 'app.js': '// 프로젝트 시작', 'README.md': '# GitDots 필수 명령어' } },
+          { id: 'c2', hash: '4d5e6f7', message: '로그인 버튼 추가', branch: 'main', parents: ['c1'],
+            tree: { 'app.js': 'export const loginButton = "로그인";', 'README.md': '# GitDots 필수 명령어' } },
+          { id: 'c3', hash: '7e8f9a0', message: '실수로 넣은 테스트 코드', branch: 'main', parents: ['c2'],
+            tree: { 'app.js': 'export const loginButton = "로그인";', 'README.md': '# GitDots 필수 명령어', 'test-mode.js': 'export const testMode = true;' } },
         ],
         branches: { main: 'c3' },
         headBranch: 'main',
@@ -376,14 +410,16 @@ export function createStageState(id: StageId): PixelSimState {
       return {
         stageId: 'ch3',
         files: [
-          { name: 'theme.js', status: 'committed', content: 'export const theme = "light";' },
+          { name: 'theme.js', status: 'committed', content: 'export const theme = "dark-midnight";' },
           { name: 'app.js', status: 'committed', content: 'import { theme } from "./theme";' },
         ],
         staged: [],
         commits: [
-          { id: 'c1', hash: '10aa20b', message: '기본 테마 설정', branch: 'main', parents: [] },
+          { id: 'c1', hash: '10aa20b', message: '기본 테마 설정', branch: 'main', parents: [],
+            tree: { 'theme.js': 'export const theme = "light";', 'app.js': 'import { theme } from "./theme";' } },
           { id: 'c2', hash: '30cc40d', message: '메인 배경색 수정', branch: 'main', parents: ['c1'] },
-          { id: 'c3', hash: '50ee60f', message: 'UI 버튼 색상 변경', branch: 'feature/ui', parents: ['c1'] },
+          { id: 'c3', hash: '50ee60f', message: 'UI 버튼 색상 변경', branch: 'feature/ui', parents: ['c1'],
+            tree: { 'theme.js': 'export const theme = "sunset-coral";', 'app.js': 'import { theme } from "./theme";' } },
         ],
         branches: { main: 'c2', 'feature/ui': 'c3' },
         headBranch: 'main',
@@ -428,8 +464,10 @@ export function createStageState(id: StageId): PixelSimState {
         ],
         staged: [],
         commits: [
-          { id: 'c1', hash: 'a01b02c', message: '팀 저장소 초기 세팅', branch: 'main', parents: [] },
-          { id: 'c2', hash: 'd03e04f', message: '팀원: 헤더 디자인 개선', branch: 'origin/main', parents: ['c1'] },
+          { id: 'c1', hash: 'a01b02c', message: '팀 저장소 초기 세팅', branch: 'main', parents: [],
+            tree: { 'README.md': '# GitDots Team Repo' } },
+          { id: 'c2', hash: 'd03e04f', message: '팀원: 헤더 디자인 개선', branch: 'origin/main', parents: ['c1'],
+            tree: { 'README.md': '# GitDots Team Repo', 'header.css': 'header { padding: 1rem; }' } },
           { id: 'c3', hash: 'f05a06b', message: '새 기능 구현 완료', branch: 'feat/sparkle', parents: ['c1'] },
         ],
         branches: { main: 'c1', 'feat/sparkle': 'c3' },
@@ -474,7 +512,7 @@ export function createStageState(id: StageId): PixelSimState {
         ],
         staged: [],
         commits: [
-          { id: 'c1', hash: 'b11c22d', message: '초기 앱 구조', branch: 'main', parents: [] },
+          { id: 'c1', hash: 'b11c22d', message: '초기 앱 구조', branch: 'main', parents: [], tree: {} },
           { id: 'c2', hash: 'e33f44a', message: '다크모드 스타일 추가', branch: 'feat/darkmode', parents: ['c1'] },
         ],
         branches: { main: 'c1', 'feat/darkmode': 'c2' },
@@ -665,11 +703,17 @@ export function createStageState(id: StageId): PixelSimState {
   }
 }
 
-function documentNotice(state: PixelSimState, command: string, title: string, message: string): PixelSimState {
+function commandNotice(
+  state: PixelSimState,
+  command: string,
+  title: string,
+  message: string,
+  tone: TerminalLine['tone'] = 'muted',
+): PixelSimState {
   return finalizeTransition(
     state, state, 'IDLE', title, undefined, command,
-    [{ text: message, tone: 'muted' }],
-    makeBubble(`document-notice-${state.lastAnim.seq + 1}`, 'buddy', 32, 54, title, message),
+    [{ text: message, tone }],
+    makeBubble(`command-notice-${state.lastAnim.seq + 1}`, 'buddy', 32, 54, title, message),
   );
 }
 
@@ -682,18 +726,18 @@ export function savePracticeDocument(
 
   const working = text.replace(/\r\n?/g, '\n');
   if (working.length > DOCUMENT_LIMIT) {
-    return documentNotice(state, command, '문서 길이를 확인해 주세요', `편집기에서는 ${DOCUMENT_LIMIT}자까지 저장할 수 있어요.`);
+    return commandNotice(state, command, '문서 길이를 확인해 주세요', `편집기에서는 ${DOCUMENT_LIMIT}자까지 저장할 수 있어요.`);
   }
   if (working === getDocumentWorkingText(state)) {
-    return documentNotice(state, command, '같은 문서 내용', '이미 저장한 작업 문서와 내용이 같아요.');
+    return commandNotice(state, command, '같은 문서 내용', '이미 저장한 작업 문서와 내용이 같아요.');
   }
 
-  const draft = withDocumentVersions(state, working, state.document.index);
+  const draft = updateWorkspace(state, { ...workingTree(state), [DOCUMENT_PATH]: working }, state.index);
   return finalizeTransition(
     state, draft, 'EDIT', '작업 문서 저장', DOCUMENT_PATH, command,
     [
-      { text: 'README.md를 작업 파일에 저장했어요.', tone: 'mint' },
-      { text: 'git diff -- README.md로 바뀐 줄을 확인할 수 있어요.', tone: 'muted' },
+      { text: `${DOCUMENT_PATH}를 작업 파일에 저장했어요.`, tone: 'mint' },
+      { text: `${DOCUMENT_COMPARISONS.working.command}로 바뀐 줄을 확인할 수 있어요.`, tone: 'muted' },
     ],
     makeBubble(`document-save-${state.lastAnim.seq + 1}`, 'buddy', 32, 54, '작업 파일에 저장했어요',
       '현재 문서와 스테이징 영역을 비교해 바뀐 줄을 확인해 보세요.'),
@@ -727,7 +771,7 @@ function getDocumentDiffMode(args: string[]): DocumentComparison | null {
 function comparePracticeDocument(state: PixelSimState, cmd: string, args: string[]): PixelSimState {
   const mode = getDocumentDiffMode(args);
   if (!mode || !state.document) {
-    return documentNotice(state, cmd, '비교할 대상을 골라 주세요',
+    return commandNotice(state, cmd, '비교할 대상을 골라 주세요',
       '이 장에서 쓸 수 있는 git diff 명령은 비교 패널과 명령어 사전에 있어요.');
   }
 
@@ -756,7 +800,7 @@ function comparePracticeDocument(state: PixelSimState, cmd: string, args: string
   const draft: PixelSimState = {
     ...state,
     document: { ...state.document, comparison: mode },
-    completedActions: comparison
+    completedActions: comparison && getNextPendingStep(state)?.doneAction === view.action
       ? withCompletedAction(state.completedActions, view.action)
       : state.completedActions,
   };
@@ -766,12 +810,37 @@ function comparePracticeDocument(state: PixelSimState, cmd: string, args: string
   );
 }
 
+function commandWords(command: string): string[] {
+  return (command.match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map((word) => word.replace(/^(["'])(.*)\1$/, '$2'));
+}
+
+function readResetArgs(args: string[]) {
+  const separator = args.indexOf('--');
+  const paths = separator === -1 ? [] : args.slice(separator + 1);
+  const options = separator === -1 ? args : args.slice(0, separator);
+  const modes = options.filter((arg) => arg.startsWith('-'));
+  const revisions = options.filter((arg) => !arg.startsWith('-'));
+  const mode = modes[0] ?? '--mixed';
+  if (!['--soft', '--mixed', '--hard'].includes(mode) || modes.length > 1 || revisions.length > 1) return null;
+  if (paths.length > 0 && modes.length > 0) return null;
+  return { mode, revision: revisions[0] ?? 'HEAD', paths };
+}
+
+export function pendingHardReset(state: PixelSimState, command: string): string | undefined {
+  const [program, sub, ...args] = commandWords(command);
+  if (program?.toLowerCase() !== 'git' || sub?.toLowerCase() !== 'reset') return undefined;
+  const reset = readResetArgs(args);
+  if (reset?.mode !== '--hard') return undefined;
+  const target = resolveRevision(state, reset.revision);
+  return target && `${reset.revision} (${target.hash})`;
+}
+
 export function executePixelCommand(state: PixelSimState, rawCmd: string): PixelSimState {
   const cmd = rawCmd.trim();
   if (!cmd) return state;
 
   const lower = cmd.toLowerCase();
-  const tokens = cmd.split(/\s+/);
+  const tokens = commandWords(cmd);
   const seqNext = state.lastAnim.seq + 1;
 
   // ── Meta commands: reset / clear / help ──────────────────────────────────
@@ -860,35 +929,23 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
   }
 
   if (state.document) {
-    if (lower === 'edit' || lower === 'edit readme.md') {
+    if (lower === 'edit' || lower === `edit ${DOCUMENT_PATH}`) {
       return savePracticeDocument(state, EXAMPLE_DOCUMENT, cmd);
     }
     const sub = tokens[1]?.toLowerCase();
     if (tokens[0].toLowerCase() !== 'git' || !sub || !DOCUMENT_GIT_COMMANDS.has(sub)) {
-      return documentNotice(state, cmd, '문서 실습 명령어', 'README.md 편집과 비교에 쓰는 명령은 명령어 사전에서 확인할 수 있어요.');
+      return commandNotice(state, cmd, '문서 실습 명령어', '회의록 편집과 비교에 쓰는 명령은 명령어 사전에서 확인할 수 있어요.');
     }
   }
 
   // ── Edit command ─────────────────────────────────────────────────────────
   if (lower === 'edit' || lower.startsWith('edit ')) {
     const targetName = tokens[1] ?? state.files[0]?.name ?? 'app.js';
-    const exists = state.files.some((f) => f.name === targetName);
-    const nextFiles: PixelFile[] = exists
-      ? state.files.map((f) =>
-          f.name === targetName
-            ? { ...f, status: 'modified', content: `${f.content}\n// 수정됨 (#${seqNext})` }
-            : f,
-        )
-      : [
-          ...state.files,
-          { name: targetName, status: 'untracked', content: `// 새 파일 ${targetName}` },
-        ];
-    const nextStaged = state.staged.filter((name) => name !== targetName);
-    const draft: PixelSimState = {
-      ...state,
-      files: nextFiles,
-      staged: nextStaged,
-    };
+    const working = workingTree(state);
+    const previous = treeEntry(working, targetName);
+    const exists = previous !== undefined;
+    const content = exists ? `${previous}\n// 수정됨 (#${seqNext})` : `// 새 파일 ${targetName}`;
+    const draft = updateWorkspace(state, { ...working, [targetName]: content }, state.index);
     return finalizeTransition(
       state,
       draft,
@@ -967,22 +1024,15 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           : '둘 다 합치기(both)';
 
     const conflictFile = state.conflict.file;
-    const nextFiles: PixelFile[] = state.files.map((f) =>
-      f.name === conflictFile ? { ...f, status: 'staged', content: resolvedContent } : f,
-    );
-    const nextStaged = state.staged.includes(conflictFile)
-      ? state.staged
-      : [...state.staged, conflictFile];
-
-    const draft: PixelSimState = {
+    const working = { ...workingTree(state) };
+    const index = { ...state.index };
+    const deleted = (choice === 'ours' && state.conflict.oursDeleted) || (choice === 'theirs' && state.conflict.theirsDeleted);
+    writeTreeEntry(working, conflictFile, deleted ? undefined : resolvedContent);
+    writeTreeEntry(index, conflictFile, deleted ? undefined : resolvedContent);
+    const draft = updateWorkspace({
       ...state,
-      files: nextFiles,
-      staged: nextStaged,
-      conflict: {
-        ...state.conflict,
-        resolvedChoice: choice,
-      },
-    };
+      conflict: { ...state.conflict, resolvedChoice: choice },
+    }, working, index);
 
     return finalizeTransition(
       state,
@@ -1343,17 +1393,11 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         message: 'fix: sum 연산자 버그 수정 (by AI)',
         branch: aiBranch,
         parents: [parentId],
+        tree: { ...commitById(state, parentId)?.tree, 'buggy.ts': 'export const sum = (a: number, b: number) => a + b;' },
       };
-
-      const nextFiles: PixelFile[] = state.files.map((f) =>
-        f.name === 'buggy.ts'
-          ? { ...f, status: 'committed', content: 'export const sum = (a: number, b: number) => a + b;' }
-          : f,
-      );
 
       const draft: PixelSimState = {
         ...state,
-        files: nextFiles,
         commits: [...state.commits, newCommit],
         branches: { ...state.branches, [aiBranch]: newCommitId },
         ai: { ...state.ai, codeWritten: true },
@@ -1485,8 +1529,16 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
       const prNum = state.ai.prNumber;
       const aiBranch = state.ai.worktreeBranch;
-      const mainHead = state.branches.main ?? 'c1';
+      const mainHead = state.remoteBranches.main ?? state.branches.main ?? 'c1';
       const aiHead = state.branches[aiBranch] ?? mainHead;
+      const result = mergeTrees(
+        mergeBase(state, mainHead, aiHead)?.tree ?? {},
+        commitById(state, mainHead)?.tree ?? {},
+        commitById(state, aiHead)?.tree ?? {},
+      );
+      if (result.conflicts.length > 0) {
+        return commandNotice(state, cmd, 'PR에 충돌이 있어요', `${result.conflicts.join(', ')}의 변경을 확인하세요.`, 'amber');
+      }
       const mergeId = `c${state.commits.length + 1}`;
       const mergeCommit: PixelCommit = {
         id: mergeId,
@@ -1494,6 +1546,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         message: `Merge PR #${prNum}: [AI] 덧셈 연산자 버그 수정`,
         branch: 'main',
         parents: aiHead !== mainHead ? [mainHead, aiHead] : [mainHead],
+        tree: result.tree,
         isMerge: true,
       };
 
@@ -1504,7 +1557,6 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       const draft: PixelSimState = {
         ...state,
         commits: [...state.commits, mergeCommit],
-        branches: { ...state.branches, main: mergeId },
         remoteBranches: { ...state.remoteBranches, main: mergeId },
         prs: nextPrs,
         ai: { ...state.ai, humanApproved: true, merged: true },
@@ -1540,7 +1592,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
     // git status
     if (sub === 'status') {
-      const stagedFiles = state.files.filter((f) => state.staged.includes(f.name));
+      const stagedFiles = state.staged;
       const modifiedFiles = state.files.filter((f) => f.status === 'modified');
       const untrackedFiles = state.files.filter((f) => f.status === 'untracked');
       const conflictFiles = state.files.filter((f) => f.status === 'conflict');
@@ -1556,7 +1608,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       }
       if (stagedFiles.length > 0) {
         lines.push({
-          text: `🧺 장바구니(Staged): ${stagedFiles.map((f) => f.name).join(', ')}`,
+          text: `스테이징(Staged): ${stagedFiles.join(', ')}`,
           tone: 'mint',
         });
       }
@@ -1638,95 +1690,44 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         );
       }
 
-      const target = (tokens[tokens[2] === '--' ? 3 : 2] ?? '.').replace(/^\.\//, '');
-      const stageAll = target === '.' || target === '-A' || target === '--all';
-      if (state.document && !stageAll && target !== DOCUMENT_PATH) {
-        return documentNotice(state, cmd, '실습 문서 확인', '이 연습 저장소에는 README.md가 있어요. git add README.md를 실행해 보세요.');
+      const args = tokens.slice(2).filter((arg) => arg !== '--');
+      const working = workingTree(state);
+      const paths = [...new Set([...Object.keys(working), ...Object.keys(state.index)])];
+      const matches = new Set<string>();
+      for (const arg of args) {
+        const target = arg === './' ? '.' : arg.replace(/^\.\//, '').replace(/\/$/, '');
+        const selected = target === '-u' || target === '--update'
+          ? Object.keys(state.index)
+          : paths.filter((path) => target === '.' || target === '-A' || target === '--all'
+            || path === target || path.startsWith(target + '/'));
+        if (selected.length === 0 && target !== '.' && target !== '-A' && target !== '--all') {
+          return commandNotice(state, cmd, '파일 경로를 확인해 주세요', `${arg} 경로와 일치하는 파일이 없어요.`, 'amber');
+        }
+        selected.forEach((path) => matches.add(path));
       }
-      const newlyStaged: string[] = [];
-      const nextFiles: PixelFile[] = state.files.map((f) => {
-        const shouldStage =
-          (stageAll && (f.status === 'modified' || f.status === 'untracked')) ||
-          (!stageAll && f.name === target && f.status !== 'committed');
-        if (shouldStage) {
-          newlyStaged.push(f.name);
-          return { ...f, status: 'staged' };
-        }
-        return f;
-      });
-
-      const nextStaged = Array.from(new Set([...state.staged, ...newlyStaged]));
-      let draft: PixelSimState = {
-        ...state,
-        files: nextFiles,
-        staged: nextStaged,
-      };
-
-      if (state.document) {
-        const working = getDocumentWorkingText(state);
-        draft = withDocumentVersions(draft, working, working);
-        if (draft.staged.length === 0) {
-          const message = '스테이징 영역의 문서가 최근 커밋과 같아요. 작업 문서에 변경을 만들고 다시 담아 보세요.';
-          return finalizeTransition(
-            state, draft, 'IDLE', '담을 문서 변경 없음', undefined, cmd,
-            [{ text: message, tone: 'muted' }],
-            makeBubble(`document-add-empty-${seqNext}`, 'buddy', 34, 54, '담을 문서 변경이 없어요', message),
-          );
-        }
+      if (args.length === 0) {
+        return commandNotice(state, cmd, '파일 이름을 적어 주세요', 'git add 뒤에 파일 이름이나 현재 폴더를 뜻하는 점(.)을 적으세요.', 'amber');
       }
 
-      if (newlyStaged.length === 0) {
+      const index = { ...state.index };
+      for (const path of matches) writeTreeEntry(index, path, treeEntry(working, path));
+      const draft = updateWorkspace(state, working, index);
+      if (changedPaths(state.index, index).length === 0 || draft.staged.length === 0) {
+        const message = draft.staged.length > 0
+          ? '현재 문서와 스테이징 영역의 내용이 이미 같아요.'
+          : '다음 커밋에 들어갈 변경이 없어요.';
         return finalizeTransition(
-          state,
-          draft,
-          state.staged.length > 0 ? 'ADD' : 'IDLE',
-          '장바구니 확인',
-          undefined,
-          cmd,
-          [
-            {
-              text:
-                state.staged.length > 0
-                  ? `🧺 이미 ${state.staged.join(', ')} 이 장바구니에 담겨 있어요!`
-                  : '장바구니에 새로 담을 변경 파일이 없어요. edit app.js 로 파일을 고쳐 볼까요?',
-              tone: 'muted',
-            },
-          ],
-          makeBubble(
-            `add-empty-${seqNext}`,
-            'buddy',
-            34,
-            54,
-            state.staged.length > 0 ? '이미 장바구니가 꽉 찼어요! 🧺' : '바뀐 파일이 아직 없어요 🙂',
-            state.staged.length > 0
-              ? '이제 git commit 으로 내 저장소에 세이브 박스를 만들 차례예요!'
-              : 'edit app.js 로 파일을 살짝 수정한 뒤 다시 담아 볼까요?',
-            nextStepHintText(draft),
-          ),
+          state, draft, 'IDLE', '스테이징 영역 확인', undefined, cmd,
+          [{ text: message, tone: 'muted' }],
+          makeBubble(`add-empty-${seqNext}`, 'buddy', 34, 54, '스테이징 영역을 확인했어요', message),
         );
       }
 
       return finalizeTransition(
-        state,
-        draft,
-        'ADD',
-        '장바구니 담기',
-        newlyStaged.join(', '),
-        cmd,
-        [
-          { text: `🧺 장바구니(Staging)에 담음: ${newlyStaged.join(', ')}`, tone: 'mint' },
-          { text: '이제 커밋하면 이 파일들이 하나의 스냅샷으로 저장돼요!', tone: 'muted' },
-        ],
-        makeBubble(
-          `add-${seqNext}`,
-          'buddy',
-          38,
-          54,
-          '다음 커밋에 담을 변경을 골랐어요',
-          `${newlyStaged.join(', ')}의 현재 변경이 스테이징 영역에 담겼어요. 원래 파일은 작업 공간에서 계속 편집할 수 있어요.`,
-          '다음은 git commit -m "첫 세이브" 로 세이브해 봐요!',
-          [{ label: '📦 첫 세이브 (git commit)', command: 'git commit -m "첫 세이브"', tone: 'mint' }],
-        ),
+        state, draft, 'ADD', '다음 기록에 담기', draft.staged.join(', '), cmd,
+        [{ text: `스테이징: ${draft.staged.join(', ')}`, tone: 'mint' }],
+        makeBubble(`add-${seqNext}`, 'buddy', 38, 54, '다음 기록에 담았어요',
+          '선택한 파일의 현재 내용을 복사해 두었어요. 커밋하기 전에 비교해 볼 수 있어요.'),
       );
     }
 
@@ -1759,206 +1760,76 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       }
 
       const isAutoStage = /\s(?:-[a-z]*a[a-z]*|--all)(?=\s|$)/.test(cmd.replace(/"[^"]*"|'[^']*'/g, ''));
-      let workingFiles = state.files;
-      let workingStaged = state.staged;
-      const workingDocument = getDocumentWorkingText(state);
-      const documentContent = state.document
-        ? isAutoStage ? workingDocument : state.document.index
-        : undefined;
-
-      if (isAutoStage && state.document) {
-        const snapshot = withDocumentVersions(state, workingDocument, workingDocument);
-        workingFiles = snapshot.files;
-        workingStaged = snapshot.staged;
-      } else if (isAutoStage) {
-        const autoAdded: string[] = [];
-        workingFiles = state.files.map((f) => {
-          if (f.status === 'modified') {
-            autoAdded.push(f.name);
-            return { ...f, status: 'staged' };
-          }
-          return f;
-        });
-        workingStaged = Array.from(new Set([...state.staged, ...autoAdded]));
+      const working = workingTree(state);
+      const index = { ...state.index };
+      if (isAutoStage) {
+        for (const path of Object.keys(index)) writeTreeEntry(index, path, treeEntry(working, path));
+      }
+      const staged = changedPaths(headTree(state), index);
+      const isMergeCommit = state.conflict?.resolvedChoice !== undefined && state.conflict.resolvedChoice !== 'none';
+      if (staged.length === 0 && !isMergeCommit && !tokens.includes('--allow-empty')) {
+        return commandNotice(state, cmd, '기록할 변경이 없어요', '변경을 작업 파일에 저장하고 git add로 다음 커밋에 담아 주세요.', 'amber');
       }
 
-      const isMergeCommit = Boolean(state.conflict && state.conflict.resolvedChoice !== 'none');
-
-      if (workingStaged.length === 0 && !isMergeCommit) {
-        if (state.document) {
-          return documentNotice(state, cmd, '커밋할 문서 변경이 없어요', '변경한 문서를 저장하고 git add README.md로 먼저 담아 주세요.');
-        }
-        return finalizeTransition(
-          state,
-          state,
-          'IDLE',
-          '커밋할 파일 없음',
-          undefined,
-          cmd,
-          [
-            { text: '장바구니(Staging)가 비어 있어요! 먼저 git add . 로 파일을 담아 주세요.', tone: 'amber' },
-          ],
-          makeBubble(
-            `commit-empty-${seqNext}`,
-            'buddy',
-            36,
-            54,
-            '장바구니가 비어 있어요! 🧺',
-            '커밋은 장바구니에 담긴 파일만 저장해요. 먼저 git add . 로 파일을 담아 볼까요?',
-            'git add . 를 실행해 보세요!',
-            [{ label: '🧺 장바구니 담기 (git add .)', command: 'git add .', tone: 'mint' }],
-          ),
-        );
-      }
-
-      const parsedMsg =
-        extractQuotedFlag(cmd, ['-m', '-am', '--message']) ??
-        (isMergeCommit
-          ? `Merge ${state.conflict?.theirsLabel ?? 'feature/ui'} into ${state.headBranch}`
-          : '변경사항 저장');
-
-      const headCommitId = state.branches[state.headBranch];
-      const parents: string[] = headCommitId ? [headCommitId] : [];
-      if (isMergeCommit && state.conflict) {
-        const theirsHead = state.branches[state.conflict.theirsLabel];
-        if (theirsHead && !parents.includes(theirsHead)) {
-          parents.push(theirsHead);
-        }
-      }
-
+      const parsedMsg = extractQuotedFlag(cmd, ['-m', '-am', '--message'])
+        ?? (isMergeCommit ? `Merge ${state.conflict?.theirsLabel} into ${state.headBranch}` : '변경 사항 기록');
+      const parents = [state.branches[state.headBranch], state.conflict?.theirsCommit]
+        .filter((id): id is string => Boolean(id));
       const newCommitId = `c${state.commits.length + 1}`;
       const newCommit: PixelCommit = {
         id: newCommitId,
         hash: makeHash(seqNext, parsedMsg),
         message: parsedMsg,
         branch: state.headBranch,
-        parents,
-        ...(documentContent !== undefined ? { documentContent } : {}),
+        parents: [...new Set(parents)],
+        tree: index,
         ...(isMergeCommit ? { isMerge: true } : {}),
       };
-
-      const nextFiles: PixelFile[] = workingFiles.map((f) =>
-        f.status === 'staged' ? { ...f, status: 'committed' } : f,
-      );
-
-      let draft: PixelSimState = {
+      const draft = updateWorkspace({
         ...state,
-        files: nextFiles,
-        staged: [],
         commits: [...state.commits, newCommit],
         branches: { ...state.branches, [state.headBranch]: newCommitId },
         conflict: null,
-      };
-      if (documentContent !== undefined) {
-        draft = withDocumentVersions(draft, workingDocument, documentContent);
-      }
+        completedActions: isMergeCommit
+          ? withCompletedAction(state.completedActions, 'MERGE_COMMIT') : state.completedActions,
+      }, working, index);
 
-      if (isMergeCommit) {
-        draft.completedActions = withCompletedAction(draft.completedActions, 'MERGE_COMMIT');
-      }
-      const afterCompleted = withCompletedAction(draft.completedActions, 'COMMIT');
-      const nextStep = getNextPendingStep({ ...draft, completedActions: afterCompleted });
-
+      const message = isMergeCommit
+        ? '병합한 파일이 새 커밋에 기록됐어요.'
+        : `스테이징 영역에 담았던 변경을 “${parsedMsg}” 커밋으로 기록했어요. ID는 ${newCommit.hash}예요.`;
       return finalizeTransition(
-        state,
-        draft,
-        'COMMIT',
-        isMergeCommit ? '머지 커밋 완료' : '세이브(커밋) 완료',
-        newCommit.hash,
-        cmd,
+        state, draft, 'COMMIT', '커밋 기록', newCommit.hash, cmd,
         [
           { text: `[${state.headBranch} ${newCommit.hash}] ${parsedMsg}`, tone: 'mint' },
-          {
-            text: isMergeCommit
-              ? '🎉 충돌 해결이 깔끔하게 머지 커밋으로 기록됐어요!'
-              : `📦 ${workingStaged.length}개 파일이 내 저장소(Local Repo)에 스냅샷으로 저장됐어요.`,
-            tone: 'sky',
-          },
+          { text: message, tone: 'sky' },
         ],
-        makeBubble(
-          `commit-${seqNext}`,
-          'buddy',
-          48,
-          52,
-          isMergeCommit ? '충돌 해결 & 머지 커밋 완료! 🎉' : '내 컴퓨터에 커밋을 기록했어요',
-          isMergeCommit
-            ? '두 갈래 브랜치가 하나의 안전한 커밋으로 합쳐졌어요!'
-            : `커밋 메시지는 “${parsedMsg}”, 이 기록의 짧은 ID는 ${newCommit.hash}예요. GitHub에는 push할 때 올라가요.`,
-          nextStepHintText({ ...draft, completedActions: afterCompleted }),
-          nextStep
-            ? [{ label: `▶ ${nextStep.command}`, command: nextStep.command, tone: 'primary' }]
-            : undefined,
-        ),
+        makeBubble(`commit-${seqNext}`, 'buddy', 48, 52, '새 커밋을 기록했어요', message),
       );
     }
 
     // git push
     if (sub === 'push') {
-      const localHead = state.branches[state.headBranch];
-      if (!localHead) {
-        return finalizeTransition(
-          state,
-          state,
-          'IDLE',
-          '푸시할 커밋 없음',
-          undefined,
-          cmd,
-          [{ text: '아직 올릴 커밋이 없어요.', tone: 'muted' }],
-          makeBubble(
-            `push-none-${seqNext}`,
-            'cloud',
-            68,
-            48,
-            '올릴 세이브가 아직 없어요 ☁️',
-            '먼저 커밋을 하나 만든 뒤 푸시해 볼까요?',
-            nextStepHintText(state),
-          ),
-        );
+      const args = tokens.slice(2).filter((arg) => arg !== '-u' && arg !== '--set-upstream');
+      const [remote = 'origin', refspec = state.headBranch] = args;
+      const [branch, remoteBranch = branch] = refspec.split(':');
+      const localHead = treeEntry(state.branches, branch);
+      if (remote !== 'origin' || args.length > 2 || !localHead || !remoteBranch) {
+        return commandNotice(state, cmd, '올릴 브랜치를 확인하세요', 'git push origin 브랜치이름으로 로컬 브랜치를 지정할 수 있어요.', 'amber');
+      }
+      const remoteHead = treeEntry(state.remoteBranches, remoteBranch);
+      if (remoteHead === localHead) {
+        return commandNotice(state, cmd, '이미 같은 커밋이에요', '로컬 브랜치와 원격 브랜치가 같은 커밋을 가리켜요.');
+      }
+      if (remoteHead && !reachableCommits(state, localHead).has(remoteHead)) {
+        return commandNotice(state, cmd, '원격 기록을 먼저 확인하세요', '원격 브랜치에 현재 이력에 없는 커밋이 있어 푸시가 거절됐어요.', 'amber');
       }
 
-      if (state.remoteBranches[state.headBranch] === localHead) {
-        return finalizeTransition(
-          state, state, 'IDLE', '이미 동기화됨', undefined, cmd,
-          [{ text: 'Everything up-to-date', tone: 'muted' }],
-          makeBubble(`push-current-${seqNext}`, 'cloud', 68, 48, '새로 보낼 커밋이 없어요',
-            '내 브랜치와 원격 브랜치가 같은 커밋을 가리켜요. 변경을 커밋한 뒤 다시 푸시해 보세요.', nextStepHintText(state)),
-        );
-      }
-
-      const draft: PixelSimState = {
-        ...state,
-        remoteBranches: {
-          ...state.remoteBranches,
-          [state.headBranch]: localHead,
-        },
-      };
-
-      const afterCompleted = withCompletedAction(draft.completedActions, 'PUSH');
-      const nextStep = getNextPendingStep({ ...draft, completedActions: afterCompleted });
-
+      const draft = { ...state, remoteBranches: { ...state.remoteBranches, [remoteBranch]: localHead } };
+      const message = `원격 저장소의 ${remoteBranch} 브랜치가 ${branch}의 새 커밋을 가리켜요.`;
       return finalizeTransition(
-        state,
-        draft,
-        'PUSH',
-        'GitHub 구름으로 푸시',
-        `origin/${state.headBranch}`,
-        cmd,
-        [
-          { text: `🚀 Uploading commits to ${state.ghHost}...`, tone: 'sky' },
-          { text: `✓ [new/updated] ${state.headBranch} -> origin/${state.headBranch}`, tone: 'mint' },
-        ],
-        makeBubble(
-          `push-${seqNext}`,
-          'cloud',
-          68,
-          48,
-          'GitHub 구름에 도착했어요! 🚀',
-          `GitHub의 ${state.headBranch} 브랜치가 내 컴퓨터와 같은 커밋을 가리켜요. 팀원도 이 변경을 받아 갈 수 있어요.`,
-          nextStepHintText({ ...draft, completedActions: afterCompleted }),
-          nextStep
-            ? [{ label: `▶ ${nextStep.command}`, command: nextStep.command, tone: 'primary' }]
-            : undefined,
-        ),
+        state, draft, 'PUSH', '변경 공유', `origin/${remoteBranch}`, cmd,
+        [{ text: `${branch} → origin/${remoteBranch}`, tone: 'mint' }, { text: message, tone: 'sky' }],
+        makeBubble(`push-${seqNext}`, 'cloud', 68, 48, '팀이 볼 수 있도록 커밋을 공유했어요', message),
       );
     }
 
@@ -2005,55 +1876,37 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
     // git pull
     if (sub === 'pull') {
-      const remoteHead = state.remoteBranches[state.headBranch] ?? state.remoteBranches.main;
-      const localHead = state.branches[state.headBranch];
-      let nextCommits = state.commits;
-      let nextBranches = { ...state.branches };
-
-      if (remoteHead && remoteHead !== localHead) {
-        if (state.headBranch === 'main') {
-          nextBranches = { ...nextBranches, main: remoteHead };
-        } else {
-          const pullId = `c${state.commits.length + 1}`;
-          const pullCommit: PixelCommit = {
-            id: pullId,
-            hash: makeHash(seqNext, 'git-pull'),
-            message: `Pull origin/main into ${state.headBranch}`,
-            branch: state.headBranch,
-            parents: localHead ? [localHead, remoteHead] : [remoteHead],
-            isMerge: true,
-          };
-          nextCommits = [...state.commits, pullCommit];
-          nextBranches = { ...nextBranches, [state.headBranch]: pullId, main: remoteHead };
-        }
+      const branch = tokens[2] === 'origin' ? (tokens[3] ?? state.headBranch) : state.headBranch;
+      const remote = resolveRevision(state, `origin/${branch}`);
+      const local = headCommit(state);
+      if (!remote || !local) {
+        return commandNotice(state, cmd, '가져올 원격 브랜치를 확인하세요', 'git pull origin main처럼 원격과 브랜치를 지정할 수 있어요.', 'amber');
       }
-
-      const draft: PixelSimState = {
-        ...state,
-        commits: nextCommits,
-        branches: nextBranches,
+      if (reachableCommits(state, local.id).has(remote.id)) {
+        return commandNotice(state, cmd, '이미 가져온 커밋이에요', '현재 브랜치에 원격 변경이 들어 있어요.');
+      }
+      const common = mergeBase(state, local.id, remote.id);
+      const merged = mergeTrees(common?.tree ?? {}, local.tree, remote.tree);
+      const checkout = checkoutTree(state, merged.tree);
+      if (merged.conflicts.length > 0 || checkout.blocked.length > 0 || state.staged.length > 0) {
+        return commandNotice(state, cmd, '원격 변경을 합치기 전에 확인하세요', '변경이 겹쳐요. 작업을 기록한 뒤 파일 차이를 확인하세요.', 'amber');
+      }
+      const fastForward = common?.id === local.id;
+      const commit: PixelCommit = fastForward ? remote : {
+        id: `c${state.commits.length + 1}`, hash: makeHash(seqNext, 'git-pull'),
+        message: `Merge origin/${branch} into ${state.headBranch}`, branch: state.headBranch,
+        parents: [local.id, remote.id], tree: merged.tree, isMerge: true,
       };
-
+      const draft = updateWorkspace({
+        ...state,
+        commits: fastForward ? state.commits : [...state.commits, commit],
+        branches: { ...state.branches, [state.headBranch]: commit.id },
+      }, checkout.working, checkout.index);
+      const message = `origin/${branch}의 변경을 현재 브랜치에 적용했어요.`;
       return finalizeTransition(
-        state,
-        draft,
-        'PULL',
-        '원격 코드 받아 합치기',
-        `origin/${state.headBranch}`,
-        cmd,
-        [
-          { text: `⬇️ Fetching & merging latest changes from origin...`, tone: 'sky' },
-          { text: `✓ ${state.headBranch} 브랜치가 최신 상태로 업데이트됐어요!`, tone: 'mint' },
-        ],
-        makeBubble(
-          `pull-${seqNext}`,
-          'cloud',
-          66,
-          48,
-          '팀원 코드를 쏙 받아 합쳤어요! ⬇️',
-          'git pull 은 fetch(확인)와 merge(합치기)를 한 번에 처리해서 내 브랜치를 최신으로 맞춰 줘요!',
-          nextStepHintText(draft),
-        ),
+        state, draft, 'PULL', '원격 변경 적용', `origin/${branch}`, cmd,
+        [{ text: message, tone: 'mint' }],
+        makeBubble(`pull-${seqNext}`, 'cloud', 66, 48, '팀원의 변경을 가져왔어요', message),
       );
     }
 
@@ -2066,8 +1919,12 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         branchByCommit.set(cId, list);
       }
 
+      const refs = tokens.includes('--all')
+        ? [...Object.values(state.branches), ...Object.values(state.remoteBranches)]
+        : [state.branches[state.headBranch]];
+      const reachable = new Set(refs.flatMap((id) => [...reachableCommits(state, id)]));
       const recent = [...state.commits]
-        .filter((c) => !c.ghost)
+        .filter((c) => reachable.has(c.id))
         .reverse()
         .slice(0, 7);
 
@@ -2100,330 +1957,247 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       );
     }
 
+    // git show <commit>:<file>
+    if (sub === 'show') {
+      const spec = tokens[2] ?? '';
+      const [ref, path] = spec.split(':', 2);
+      const commit = resolveRevision(state, ref);
+      const content = commit && path ? treeEntry(commit.tree, path) : undefined;
+      if (!commit || !path || content === undefined) {
+        return commandNotice(state, cmd, '확인할 파일을 골라 주세요', 'git show HEAD:파일이름으로 커밋에 기록된 파일을 읽을 수 있어요.', 'amber');
+      }
+      return finalizeTransition(
+        state, state, 'IDLE', '커밋의 파일 읽기', path, cmd,
+        [{ text: `${commit.hash} · ${path}`, tone: 'sky' }, { text: content, tone: 'default' }],
+        makeBubble(`show-${seqNext}`, 'buddy', 34, 52, '커밋에서 파일을 열었어요', `${commit.hash}에 저장된 ${path}예요.`),
+      );
+    }
+
     // git diff
     if (sub === 'diff') {
-      if (state.document) return comparePracticeDocument(state, cmd, tokens.slice(2));
-      const dirty = state.files.filter((f) => f.status === 'modified');
-      const lines: TerminalLine[] =
-        dirty.length === 0
-          ? [{ text: '수정된 내용이 없어요 (diff empty).', tone: 'muted' }]
-          : dirty.flatMap((f) => [
-              { text: `diff --git a/${f.name} b/${f.name}`, tone: 'sky' as const },
-              { text: `- // 이전 저장 내용`, tone: 'coral' as const },
-              { text: `+ ${f.content.split('\n')[0]}`, tone: 'mint' as const },
-            ]);
-
+      const args = tokens.slice(2);
+      if (state.document && getDocumentDiffMode(args)) return comparePracticeDocument(state, cmd, args);
+      const separator = args.indexOf('--');
+      const options = separator === -1 ? args : args.slice(0, separator);
+      let paths = separator === -1 ? [] : args.slice(separator + 1);
+      const staged = options.some((arg) => arg === '--staged' || arg === '--cached');
+      const refs = options.filter((arg) => arg !== '--staged' && arg !== '--cached');
+      if (separator === -1 && refs.length > 0 && !resolveRevision(state, refs.at(-1) ?? '')) {
+        const name = refs.at(-1) ?? '';
+        if (!name.startsWith('-') && [...Object.keys(state.index), ...state.files.map((file) => file.name)].includes(name)) {
+          paths = [name];
+          refs.pop();
+        }
+      }
+      const range = refs.length === 1 && refs[0].includes('..') && !refs[0].includes('...')
+        ? refs[0].split('..').map((ref) => ref || 'HEAD') : refs;
+      const commits = range.map((ref) => resolveRevision(state, ref));
+      if (commits.some((commit) => !commit) || commits.length > (staged ? 1 : 2)) {
+        return commandNotice(state, cmd, '비교할 커밋이나 경로를 확인하세요',
+          'git diff, git diff --staged 또는 git diff HEAD~1 HEAD로 비교할 수 있어요.', 'amber');
+      }
+      const before = commits[0]?.tree ?? (staged ? headTree(state) : state.index);
+      const after = commits[1]?.tree ?? (staged ? state.index : workingTree(state));
+      const files = changedPaths(before, after).filter((path) =>
+        (Boolean(commits[1]) || staged || treeEntry(state.index, path) !== undefined) &&
+        (paths.length === 0 || paths.some((filter) => filter === '.' || path === filter || path.startsWith(filter + '/'))),
+      );
+      const lines: TerminalLine[] = files.flatMap((path) => [
+        { text: `--- ${path}\n+++ ${path}`, tone: 'sky' },
+        ...diffDocumentLines(treeEntry(before, path) ?? '', treeEntry(after, path) ?? '').map((row): TerminalLine => ({
+          text: `${row.kind === 'added' ? '+' : row.kind === 'removed' ? '-' : ' '}${row.text}`,
+          tone: row.kind === 'added' ? 'mint' : row.kind === 'removed' ? 'coral' : 'default',
+        })),
+      ]);
+      if (!lines.length) lines.push({ text: '비교한 파일에 변경이 없어요.', tone: 'muted' });
       return finalizeTransition(
-        state,
-        state,
-        'IDLE',
-        '변경점 비교',
-        undefined,
-        cmd,
-        lines,
-        makeBubble(
-          `diff-${seqNext}`,
-          'buddy',
-          34,
-          54,
-          '바뀐 줄을 돋보기로 비교했어요! 🔍',
-          dirty.length > 0
-            ? '빨간 줄(-)은 사라진 내용, 초록 줄(+)은 새로 추가된 내용이에요!'
-            : '추적 중인 파일에 아직 스테이징하지 않은 변경이 없어요.',
-          nextStepHintText(state),
-        ),
+        state, state, 'IDLE', '변경 비교', undefined, cmd, lines,
+        makeBubble(`diff-${seqNext}`, 'buddy', 34, 54, '파일의 바뀐 줄을 비교했어요',
+          '−는 빠진 줄이고, +는 들어간 줄이에요. 터미널에서 파일별 변경을 볼 수 있어요.'),
       );
     }
 
     // git stash / git stash pop
     if (sub === 'stash') {
       const action = (tokens[2] ?? 'push').toLowerCase();
-
+      const working = workingTree(state);
+      if (state.conflict) {
+        return commandNotice(state, cmd, '병합을 먼저 마무리하세요', '충돌 중인 파일을 해결한 뒤 작업을 보관할 수 있어요.', 'amber');
+      }
       if (action === 'pop' || action === 'apply') {
         const saved = state.stashes.at(-1);
-        if (!saved) {
-          return finalizeTransition(
-            state,
-            state,
-            'IDLE',
-            '서랍 비어있음',
-            undefined,
-            cmd,
-            [{ text: 'error: No stash entries found. (서랍이 비어 있어요!)', tone: 'amber' }],
-            makeBubble(
-              `stash-empty-${seqNext}`,
-              'buddy',
-              34,
-              54,
-              '서랍이 비어 있어요! 📦',
-              '먼저 git stash 로 작업 중인 파일을 서랍에 넣어 둔 뒤에 꺼낼 수 있어요.',
-              nextStepHintText(state),
-              [{ label: '📦 서랍에 넣기 (git stash)', command: 'git stash', tone: 'amber' }],
-            ),
-          );
+        if (!saved) return commandNotice(state, cmd, '보관한 변경이 없어요', 'git stash로 작업을 먼저 임시 보관해 보세요.', 'amber');
+        const paths = changedPaths(saved.base, saved.working);
+        const overwritten = paths.filter((path) =>
+          treeEntry(working, path) !== treeEntry(state.index, path),
+        );
+        const restored = mergeTrees(saved.base, working, saved.working);
+        const index = tokens.includes('--index') ? mergeTrees(saved.base, state.index, saved.index)
+          : { tree: state.index, conflicts: [] };
+        if (overwritten.length > 0 || restored.conflicts.length > 0 || index.conflicts.length > 0) {
+          return commandNotice(state, cmd, '보관한 변경과 현재 수정이 겹쳐요',
+            '현재 수정 내용을 먼저 기록하거나 따로 보관하세요. 기존 보관 항목을 다시 적용할 수 있어요.', 'amber');
         }
-
-        const targetFile = saved.map((file) => file.name).join(', ');
-        const files = new Map(state.files.map((file) => [file.name, file]));
-        const occupied = saved.find((file) => {
-          const current = files.get(file.name);
-          return current && current.status !== 'committed';
-        });
-        if (occupied) {
-          return finalizeTransition(
-            state, state, 'IDLE', '작업 중인 변경 확인', occupied.name, cmd,
-            [{ text: `${occupied.name}에 보관 후 생긴 변경이 있어요.`, tone: 'amber' }],
-            makeBubble(`stash-overlap-${seqNext}`, 'buddy', 34, 54, '같은 파일에 새 변경이 있어요',
-              '지금 변경을 먼저 커밋하거나 따로 보관하고 다시 꺼내세요. 보관한 작업은 서랍에 있어요.'),
-          );
-        }
-        for (const file of saved) {
-          const status = file.status === 'staged' && !tokens.includes('--index') ? 'modified' : file.status;
-          files.set(file.name, { ...file, status });
-        }
-        const nextFiles = [...files.values()];
         const stashes = action === 'pop' ? state.stashes.slice(0, -1) : state.stashes;
-        const draft: PixelSimState = {
-          ...state,
-          files: nextFiles,
-          staged: nextFiles.filter((file) => file.status === 'staged').map((file) => file.name),
-          stashes,
-          stashCount: stashes.length,
-        };
-        const afterCompleted = withCompletedAction(draft.completedActions, 'STASH_POP');
-        const nextStep = getNextPendingStep({ ...draft, completedActions: afterCompleted });
-
+        const draft = updateWorkspace({ ...state, stashes, stashCount: stashes.length }, restored.tree, index.tree);
         return finalizeTransition(
-          state,
-          draft,
-          'STASH_POP',
-          '서랍에서 꺼내기',
-          targetFile,
-          cmd,
-          [
-            { text: `📤 서랍(stash@{0})에서 ${targetFile} 작업을 다시 꺼냈어요!`, tone: 'mint' },
-            { text: `남은 보관 항목 ${stashes.length}개`, tone: 'muted' },
-          ],
-          makeBubble(
-            `stash-pop-${seqNext}`,
-            'buddy',
-            34,
-            54,
-            '아까 하던 작업이 돌아왔어요! 📤',
-            `서랍에 넣어둔 ${targetFile} 변경사항을 책상 위로 고스란히 꺼내 왔어요!`,
-            nextStepHintText({ ...draft, completedActions: afterCompleted }),
-            nextStep
-              ? [{ label: `▶ ${nextStep.command}`, command: nextStep.command, tone: 'primary' }]
-              : undefined,
-          ),
+          state, draft, 'STASH_POP', '임시 보관 복원', paths.join(', '), cmd,
+          [{ text: `보관했던 변경을 작업 파일에 적용했어요. 남은 항목 ${stashes.length}개.`, tone: 'mint' }],
+          makeBubble(`stash-pop-${seqNext}`, 'buddy', 34, 54, '중단했던 작업을 되찾았어요',
+            '보관했던 줄이 돌아왔어요. git diff로 작업 파일이 어떻게 달라졌는지 볼 수 있어요.'),
         );
       }
 
+      if (!['push', '-u', '--include-untracked'].includes(action)) {
+        return commandNotice(state, cmd, 'stash 명령을 확인하세요', 'git stash로 보관하고 git stash pop으로 복원할 수 있어요.', 'amber');
+      }
       const includeUntracked = tokens.includes('-u') || tokens.includes('--include-untracked');
-      const dirtyFiles = state.files.filter((f) =>
-        f.status === 'modified' || f.status === 'staged' || (includeUntracked && f.status === 'untracked'),
+      const base = headTree(state);
+      const untracked = Object.entries(working).filter(([path]) =>
+        treeEntry(state.index, path) === undefined && treeEntry(base, path) === undefined,
       );
-      if (dirtyFiles.length === 0) {
-        return finalizeTransition(
-          state,
-          state,
-          'IDLE',
-          '보관할 작업 없음',
-          undefined,
-          cmd,
-          [{ text: 'No local changes to save (서랍에 넣을 변경사항이 없어요).', tone: 'muted' }],
-          makeBubble(
-            `stash-clean-${seqNext}`,
-            'buddy',
-            34,
-            54,
-            '책상이 이미 깨끗해요! ✨',
-            '서랍에 숨길 변경 파일이 없어요. edit app.js 로 파일을 고친 뒤 stash해 볼까요?',
-            nextStepHintText(state),
-          ),
-        );
+      const snapshot = { ...working };
+      if (!includeUntracked) for (const [path] of untracked) delete snapshot[path];
+      if (changedPaths(base, snapshot).length === 0 && state.staged.length === 0) {
+        return commandNotice(state, cmd, '임시 보관할 변경이 없어요', '추적 중인 파일을 수정하거나 git stash -u로 새 파일도 포함할 수 있어요.');
       }
 
-      const nextFiles: PixelFile[] = state.files
-        .filter((file) => !(includeUntracked && file.status === 'untracked'))
-        .map((file) => dirtyFiles.includes(file) ? { ...file, status: 'committed' } : file);
-      const stashes = [...state.stashes, dirtyFiles];
-      const draft: PixelSimState = {
-        ...state,
-        files: nextFiles,
-        staged: [],
-        stashes,
-        stashCount: stashes.length,
-      };
-
+      const stashes = [...state.stashes, { base, index: state.index, working: snapshot }];
+      const nextWorking = { ...Object.fromEntries(includeUntracked ? [] : untracked), ...base };
+      const draft = updateWorkspace({ ...state, stashes, stashCount: stashes.length }, nextWorking, base);
       return finalizeTransition(
-        state,
-        draft,
-        'STASH',
-        '서랍에 임시 보관',
-        `stash@{0}`,
-        cmd,
-        [
-          {
-            text: `📦 Saved working directory on ${state.headBranch}: ${dirtyFiles.map((f) => f.name).join(', ')}`,
-            tone: 'amber',
-          },
-          { text: `보관 항목 ${stashes.length}개`, tone: 'muted' },
-        ],
-        makeBubble(
-          `stash-${seqNext}`,
-          'buddy',
-          34,
-          54,
-          '서랍에 안전하게 숨겼어요! 📦',
-          '아직 커밋하지 않은 변경을 보관했어요. 이제 작업 폴더에서 급한 수정을 할 수 있어요.',
-          nextStepHintText({ ...draft, completedActions: withCompletedAction(draft.completedActions, 'STASH') }),
-        ),
+        state, draft, 'STASH', '작업 임시 보관', 'stash@{0}', cmd,
+        [{ text: `수정 내용을 보관했어요. 보관 항목 ${stashes.length}개.`, tone: 'mint' }],
+        makeBubble(`stash-${seqNext}`, 'buddy', 34, 54, '하던 작업을 잠시 보관했어요',
+          '추적 중인 작업 파일이 최근 커밋 상태로 돌아왔어요. 이제 급한 수정을 먼저 할 수 있어요.'),
       );
     }
 
     // git reset
     if (sub === 'reset') {
-      const headId = state.branches[state.headBranch];
-      const headCommit = state.commits.find((c) => c.id === headId);
-      const parentId = headCommit?.parents[0];
+      const args = readResetArgs(tokens.slice(2));
+      if (!args) {
+        return commandNotice(state, cmd, 'reset 사용법 확인', '예를 들어 git reset --hard HEAD~1처럼 모드와 대상 커밋을 적으세요.', 'amber');
+      }
+      const target = resolveRevision(state, args.revision);
+      if (!target) {
+        return commandNotice(state, cmd, '대상 커밋을 찾을 수 없어요', `${args.revision}의 커밋을 확인하세요. git log에서 커밋 ID를 볼 수 있어요.`, 'amber');
+      }
 
-      if (!headCommit || !parentId) {
+      const working = workingTree(state);
+      if (args.paths.length > 0) {
+        const index = { ...state.index };
+        for (const raw of args.paths) {
+          const path = raw.replace(/^\.\//, '');
+          if (treeEntry(index, path) === undefined && treeEntry(target.tree, path) === undefined) {
+            return commandNotice(state, cmd, '스테이징할 파일 경로를 확인해 주세요', `실습 기록에 ${path} 파일이 없어요.`, 'amber');
+          }
+          writeTreeEntry(index, path, treeEntry(target.tree, path));
+        }
+        const draft = updateWorkspace(state, working, index);
         return finalizeTransition(
-          state,
-          state,
-          'IDLE',
-          '되감을 커밋 없음',
-          undefined,
-          cmd,
-          [{ text: '첫 번째 커밋이라 더 이상 뒤로 되감을 수 없어요.', tone: 'amber' }],
-          makeBubble(
-            `reset-root-${seqNext}`,
-            'buddy',
-            44,
-            52,
-            '여기가 첫 출발점이에요! 🏁',
-            '첫 커밋 이전으로는 되감을 수 없어요.',
-            nextStepHintText(state),
-          ),
+          state, draft, 'RESET', '스테이징 영역 복원', target.hash, cmd,
+          [{ text: `${args.paths.join(', ')}의 스테이징 버전을 ${target.hash} 기준으로 바꿨어요.`, tone: 'sky' }],
+          makeBubble(`reset-path-${seqNext}`, 'buddy', 46, 52, '스테이징 사본을 바꿨어요',
+            '작업 파일은 계속 편집할 수 있어요. git diff로 작업 파일과 스테이징 영역을 비교해 보세요.'),
         );
       }
 
-      const isSoft = cmd.includes('--soft');
-      const isHard = cmd.includes('--hard');
-      const nextCommits: PixelCommit[] = state.commits.map((c) =>
-        c.id === headCommit.id ? { ...c, ghost: true } : c,
-      );
-      const primaryName = state.files[0]?.name ?? 'app.js';
-      const nextFiles: PixelFile[] = isHard
-        ? state.files.map((f) => ({ ...f, status: 'committed' }))
-        : state.files.map((f, idx) =>
-            idx === 0 ? { ...f, status: isSoft ? 'staged' : 'modified' } : f,
-          );
-      const nextStaged = isSoft ? [primaryName] : [];
+      if (args.mode === '--soft' && state.conflict) {
+        return commandNotice(state, cmd, '병합을 먼저 마무리하세요', '병합 중에는 git reset --soft를 실행할 수 없어요.', 'amber');
+      }
 
-      const draft: PixelSimState = {
-        ...state,
-        commits: nextCommits,
-        branches: { ...state.branches, [state.headBranch]: parentId },
-        files: nextFiles,
-        staged: nextStaged,
-      };
-
+      const oldHead = headCommit(state);
+      const branches = { ...state.branches, [state.headBranch]: target.id };
+      const referenced = [...Object.values(branches), ...Object.values(state.remoteBranches)];
+      const reachable = new Set<string>(referenced.flatMap((id) => [...reachableCommits(state, id)]));
+      const commits = state.commits.map((commit) => ({ ...commit, ghost: !reachable.has(commit.id) }));
+      const nextWorking = args.mode === '--hard' ? restoreWorktree(state, target.tree) : working;
+      const index = args.mode === '--soft' ? state.index : target.tree;
+      const draft = updateWorkspace({
+        ...state, branches, commits, origHead: oldHead?.id, conflict: null,
+      }, nextWorking, index);
+      const message = args.mode === '--hard'
+        ? '커밋하지 않은 추적 파일의 변경을 덮어쓰고, 작업 파일과 스테이징 영역을 대상 커밋의 버전으로 복원했어요.'
+        : args.mode === '--soft'
+          ? 'HEAD가 가리키는 커밋을 바꿨어요. 작업 파일과 스테이징 영역은 유지돼요.'
+          : '스테이징 영역을 대상 커밋과 맞췄어요. 작업 파일에는 기존 수정 내용이 남아 있어요.';
       return finalizeTransition(
-        state,
-        draft,
-        'RESET',
-        isSoft ? 'Soft 되감기' : isHard ? 'Hard 되감기' : '커밋 되감기',
-        headCommit.hash,
-        cmd,
+        state, draft, 'RESET', `복원 ${args.mode}`, target.hash, cmd,
         [
-          { text: `⏪ HEAD가 이전 커밋(${parentId})으로 한 칸 되감겼어요.`, tone: 'amber' },
-          {
-            text: isSoft
-              ? `🧺 --soft 옵션이라 ${primaryName} 변경 내용은 장바구니에 고스란히 남아 있어요!`
-              : isHard
-                ? '⚠️ --hard 옵션으로 작업실 파일까지 이전 상태로 되돌렸어요.'
-                : `✏️ ${primaryName} 변경 내용은 작업실에 남아 있어요.`,
-            tone: 'sky',
-          },
+          { text: `HEAD → ${target.hash} ${target.message}`, tone: 'sky' },
+          { text: message, tone: args.mode === '--hard' ? 'amber' : 'default' },
         ],
-        makeBubble(
-          `reset-${seqNext}`,
-          'buddy',
-          46,
-          52,
-          '커밋을 한 칸 되감았어요! ⏪',
-          isSoft
-            ? 'reset --soft 는 커밋만 취소하고 내 코드는 장바구니에 살려 둬요! 팀과 공유 전 내 PC에서만 써야 해요.'
-            : '이전 세이브 지점으로 시계를 되돌렸어요!',
-          nextStepHintText(draft),
-        ),
+        makeBubble(`reset-${seqNext}`, 'buddy', 46, 52, `${target.hash}로 이동했어요`, message),
       );
     }
 
     // git revert
     if (sub === 'revert') {
-      const headId = state.branches[state.headBranch];
-      const headCommit = state.commits.find((c) => c.id === headId);
-      if (!headCommit) {
+      const args = tokens.slice(2);
+      const mainlineFlag = args.findIndex((arg) => arg === '-m' || arg === '--mainline');
+      const mainline = mainlineFlag === -1 ? undefined : Number(args.splice(mainlineFlag, 2)[1]);
+      const noCommit = args.includes('-n') || args.includes('--no-commit');
+      const revisions = args.filter((arg) => !['--edit', '--no-edit', '-e', '-n', '--no-commit'].includes(arg));
+      const [revision] = revisions;
+      const target = revisions.length === 1 ? resolveRevision(state, revision) : undefined;
+      const current = headCommit(state);
+      if (!target || !current) {
+        return commandNotice(state, cmd, '취소할 커밋을 확인하세요', 'git revert HEAD 또는 git revert 뒤에 취소할 커밋 ID 하나를 적으세요.', 'amber');
+      }
+      if (state.conflict || (!noCommit && state.staged.length > 0)) {
+        return commandNotice(state, cmd, '먼저 진행 중인 변경을 정리하세요', '스테이징한 변경을 기록하거나 임시 보관한 다음 다시 시도하세요.', 'amber');
+      }
+      if (target.parents.length > 1 && mainline === undefined) {
+        return commandNotice(state, cmd, '병합 커밋의 기준이 필요해요', '병합을 취소할 때는 기준이 되는 부모를 -m 1처럼 지정하세요.', 'amber');
+      }
+      if (mainline !== undefined && (!Number.isInteger(mainline) || mainline < 1 || mainline > Math.max(1, target.parents.length))) {
+        return commandNotice(state, cmd, '부모 커밋 번호를 확인하세요', '존재하는 부모 커밋의 번호를 입력하세요.', 'amber');
+      }
+
+      const parentTree = commitById(state, target.parents[(mainline ?? 1) - 1])?.tree ?? {};
+      const reversed = mergeTrees(target.tree, state.index, parentTree);
+      if (reversed.conflicts.length > 0) {
+        return commandNotice(state, cmd, '되돌리려는 줄에 충돌이 있어요',
+          `${reversed.conflicts.join(', ')}의 현재 변경과 겹쳐 취소 커밋을 만들지 못했어요.`, 'coral');
+      }
+      const changed = changedPaths(state.index, reversed.tree);
+      if (changed.length === 0) {
+        return commandNotice(state, cmd, '취소할 변경이 없어요', '현재 파일에 되돌릴 변경이 남아 있지 않아요.');
+      }
+      const checkout = checkoutTree(state, reversed.tree, state.index);
+      if (checkout.blocked.length > 0) {
+        return commandNotice(state, cmd, '작업 파일에 커밋하지 않은 변경이 있어요',
+          `${checkout.blocked.join(', ')}의 수정 내용을 먼저 기록하거나 임시 보관하세요.`, 'amber');
+      }
+      const message = `“${target.message}”에서 생긴 변경을 취소했어요. 바뀐 파일은 ${changed.join(', ')}예요.`;
+      if (noCommit) {
+        const draft = updateWorkspace(state, checkout.working, reversed.tree);
         return finalizeTransition(
-          state,
-          state,
-          'IDLE',
-          '취소할 커밋 없음',
-          undefined,
-          cmd,
-          [{ text: '되돌릴 커밋이 없어요.', tone: 'muted' }],
-          makeBubble(
-            `revert-none-${seqNext}`,
-            'buddy',
-            44,
-            52,
-            '취소할 커밋이 없어요 🙂',
-            '먼저 커밋을 만든 뒤 revert 를 사용해 보세요!',
-            nextStepHintText(state),
-          ),
+          state, draft, 'IDLE', '취소 변경 스테이징', target.hash, cmd,
+          [{ text: `${message} git commit으로 기록할 수 있어요.`, tone: 'sky' }],
+          makeBubble(`revert-no-commit-${seqNext}`, 'buddy', 48, 52, '취소 변경을 담아 뒀어요', message),
         );
       }
 
       const revertId = `c${state.commits.length + 1}`;
-      const revertMsg = `Revert "${headCommit.message}"`;
+      const revertMsg = `Revert "${target.message}"`;
       const revertCommit: PixelCommit = {
-        id: revertId,
-        hash: makeHash(seqNext, revertMsg),
-        message: revertMsg,
-        branch: state.headBranch,
-        parents: [headCommit.id],
-        isRevert: true,
+        id: revertId, hash: makeHash(seqNext, revertMsg), message: revertMsg,
+        branch: state.headBranch, parents: [current.id], tree: reversed.tree, isRevert: true,
       };
-
-      const draft: PixelSimState = {
+      const draft = updateWorkspace({
         ...state,
         commits: [...state.commits, revertCommit],
         branches: { ...state.branches, [state.headBranch]: revertId },
-      };
-
+      }, checkout.working, reversed.tree);
       return finalizeTransition(
-        state,
-        draft,
-        'REVERT',
-        '안전 취소(Revert)',
-        revertCommit.hash,
-        cmd,
+        state, draft, 'REVERT', '취소 커밋 기록', revertCommit.hash, cmd,
         [
           { text: `[${state.headBranch} ${revertCommit.hash}] ${revertMsg}`, tone: 'mint' },
-          { text: '🛡️ 기존 기록을 지우지 않고 반대 커밋을 새로 쌓아 팀원도 안전해요!', tone: 'sky' },
+          { text: message, tone: 'sky' },
         ],
-        makeBubble(
-          `revert-${seqNext}`,
-          'buddy',
-          48,
-          52,
-          '지난 변경을 취소하는 커밋을 만들었어요',
-          `“${headCommit.message}”의 변경을 취소했어요. git log를 보면 원래 커밋과 취소 커밋을 모두 확인할 수 있어요.`,
-          nextStepHintText({ ...draft, completedActions: withCompletedAction(draft.completedActions, 'REVERT') }),
-        ),
+        makeBubble(`revert-${seqNext}`, 'buddy', 48, 52, '지난 변경을 취소하는 커밋을 만들었어요', message),
       );
     }
 
@@ -2455,11 +2229,14 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         );
       }
 
-      const headCommit = state.branches[state.headBranch] ?? 'c1';
-      const draft: PixelSimState = {
-        ...state,
-        branches: { ...state.branches, [newName]: headCommit },
-      };
+      if (treeEntry(state.branches, newName)) {
+        return commandNotice(state, cmd, '이미 있는 브랜치예요', `git switch ${newName}로 이동할 수 있어요.`, 'amber');
+      }
+      const start = resolveRevision(state, tokens[3] ?? 'HEAD');
+      if (!start) {
+        return commandNotice(state, cmd, '시작 커밋을 찾을 수 없어요', 'git log에서 시작 커밋의 ID를 확인하세요.', 'amber');
+      }
+      const draft: PixelSimState = { ...state, branches: { ...state.branches, [newName]: start.id } };
 
       return finalizeTransition(
         state,
@@ -2484,333 +2261,169 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
     // git switch / git checkout
     if (sub === 'switch' || sub === 'checkout') {
       const isCreate = tokens[2] === '-c' || tokens[2] === '-b';
-      const targetBranch = isCreate ? tokens[3] : tokens[2];
-
-      if (!targetBranch) {
-        return finalizeTransition(
-          state,
-          state,
-          'IDLE',
-          '브랜치 이름 필요',
-          undefined,
-          cmd,
-          [{ text: '이동할 브랜치 이름을 적어 주세요! 예: git switch -c feat/dark', tone: 'amber' }],
-          makeBubble(
-            `switch-arg-${seqNext}`,
-            'buddy',
-            38,
-            54,
-            '어느 브랜치로 갈까요? 🤔',
-            'git switch -c feat/dark 처럼 브랜치 이름을 함께 적어 주세요!',
-            nextStepHintText(state),
-          ),
-        );
+      const name = isCreate ? tokens[3] : tokens[2];
+      const targetBranch = name === '-' && !isCreate ? state.previousBranch : name;
+      if (!targetBranch || targetBranch.startsWith('-') || tokens.length > (isCreate ? 5 : 3)) {
+        return commandNotice(state, cmd, '이동할 브랜치를 확인하세요', 'git switch 뒤에 브랜치 이름을 적으세요. 새 브랜치는 git switch -c로 열 수 있어요.', 'amber');
+      }
+      if (state.conflict) {
+        return commandNotice(state, cmd, '현재 병합을 먼저 마무리하세요', '충돌 해결을 기록한 뒤 브랜치를 바꿀 수 있어요.', 'amber');
+      }
+      const existing = treeEntry(state.branches, targetBranch);
+      if (isCreate && existing) {
+        return commandNotice(state, cmd, '이미 있는 브랜치예요', `git switch ${targetBranch}로 이동할 수 있어요.`, 'amber');
+      }
+      const target = isCreate
+        ? resolveRevision(state, tokens[4] ?? 'HEAD')
+        : commitById(state, existing);
+      if (!target) {
+        return commandNotice(state, cmd, '브랜치나 시작 커밋을 찾을 수 없어요', 'git branch에서 이동할 브랜치를 고르세요.', 'amber');
       }
 
-      if (isCreate) {
-        const headCommit = state.branches[state.headBranch] ?? 'c1';
-        const nextBranches = state.branches[targetBranch]
-          ? state.branches
-          : { ...state.branches, [targetBranch]: headCommit };
-        const draft: PixelSimState = {
-          ...state,
-          branches: nextBranches,
-          headBranch: targetBranch,
-        };
-        const afterCompleted = withCompletedAction(draft.completedActions, 'BRANCH');
-        const nextStep = getNextPendingStep({ ...draft, completedActions: afterCompleted });
-
-        return finalizeTransition(
-          state,
-          draft,
-          'BRANCH',
-          `브랜치 ${targetBranch} 생성·이동`,
-          targetBranch,
-          cmd,
-          [{ text: `🌿 Switched to a new branch '${targetBranch}'`, tone: 'mint' }],
-          makeBubble(
-            `switch-create-${seqNext}`,
-            'buddy',
-            44,
-            52,
-            `새 평행우주 ${targetBranch} 로 이동! 🌿`,
-            '이제 여기서 마음껏 코드를 고쳐도 main 브랜치는 안전해요! 이번엔 feature/ui를 합쳐 볼까요?',
-            nextStepHintText({ ...draft, completedActions: afterCompleted }),
-            nextStep
-              ? [{ label: `▶ ${nextStep.command}`, command: nextStep.command, tone: 'amber' }]
-              : undefined,
-          ),
-        );
+      const checkout = checkoutTree(state, target.tree);
+      if (checkout.blocked.length > 0) {
+        return commandNotice(state, cmd, '브랜치를 바꾸면 작업 내용이 덮어쓰여요',
+          `${checkout.blocked.join(', ')}의 변경을 먼저 커밋하거나 임시 보관하세요.`, 'amber');
       }
-
-      if (!state.branches[targetBranch]) {
-        return finalizeTransition(
-          state,
-          state,
-          'IDLE',
-          '없는 브랜치',
-          targetBranch,
-          cmd,
-          [
-            { text: `error: pathspec '${targetBranch}' did not match any branch.`, tone: 'coral' },
-            { text: `사용 가능 브랜치: ${Object.keys(state.branches).join(', ')}`, tone: 'muted' },
-          ],
-          makeBubble(
-            `switch-missing-${seqNext}`,
-            'buddy',
-            38,
-            54,
-            `'${targetBranch}' 브랜치가 아직 없어요! 🤔`,
-            `새로 만들면서 이동하려면 git switch -c ${targetBranch} 를 입력해 보세요!`,
-            nextStepHintText(state),
-            [{ label: `🌿 새로 만들기 (-c ${targetBranch})`, command: `git switch -c ${targetBranch}`, tone: 'primary' }],
-          ),
-        );
-      }
-
-      const draft: PixelSimState = {
+      const draft = updateWorkspace({
         ...state,
+        branches: isCreate ? { ...state.branches, [targetBranch]: target.id } : state.branches,
         headBranch: targetBranch,
-      };
+        previousBranch: state.headBranch === targetBranch ? state.previousBranch : state.headBranch,
+      }, checkout.working, checkout.index);
+      const message = `${targetBranch} 브랜치의 커밋 ${target.hash}에 맞게 작업 파일이 열렸어요.`;
       return finalizeTransition(
-        state,
-        draft,
-        'SWITCH',
-        `${targetBranch} 로 이동`,
-        targetBranch,
-        cmd,
-        [{ text: `🔀 Switched to branch '${targetBranch}'`, tone: 'sky' }],
-        makeBubble(
-          `switch-${seqNext}`,
-          'buddy',
-          42,
-          54,
-          `${targetBranch} 브랜치로 건너왔어요! 🔀`,
-          `이제부터 만드는 커밋은 모두 ${targetBranch} 길 위에 차곡차곡 쌓여요.`,
-          nextStepHintText(draft),
-        ),
+        state, draft, isCreate ? 'BRANCH' : 'SWITCH', '브랜치 전환', targetBranch, cmd,
+        [
+          { text: isCreate ? `Switched to a new branch '${targetBranch}'` : `Switched to branch '${targetBranch}'`, tone: 'mint' },
+          { text: message, tone: 'sky' },
+        ],
+        makeBubble(`switch-${seqNext}`, 'buddy', 42, 54, `${targetBranch} 브랜치를 열었어요`, message),
       );
     }
 
     // git merge
     if (sub === 'merge') {
-      const targetBranch = tokens[2];
-      if (!targetBranch || !state.branches[targetBranch]) {
-        return finalizeTransition(
-          state,
-          state,
-          'IDLE',
-          '머지 대상 확인',
-          undefined,
-          cmd,
-          [
-            { text: `합칠 브랜치를 찾을 수 없어요. 현재 브랜치: ${Object.keys(state.branches).join(', ')}`, tone: 'amber' },
-          ],
-          makeBubble(
-            `merge-missing-${seqNext}`,
-            'buddy',
-            40,
-            54,
-            '어떤 브랜치를 합칠까요? 🤔',
-            'git merge feature/ui 처럼 존재하는 브랜치 이름을 적어 주세요!',
-            nextStepHintText(state),
-          ),
-        );
+      const targetName = tokens[2];
+      const target = targetName ? resolveRevision(state, targetName) : undefined;
+      const local = headCommit(state);
+      if (!target || !local) {
+        return commandNotice(state, cmd, '합칠 브랜치를 찾을 수 없어요', 'git branch로 브랜치 이름을 확인하세요.', 'amber');
+      }
+      if (state.conflict || state.staged.length > 0) {
+        return commandNotice(state, cmd, '현재 변경을 먼저 정리하세요', '스테이징한 변경을 커밋하거나 진행 중인 병합을 마무리하세요.', 'amber');
+      }
+      if (reachableCommits(state, local.id).has(target.id)) {
+        return commandNotice(state, cmd, '이미 합쳐진 변경이에요', '대상 커밋이 현재 브랜치의 이력에 들어 있어요.');
       }
 
-      if (targetBranch === state.headBranch) {
-        return finalizeTransition(
-          state,
-          state,
-          'IDLE',
-          '같은 브랜치',
-          undefined,
-          cmd,
-          [{ text: 'Already up to date. (자기 자신과는 이미 같아요!)', tone: 'muted' }],
-          makeBubble(
-            `merge-self-${seqNext}`,
-            'buddy',
-            40,
-            54,
-            '같은 브랜치끼리는 이미 같아요! 🙂',
-            '다른 브랜치(예: feature/ui)를 합쳐 보세요!',
-            nextStepHintText(state),
-          ),
-        );
+      const common = mergeBase(state, local.id, target.id);
+      const merged = mergeTrees(common?.tree ?? {}, local.tree, target.tree);
+      const checkout = checkoutTree(state, merged.tree);
+      const working = workingTree(state);
+      const blocked = merged.conflicts.some((path) => treeEntry(working, path) !== treeEntry(state.index, path));
+      if (checkout.blocked.length > 0 || blocked || merged.conflicts.length > 1) {
+        return commandNotice(state, cmd, '병합하기 전에 변경을 확인하세요', '겹치는 작업이 있어 자동으로 합치지 못했어요. git diff로 현재 변경을 확인하세요.', 'amber');
       }
-
-      const shouldConflict =
-        targetBranch === 'feature/ui' ||
-        (state.stageId === 'ch3' && !state.completedActions.includes('RESOLVE'));
-
-      if (shouldConflict) {
-        const conflictFile = 'theme.js';
-        const nextFiles: PixelFile[] = state.files.some((f) => f.name === conflictFile)
-          ? state.files.map((f) =>
-              f.name === conflictFile
-                ? {
-                    ...f,
-                    status: 'conflict',
-                    content:
-                      `<<<<<<< ${state.headBranch}\nexport const theme = "dark-midnight";\n=======\nexport const theme = "sunset-coral";\n>>>>>>> ${targetBranch}`,
-                  }
-                : f,
-            )
-          : [
-              ...state.files,
-              {
-                name: conflictFile,
-                status: 'conflict',
-                content:
-                  `<<<<<<< ${state.headBranch}\nexport const theme = "dark-midnight";\n=======\nexport const theme = "sunset-coral";\n>>>>>>> ${targetBranch}`,
-              },
-            ];
-
-        const draft: PixelSimState = {
-          ...state,
-          files: nextFiles,
-          conflict: {
-            file: conflictFile,
-            oursLabel: state.headBranch,
-            theirsLabel: targetBranch,
-            oursCode: 'export const theme = "dark-midnight"; // 내 브랜치',
-            theirsCode: 'export const theme = "sunset-coral"; // 상대 브랜치',
-            bothCode: 'export const theme = "dark-midnight";\nexport const alternateTheme = "sunset-coral";',
-            resolvedChoice: 'none',
-          },
+      if (merged.conflicts.length === 1) {
+        const file = merged.conflicts[0];
+        const ours = treeEntry(local.tree, file);
+        const theirs = treeEntry(target.tree, file);
+        const oursCode = ours ?? '';
+        const theirsCode = theirs ?? '';
+        const bothCode = [oursCode, file === 'theme.js' ? theirsCode.replace('export const theme =', 'export const alternateTheme =') : theirsCode]
+          .filter(Boolean).join('\n');
+        const conflict = {
+          file, oursLabel: state.headBranch, theirsLabel: targetName, theirsCommit: target.id,
+          oursCode, theirsCode, bothCode, oursDeleted: ours === undefined, theirsDeleted: theirs === undefined,
+          resolvedChoice: 'none' as const,
         };
-
+        const conflictText = `<<<<<<< ${state.headBranch}\n${oursCode}\n=======\n${theirsCode}\n>>>>>>> ${targetName}\n`;
+        const draft = updateWorkspace({ ...state, conflict }, { ...checkout.working, [file]: conflictText }, checkout.index);
+        const message = `${file}의 같은 부분을 두 브랜치가 바꿨어요. 아래 설명 카드에서 남길 내용을 고르세요.`;
         return finalizeTransition(
-          state,
-          draft,
-          'CONFLICT',
-          '충돌(Conflict) 발생!',
-          conflictFile,
-          cmd,
+          state, draft, 'CONFLICT', '병합 충돌 발생', file, cmd,
           [
-            { text: `Auto-merging ${conflictFile}`, tone: 'amber' },
-            { text: `CONFLICT (content): Merge conflict in ${conflictFile}`, tone: 'coral' },
-            { text: '⚡ 두 브랜치가 theme.js의 같은 줄을 다르게 고쳤어요! 아래 버튼으로 골라 주세요.', tone: 'amber' },
+            { text: `CONFLICT (content): ${file}`, tone: 'coral' },
+            { text: '화면의 충돌 안내에서 남길 버전을 선택해 주세요.', tone: 'amber' },
           ],
-          makeBubble(
-            `conflict-${seqNext}`,
-            'buddy',
-            48,
-            52,
-            'theme.js의 테마 색이 충돌했어요',
-            `${state.headBranch}는 dark-midnight, ${targetBranch}는 sunset-coral을 골랐어요. 기본 테마로 쓸 색을 정하거나 두 색을 모두 남겨 보세요.`,
-            '아래 3가지 해결 버튼 중 하나를 클릭해 보세요!',
-            [
-              { label: '내 코드 유지 (ours)', command: 'resolve ours', tone: 'primary' },
-              { label: '상대 코드 채택 (theirs)', command: 'resolve theirs', tone: 'amber' },
-              { label: '둘 다 합치기 (both)', command: 'resolve both', tone: 'mint' },
-            ],
-          ),
+          makeBubble(`conflict-${seqNext}`, 'buddy', 48, 52, `${file}의 변경이 겹쳤어요`, message, undefined, [
+            { label: '현재 브랜치 내용 유지', command: 'resolve ours', tone: 'primary' },
+            { label: '상대 브랜치 내용 사용', command: 'resolve theirs', tone: 'amber' },
+            { label: '두 내용 함께 담기', command: 'resolve both', tone: 'mint' },
+          ]),
         );
       }
 
-      // Clean merge
-      const headId = state.branches[state.headBranch] ?? 'c1';
-      const targetId = state.branches[targetBranch];
-      const mergeId = `c${state.commits.length + 1}`;
-      const mergeCommit: PixelCommit = {
-        id: mergeId,
-        hash: makeHash(seqNext, `merge-${targetBranch}`),
-        message: `Merge branch '${targetBranch}' into ${state.headBranch}`,
-        branch: state.headBranch,
-        parents: [headId, targetId],
-        isMerge: true,
+      const fastForward = common?.id === local.id;
+      const commit: PixelCommit = fastForward ? target : {
+        id: `c${state.commits.length + 1}`, hash: makeHash(seqNext, `merge-${targetName}`),
+        message: `Merge branch '${targetName}' into ${state.headBranch}`, branch: state.headBranch,
+        parents: [local.id, target.id], tree: merged.tree, isMerge: true,
       };
-      const draft: PixelSimState = {
+      const draft = updateWorkspace({
         ...state,
-        commits: [...state.commits, mergeCommit],
-        branches: { ...state.branches, [state.headBranch]: mergeId },
-      };
-
+        commits: fastForward ? state.commits : [...state.commits, commit],
+        branches: { ...state.branches, [state.headBranch]: commit.id },
+      }, checkout.working, checkout.index);
+      const message = fastForward
+        ? `현재 브랜치를 ${target.hash}까지 옮기고 작업 파일을 갱신했어요.`
+        : `${targetName}의 변경을 병합 커밋 ${commit.hash}에 기록했어요.`;
       return finalizeTransition(
-        state,
-        draft,
-        'MERGE_OK',
-        '깔끔한 머지 성공',
-        targetBranch,
-        cmd,
-        [
-          { text: `Merge made by the 'ort' strategy.`, tone: 'mint' },
-          { text: `[${state.headBranch} ${mergeCommit.hash}] ${mergeCommit.message}`, tone: 'sky' },
-        ],
-        makeBubble(
-          `merge-ok-${seqNext}`,
-          'buddy',
-          46,
-          52,
-          '충돌 없이 깔끔하게 합쳤어요! 🤝',
-          `${targetBranch}의 작업이 ${state.headBranch}로 부드럽게 합쳐졌어요!`,
-          nextStepHintText(draft),
-        ),
+        state, draft, 'MERGE_OK', '병합 완료', targetName, cmd,
+        [{ text: message, tone: 'mint' }],
+        makeBubble(`merge-ok-${seqNext}`, 'buddy', 46, 52, '두 브랜치를 합쳤어요', message),
       );
     }
 
     // git rebase
     if (sub === 'rebase') {
-      const baseBranch = tokens[2] ?? 'main';
-      const baseId = state.branches[baseBranch];
-      if (!baseId) {
-        return finalizeTransition(
-          state,
-          state,
-          'IDLE',
-          '리베이스 대상 없음',
-          undefined,
-          cmd,
-          [{ text: `fatal: invalid upstream '${baseBranch}'`, tone: 'coral' }],
-          makeBubble(
-            `rebase-err-${seqNext}`,
-            'buddy',
-            42,
-            52,
-            `'${baseBranch}' 브랜치를 못 찾았어요 🤔`,
-            'git rebase main 처럼 기준이 될 브랜치 이름을 적어 주세요!',
-            nextStepHintText(state),
-          ),
-        );
+      const name = tokens[2] ?? 'main';
+      const base = resolveRevision(state, name);
+      const local = headCommit(state);
+      if (!base || !local) {
+        return commandNotice(state, cmd, '리베이스 기준을 찾을 수 없어요', 'git rebase 뒤에 기준 브랜치를 적으세요.', 'amber');
+      }
+      const localHistory = reachableCommits(state, local.id);
+      if (localHistory.has(base.id)) {
+        return commandNotice(state, cmd, '이미 기준 커밋이 이력에 있어요', `${name} 위로 옮길 새 커밋이 없어요.`);
+      }
+      if (state.conflict || trackedChanges(state).length > 0) {
+        return commandNotice(state, cmd, '작업을 먼저 정리하세요', '변경을 커밋하거나 임시 보관한 뒤 리베이스할 수 있어요.', 'amber');
+      }
+      const baseHistory = reachableCommits(state, base.id);
+      const replay = state.commits.filter((commit) => localHistory.has(commit.id) && !baseHistory.has(commit.id));
+      if (replay.some((commit) => commit.parents.length > 1)) {
+        return commandNotice(state, cmd, '리베이스할 이력을 확인하세요', '이 실습에서 리베이스할 커밋은 한 줄로 이어진 이력이어야 해요.', 'amber');
       }
 
-      const rebasedId = `c${state.commits.length + 1}`;
-      const currentHead = state.commits.find((c) => c.id === state.branches[state.headBranch]);
-      const rebasedCommit: PixelCommit = {
-        id: rebasedId,
-        hash: makeHash(seqNext, `rebase-${baseBranch}`),
-        message: `${currentHead?.message ?? '내 작업'} (rebased)`,
-        branch: state.headBranch,
-        parents: [baseId],
-      };
-
-      const draft: PixelSimState = {
-        ...state,
-        commits: [...state.commits, rebasedCommit],
-        branches: { ...state.branches, [state.headBranch]: rebasedId },
-      };
-
+      const commits = [...state.commits];
+      let head = base;
+      for (const commit of replay) {
+        const originalBase = commitById(state, commit.parents[0])?.tree ?? {};
+        const merged = mergeTrees(originalBase, head.tree, commit.tree);
+        if (merged.conflicts.length > 0) {
+          return commandNotice(state, cmd, '리베이스 중 변경이 겹쳐요', `${merged.conflicts.join(', ')}의 변경을 먼저 확인하세요.`, 'amber');
+        }
+        if (changedPaths(head.tree, merged.tree).length === 0) continue;
+        head = {
+          id: `c${commits.length + 1}`, hash: makeHash(seqNext, `rebase-${commit.hash}`),
+          message: commit.message, branch: state.headBranch, parents: [head.id], tree: merged.tree,
+        };
+        commits.push(head);
+      }
+      const checkout = checkoutTree(state, head.tree);
+      if (checkout.blocked.length > 0) {
+        return commandNotice(state, cmd, '작업 파일을 먼저 옮겨 주세요', `${checkout.blocked.join(', ')}이 리베이스 결과로 덮어쓰일 수 있어요.`, 'amber');
+      }
+      const draft = updateWorkspace({
+        ...state, commits, origHead: local.id, branches: { ...state.branches, [state.headBranch]: head.id },
+      }, checkout.working, checkout.index);
+      const message = `${name}에서 시작하도록 현재 작업을 새 이력에 기록했어요.`;
       return finalizeTransition(
-        state,
-        draft,
-        'REBASE',
-        `${baseBranch} 위로 리베이스`,
-        rebasedCommit.hash,
-        cmd,
-        [
-          { text: `Successfully rebased and updated refs/heads/${state.headBranch}.`, tone: 'mint' },
-          { text: `📏 내 커밋이 ${baseBranch} 끝부분 위로 일직선 정렬됐어요!`, tone: 'sky' },
-        ],
-        makeBubble(
-          `rebase-${seqNext}`,
-          'buddy',
-          48,
-          52,
-          '커밋을 한 줄로 깔끔하게 줄 세웠어요! 📏',
-          `git rebase ${baseBranch} 는 내 작업을 ${baseBranch} 최신 끝으로 옮겨 달아 역사를 일직선으로 정돈해 줘요!`,
-          nextStepHintText(draft),
-        ),
+        state, draft, 'REBASE', '리베이스 완료', head.hash, cmd,
+        [{ text: message, tone: 'mint' }],
+        makeBubble(`rebase-${seqNext}`, 'buddy', 48, 52, '커밋을 새 기준 위에 옮겼어요', message),
       );
     }
 
@@ -3112,8 +2725,16 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           );
         }
 
-        const mainHead = state.branches.main ?? 'c1';
-        const prHead = state.branches[targetPr.headBranch] ?? mainHead;
+        const mainHead = state.remoteBranches.main ?? state.branches.main ?? 'c1';
+        const prHead = state.remoteBranches[targetPr.headBranch] ?? state.branches[targetPr.headBranch] ?? mainHead;
+        const result = mergeTrees(
+          mergeBase(state, mainHead, prHead)?.tree ?? {},
+          commitById(state, mainHead)?.tree ?? {},
+          commitById(state, prHead)?.tree ?? {},
+        );
+        if (result.conflicts.length > 0) {
+          return commandNotice(state, cmd, 'PR에 충돌이 있어요', `${result.conflicts.join(', ')}의 변경을 확인하세요.`, 'amber');
+        }
         const mergeId = `c${state.commits.length + 1}`;
         const mergeCommit: PixelCommit = {
           id: mergeId,
@@ -3121,6 +2742,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           message: `Merge PR #${targetPr.number}: ${targetPr.title}`,
           branch: 'main',
           parents: prHead !== mainHead ? [mainHead, prHead] : [mainHead],
+          tree: result.tree,
           isMerge: true,
         };
 
@@ -3133,7 +2755,6 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         const draft: PixelSimState = {
           ...state,
           commits: [...state.commits, mergeCommit],
-          branches: { ...state.branches, main: mergeId },
           remoteBranches: { ...state.remoteBranches, main: mergeId },
           prs: nextPrs,
         };
