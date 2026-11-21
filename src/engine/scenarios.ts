@@ -1,6 +1,7 @@
 import { ALL_STAGE_IDS, type CommandChip, type StageId, type StageScenario } from '../types/sim';
 import { DOCUMENT_COMPARISONS, DOCUMENT_REVERT } from './documentDiff';
 import { ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, MISTAKEN_NOTICE_PATH } from './meetingExample';
+import { term } from './terms';
 
 const { working, staged, commits } = DOCUMENT_COMPARISONS;
 
@@ -21,11 +22,11 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     takeaway: '같은 문서도 비교 기준에 따라 결과가 달라져요. 작업 파일, 스테이징 영역, 커밋에 담긴 버전을 각각 확인했어요.',
     accent: '#14a878',
     terms: [
-      { name: '회의록.md', meaning: '모임 내용과 결정 사항을 적은 예제 문서예요. .md는 제목과 목록 등을 문자로 표현하는 Markdown 파일 형식이에요.' },
-      { name: '스테이징 영역', meaning: '다음 기록에 담을 변경을 골라 두는 장바구니예요.' },
-      { name: '커밋', meaning: '장바구니에 담긴 모습을 이름 붙여 찰칵 찍은 보관 사진이에요. 변경 이력 한 건이에요.' },
-      { name: 'diff', meaning: '두 버전 사이에서 어느 줄이 빠지거나 들어갔는지 보여줘요. 바꾼 줄은 기존 줄의 삭제와 새 줄의 추가로 표시돼요.' },
-      { name: 'HEAD', meaning: '현재 커밋(마지막 기록)을 가리키는 이름이에요. HEAD~1은 바로 이전 기록이에요.' },
+      term('회의록.md'),
+      term('스테이징 영역'),
+      term('커밋'),
+      term('diff'),
+      term('HEAD'),
     ],
     steps: [
       { id: 'docs-edit', label: '문서 편집하기', goal: '회의록.md의 "금요일 저녁 7시"를 다른 시간으로 바꾸고 저장하기', command: 'edit 회의록.md', doneAction: 'EDIT' },
@@ -62,8 +63,8 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     takeaway: '회의록과 참석 안내의 변경을 골라 커밋으로 남기고, 팀이 볼 수 있도록 GitHub에 공유했어요.',
     accent: '#5eead4',
     terms: [
-      { name: '스테이징 영역', meaning: '다음 커밋에 넣을 변경을 고르는 곳이에요.' },
-      { name: '커밋', meaning: '고른 변경을 반영한 프로젝트 상태를 메시지와 함께 남긴 기록이에요. 내 저장소에서 git log로 찾아볼 수 있어요.' },
+      term('스테이징 영역'),
+      term('커밋'),
     ],
     steps: [
       {
@@ -108,11 +109,11 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     shortTitle: '보관과 취소',
     title: '작업 도중에 지난 커밋을 취소하려면?',
     tagline: `지난 장에서 커밋한 회의록에 준비물을 더 적다가, 실수로 올린 ${MISTAKEN_NOTICE_PATH}를 발견했어요. 아직 커밋하지 않은 준비물 수정을 잠시 보관하고 잘못 올린 안내부터 되돌려 보세요.`,
-    takeaway: 'stash로 하던 일을 보관하고, revert로 지난 변경을 취소하는 커밋을 남겼어요. stash pop으로 중단했던 작업도 되찾았어요.',
+    takeaway: 'stash로 하던 일을 보관하고, revert로 지난 변경을 취소하는 커밋을 남겼어요. stash pop으로 중단했던 작업도 되찾고, 취소 커밋을 팀에 공유해 GitHub에서도 임시 안내를 없앴어요.',
     accent: '#fbbf24',
     terms: [
-      { name: 'stash', meaning: '작업 중인 변경을 잠시 맡기는 보관함이에요. stash pop으로 적용에 성공하면 그 항목을 보관함에서 꺼내요.' },
-      { name: 'HEAD', meaning: '현재 커밋을 가리켜요. HEAD~1은 바로 이전 커밋이에요.' },
+      term('stash'),
+      term('HEAD'),
     ],
     steps: [
       {
@@ -136,6 +137,13 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'git stash pop',
         doneAction: 'STASH_POP',
       },
+      {
+        id: 'ch2-push',
+        label: '팀에 공유하기',
+        goal: '취소 커밋을 GitHub에 올려 팀 쪽에서도 임시 안내가 사라지게 하기',
+        command: 'git push',
+        doneAction: 'PUSH',
+      },
     ],
     chips: [
       { command: 'git status', label: '상태 보기' },
@@ -143,6 +151,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       { stepIndex: 0 },
       { stepIndex: 1 },
       { stepIndex: 2 },
+      { stepIndex: 3 },
       { command: 'git reset --soft HEAD~1', label: '커밋만 되감기' },
     ],
     cheatSheet: [
@@ -151,6 +160,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       { cmd: 'git stash', desc: '아직 커밋하지 않은 변경을 임시 보관해요.' },
       { cmd: 'git stash pop', desc: '임시 보관한 변경을 작업 폴더에 다시 적용해요.' },
       { cmd: 'git revert HEAD', desc: 'HEAD는 현재 커밋이에요. 그 변경을 취소하는 새 커밋을 만들어요.' },
+      { cmd: 'git push', desc: '취소 커밋을 원격 저장소에 올려 팀의 GitHub에서도 임시 안내가 사라지게 해요.' },
       { cmd: 'git reset --soft HEAD~1', desc: 'HEAD~1은 바로 이전 커밋이에요. 작업 파일과 스테이징 영역을 유지하면서 현재 브랜치를 그 커밋으로 옮겨요.' },
     ],
   },
@@ -162,12 +172,12 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     takeaway: '새 브랜치를 만들어 회의록 변경을 기록하고 공유했어요. 팀원 승인을 확인한 뒤 PR을 합치고, 내 컴퓨터의 main에도 합친 내용을 가져왔어요.',
     accent: '#38bdf8',
     terms: [
-      { name: '브랜치', meaning: '기본 문서를 그대로 두고 따로 수정할 수 있는 작업 갈래예요. main은 팀의 기본 브랜치예요.' },
-      { name: 'gh', meaning: 'GitHub를 터미널에서 쓰는 도구예요. 이 장에서는 gh로 PR을 열고, 팀원 승인을 확인하고, 합쳐요.' },
-      { name: '원격 저장소', meaning: '내 컴퓨터에서 연결해 둔 다른 저장소예요. 여기서는 팀이 GitHub에 둔 저장소를 뜻해요.' },
-      { name: 'origin', meaning: '연결된 원격 저장소(GitHub)에 붙인 별명이에요. origin/main은 GitHub에 있는 main을 뜻해요.' },
-      { name: '풀 리퀘스트(PR)', meaning: '한 브랜치의 변경을 다른 브랜치에 합치기(병합)하자는 제안이에요. 팀원이 바뀐 줄을 보고 의견을 남기고 승인할 수 있어요.' },
-      { name: '승인', meaning: '팀원이 변경을 검토하고 좋다고 표시하는 것이에요. 승인을 확인한 뒤 합치는 것이 안전해요.' },
+      term('브랜치'),
+      term('gh'),
+      term('원격 저장소'),
+      term('origin'),
+      term('풀 리퀘스트(PR)'),
+      term('승인'),
     ],
     steps: [
       {
@@ -272,8 +282,8 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     takeaway: 'Git이 같은 줄의 변경을 자동으로 합칠 수 없을 때 충돌이 생겨요. 남길 내용을 정하고 커밋하면 합치기가 끝나요.',
     accent: '#c084fc',
     terms: [
-      { name: '브랜치', meaning: '각자 작업을 이어 갈 수 있는 기록의 갈래예요. 이 실습에서는 feat/dark에서 변경을 합쳐요.' },
-      { name: '병합 충돌', meaning: 'Git이 두 변경을 자동으로 합칠 수 없어 사람이 최종 내용을 정해야 하는 상태예요.' },
+      term('브랜치'),
+      term('병합 충돌'),
     ],
     steps: [
       {
@@ -332,9 +342,9 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     takeaway: '이슈는 버그나 할 일을 기록하는 글이에요. gh로 이슈를 등록하고, 자동 검사 진행을 지켜보고, 저장소 정보도 조회했어요.',
     accent: '#a78bfa',
     terms: [
-      { name: '이슈', meaning: '버그, 질문, 할 일을 팀이 함께 기록하는 글이에요. 코드 변경을 제안하려면 PR을 열어요.' },
-      { name: '자동 검사(CI)', meaning: 'GitHub Actions가 빌드·테스트를 자동으로 돌리는 검사예요. gh run watch로 진행을 지켜볼 수 있어요.' },
-      { name: 'API', meaning: '프로그램이 서비스에 요청을 보내 데이터를 받는 통로예요. 여기서는 gh로 저장소 이름을 조회해요.' },
+      term('이슈'),
+      term('자동 검사(CI)'),
+      term('API'),
     ],
     steps: [
       {
@@ -347,8 +357,8 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       {
         id: 'ch5-issue',
         label: '버그 등록하기',
-        goal: '나중에 고칠 버그를 이슈로 등록하기',
-        command: 'gh issue create --title "버그 수정"',
+        goal: '버그 증상을 제목으로 적어 나중에 고칠 이슈로 등록하기',
+        command: 'gh issue create --title "다크 모드에서 글자가 안 보여요"',
         doneAction: 'ISSUE_CREATE',
       },
       {
@@ -371,14 +381,14 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       { stepIndex: 1 },
       { stepIndex: 2 },
       { stepIndex: 3 },
-      { command: 'gh pr create --title "다크모드"', label: '검토 요청하기' },
+      { command: 'gh pr create --title "다크모드" --body "다크 모드 색상을 추가했어요. 검토 부탁해요!"', label: '검토 요청하기' },
       { command: 'gh pr list', label: 'PR 목록 보기' },
     ],
     cheatSheet: [
       { cmd: 'gh auth status', desc: '현재 로그인된 계정과 권한을 확인해요.' },
-      { cmd: 'gh issue create --title "버그 수정"', desc: '새 버그·할 일 이슈를 바로 등록해요.' },
+      { cmd: 'gh issue create --title "다크 모드에서 글자가 안 보여요"', desc: '버그 증상을 제목으로 적어 새 이슈를 바로 등록해요.' },
       { cmd: 'gh run watch', desc: '자동 검사(빌드·테스트) 진행을 실시간으로 지켜봐요.' },
-      { cmd: 'gh pr create --title "다크모드"', desc: '브라우저 없이 PR을 바로 열어요.' },
+      { cmd: 'gh pr create --title "다크모드" --body "다크 모드 색상을 추가했어요. 검토 부탁해요!"', desc: '브라우저 없이 제목과 본문을 적어 PR을 바로 열어요.' },
       { cmd: 'gh pr list', desc: '열려 있는 PR 목록과 자동 검사 상태를 조회해요.' },
       { cmd: 'gh repo view', desc: '현재 저장소의 설명과 상태를 요약해 봐요.' },
       { cmd: 'gh api repos/gitdots/app', desc: '연습 저장소 gitdots/app의 정보를 JSON 형식으로 받아요.' },
@@ -392,8 +402,8 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     takeaway: '이 실습에서는 한 저장소에 필요한 쓰기 권한만 줬어요. 회사의 SSO는 조직에서 신원을 확인하고, SSH 키는 Git 연결을 인증해요.',
     accent: '#fb7185',
     terms: [
-      { name: '개인 액세스 토큰(PAT)', meaning: '프로그램이 내 권한으로 GitHub에 접근할 때 쓰는 인증 정보예요. Fine-grained 토큰은 대상 저장소와 권한을 세밀하게 고를 수 있어요.' },
-      { name: 'SSH 키', meaning: 'Git 연결에 쓰는 인증 수단이에요. 공개키를 GitHub에 등록하고 개인키는 내 컴퓨터에 보관해요.' },
+      term('개인 액세스 토큰(PAT)'),
+      term('SSH 키'),
     ],
     steps: [
       {
@@ -450,8 +460,8 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     takeaway: '사내 호스트에 로그인해 내 계정 정보를 조회했어요. 이 회사의 자동 빌드는 사내 실행기(runner)가 맡아요.',
     accent: '#60a5fa',
     terms: [
-      { name: '호스트', meaning: '접속할 서버의 주소예요. 예제의 사내 호스트는 github.corp.internal이에요.' },
-      { name: '실행기(runner)', meaning: '빌드와 테스트 같은 자동 작업을 맡는 컴퓨터예요. 이 회사는 사내에 실행기를 두었어요.' },
+      term('호스트'),
+      term('실행기(runner)'),
     ],
     steps: [
       {
@@ -506,8 +516,8 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     takeaway: 'worktree로 작업 폴더를 나누고, 브랜치 보호 규칙으로 main에 들어갈 변경을 관리했어요. 사람이 검토한 수정이 PR을 통해 합쳐졌어요.',
     accent: '#34d399',
     terms: [
-      { name: 'worktree', meaning: '같은 저장소의 다른 브랜치를 별도 폴더에서 열어 작업할 수 있게 해요. 각 폴더는 커밋 기록을 공유해요.' },
-      { name: '브랜치 보호 규칙', meaning: '중요한 브랜치를 바꿀 조건을 정해요. 이 실습의 main은 PR, 자동 테스트, 사람의 승인을 거쳐요.' },
+      term('worktree'),
+      term('브랜치 보호 규칙'),
     ],
     steps: [
       {

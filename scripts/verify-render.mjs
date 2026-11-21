@@ -233,7 +233,7 @@ async function practiceTracks(page, url) {
   const guide = page.getByTestId('guided-command');
   await openTerminal(page);
   await expectQuickAction(page, '보관한 작업 복원하기', 'git stash pop');
-  for (const label of ['작업 임시 보관하기', '지난 변경 취소하기', '보관한 작업 복원하기']) {
+  for (const label of ['작업 임시 보관하기', '지난 변경 취소하기', '보관한 작업 복원하기', '팀에 공유하기']) {
     assert.equal(await guide.innerText(), label);
     await guide.click();
   }
@@ -529,6 +529,23 @@ async function advancedVisualCards(browser, url) {
   await page.close();
 }
 
+async function mobileLessonLayout(browser, url) {
+  const page = await browser.newPage({ viewport: { width: 390, height: 760 }, isMobile: true, hasTouch: true });
+  await openChapter(page, url, 1);
+  const allTerms = page.getByTestId('all-terms');
+  // 전체 용어 상자는 접혀 있고, 다음 단계 버튼보다 아래에 있어요.
+  assert.equal(await allTerms.evaluate((el) => el.open), false);
+  const buttonBox = await page.getByTestId('guided-command').boundingBox();
+  const termsBox = await allTerms.boundingBox();
+  assert(buttonBox.y < termsBox.y, 'Guided button sits below the full terms list on mobile');
+  // 지금 단계에서 쓰는 용어만 보여 줘요.
+  const stepTerms = page.getByTestId('step-terms');
+  await stepTerms.waitFor();
+  assert.match(await stepTerms.innerText(), /회의록.md/);
+  assert.doesNotMatch(await stepTerms.innerText(), /HEAD/);
+  await page.close();
+}
+
 async function main() {
   fs.mkdirSync(out, { recursive: true });
   const local = publicUrl ? undefined : await startServer();
@@ -573,6 +590,8 @@ async function main() {
     console.log('[QA] Storage failure warning and cross-tab sync passed');
     await advancedVisualCards(browser, url);
     console.log('[QA] Token scope and AI test result cards passed');
+    await mobileLessonLayout(browser, url);
+    console.log('[QA] Mobile lesson layout (contextual terms, button above full terms) passed');
 
     const link = await browser.newPage();
     await link.goto(url + 'docs/deeper/');

@@ -140,7 +140,7 @@ export function TerminalDock() {
                 >
                   {done && <Check aria-hidden="true" className="h-3 w-3 shrink-0 text-[#147A5B]" />}
                   {chip.label}
-                  {isPracticeCommand(chip.command) && <span className="shrink-0 text-[10px] font-normal text-[#79521D]">실습 전용</span>}
+                  {isPracticeCommand(chip.command) && <span className="shrink-0 text-xs font-normal text-[#79521D]">실습 전용</span>}
                 </button>
               );
             })}

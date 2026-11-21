@@ -35,6 +35,10 @@ export function LessonGuide() {
   const saveDraft = draft !== null;
   const ButtonIcon = saveDraft ? Save : editDocument ? Pencil : Play;
   const label = saveDraft ? '문서 저장하기' : nextStep?.label;
+  // 지금 단계에서 쓰는 용어만 보여 줘서 첫 화면을 가볍게 해요.
+  const stepTerms = nextStep
+    ? lesson.terms.filter(({ name }) => nextStep.goal.includes(name) || nextStep.command.includes(name))
+    : [];
 
   function runGuidedStep() {
     if (saveDraft) {
@@ -62,19 +66,6 @@ export function LessonGuide() {
           </p>
           <p className="mt-1.5 text-xs text-[#715A43]">이 브라우저 안의 가상 실습이에요. 실제 GitHub에는 반영되지 않아요.</p>
           {(lesson.id === 'docs' || lesson.id === 'ch4') && <GitHubWebGuide />}
-          {lesson.terms.length > 0 && (
-            <details open className="mt-2 max-w-[68ch] rounded-md border border-[#DED1B8] bg-[#F9F3E8] px-2.5 text-xs">
-              <summary className="cursor-pointer py-1.5 font-semibold text-[#166447]">이 장에서 쓰는 용어</summary>
-              <dl className="mb-2 space-y-1 leading-relaxed text-[#59483B]">
-                {lesson.terms.map(({ name, meaning }) => (
-                  <div key={name} className="break-keep">
-                    <dt className="inline font-semibold text-[#14694F]">{name}</dt>
-                    <dd className="inline"> — {meaning}</dd>
-                  </div>
-                ))}
-              </dl>
-            </details>
-          )}
         </div>
         <div className="min-w-0 border-l-[3px] border-[#D69724] pl-3.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-[#715A43]" aria-live="polite">
@@ -118,6 +109,16 @@ export function LessonGuide() {
                   {isPracticeCommand(nextStep.command) && <span className="ml-2">실습 전용</span>}
                 </p>
               )}
+              {stepTerms.length > 0 && (
+                <dl data-testid="step-terms" className="mt-2 space-y-1 rounded-md border border-[#E3D5BE] bg-[#F9F3E8] px-2.5 py-1.5 text-xs leading-relaxed text-[#59483B]">
+                  {stepTerms.map(({ name, meaning }) => (
+                    <div key={name} className="break-keep">
+                      <dt className="inline font-semibold text-[#14694F]">{name}</dt>
+                      <dd className="inline"> — {meaning}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
             </>
           ) : (
             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -140,6 +141,19 @@ export function LessonGuide() {
           )}
         </div>
       </div>
+      {lesson.terms.length > 0 && (
+        <details data-testid="all-terms" className="mx-auto max-w-[1440px] px-4 pb-3 sm:px-6">
+          <summary className="cursor-pointer text-xs font-semibold text-[#166447]">이 장에서 쓰는 용어 전체 보기</summary>
+          <dl className="mt-1.5 max-w-[68ch] space-y-1 rounded-md border border-[#DED1B8] bg-[#F9F3E8] px-2.5 py-2 text-xs leading-relaxed text-[#59483B]">
+            {lesson.terms.map(({ name, meaning }) => (
+              <div key={name} className="break-keep">
+                <dt className="inline font-semibold text-[#14694F]">{name}</dt>
+                <dd className="inline"> — {meaning}</dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+      )}
     </section>
   );
 }

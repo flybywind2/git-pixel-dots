@@ -3290,7 +3290,7 @@ const GENERAL_CATALOG: { cmd: string; hint: string }[] = [
   { cmd: 'gh pr list', hint: '열린 PR 목록 보기' },
   { cmd: 'gh pr view', hint: 'PR의 팀원 검토·승인 확인하기' },
   { cmd: 'gh pr merge', hint: '승인을 확인한 PR을 main에 합치기' },
-  { cmd: 'gh issue create --title "버그 수정"', hint: '새 이슈 카드 등록하기' },
+  { cmd: 'gh issue create --title "다크 모드에서 글자가 안 보여요"', hint: '버그 증상을 제목으로 적어 이슈 등록하기' },
   { cmd: 'gh run watch', hint: '자동 검사(CI) 실시간 지켜보기' },
   { cmd: 'gh api repos/gitdots/app', hint: 'GitHub REST API 조회하기' },
   { cmd: 'token classic', hint: '예제 classic 토큰의 권한 확인' },

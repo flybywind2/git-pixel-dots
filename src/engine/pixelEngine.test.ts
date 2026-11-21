@@ -173,15 +173,20 @@ describe('Full stage walkthroughs', () => {
     expect(s.lastAnim.kind).toBe('REVERT');
     expect(s.commits).toHaveLength(initialCommitCount + 1);
     expect(s.commits[s.commits.length - 1]?.isRevert).toBe(true);
-    expect(s.bubbles[0]?.title).toContain('3장 실습 완료');
 
-    // Bonus: reset --soft marks latest commit as ghost and stages file
+    // Bonus: reset --soft marks the local-only revert commit as ghost and stages file
     const beforeResetHead = s.branches.main;
-    s = deepFreeze(executePixelCommand(s, 'git reset --soft HEAD~1'));
-    expect(s.lastAnim.kind).toBe('RESET');
-    expect(s.branches.main).not.toBe(beforeResetHead);
-    expect(s.commits.find((c) => c.id === beforeResetHead)?.ghost).toBe(true);
-    expect(s.staged.length).toBeGreaterThan(0);
+    const softReset = deepFreeze(executePixelCommand(s, 'git reset --soft HEAD~1'));
+    expect(softReset.lastAnim.kind).toBe('RESET');
+    expect(softReset.branches.main).not.toBe(beforeResetHead);
+    expect(softReset.commits.find((c) => c.id === beforeResetHead)?.ghost).toBe(true);
+    expect(softReset.staged.length).toBeGreaterThan(0);
+
+    // 취소 커밋을 팀에 공유해야 장이 완료돼요.
+    s = deepFreeze(executePixelCommand(s, 'git push'));
+    expect(s.lastAnim.kind).toBe('PUSH');
+    expect(s.remoteBranches.main).toBe(s.branches.main);
+    expect(s.bubbles[0]?.title).toContain('3장 실습 완료');
   });
 
   it('restores the files in each stash and keeps the entry when newer edits overlap', () => {
@@ -386,10 +391,10 @@ describe('Full stage walkthroughs', () => {
     s = deepFreeze(executePixelCommand(s, 'gh pr list'));
     expect(s.lastAnim.kind).toBe('GH_CMD');
 
-    s = deepFreeze(executePixelCommand(s, 'gh issue create --title "버그 수정"'));
+    s = deepFreeze(executePixelCommand(s, 'gh issue create --title "다크 모드에서 글자가 안 보여요"'));
     expect(s.lastAnim.kind).toBe('GH_CMD');
     expect(s.issues).toHaveLength(initialIssues + 1);
-    expect(s.issues[s.issues.length - 1]?.title).toBe('버그 수정');
+    expect(s.issues[s.issues.length - 1]?.title).toBe('다크 모드에서 글자가 안 보여요');
 
     s = deepFreeze(executePixelCommand(s, 'gh run watch'));
     expect(s.lastAnim.kind).toBe('GH_CMD');
