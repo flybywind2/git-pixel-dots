@@ -245,6 +245,18 @@ async function practiceTracks(page, url) {
   for (const phase of ['내 컴퓨터에서', 'GitHub에서', '다시 내 컴퓨터로']) {
     await page.getByText(phase, { exact: true }).waitFor();
   }
+  for (const label of ['새 브랜치 만들기', '다음 기록에 담기', '기록 남기기', '팀에 공유하기', '검토 요청하기', '팀원 승인 확인하기', '검토한 변경 합치기', '기본 브랜치로 이동하기', '합친 내용 가져오기']) {
+    assert.equal(await guide.innerText(), label);
+    await guide.click();
+  }
+  await expectProgress(page, 9, 9);
+  await runCommand(page, 'git show origin/main:회의록.md');
+  await page.getByRole('log').getByText(/장소는 2층 모임방이에요\./).waitFor();
+  // 합친 뒤 내 컴퓨터의 main에도 같은 내용이 반영돼요.
+  await runCommand(page, 'git show HEAD:회의록.md');
+  await page.getByRole('log').getByText(/장소는 2층 모임방이에요\./).last().waitFor();
+
+  // GitHub 웹 안내는 장을 완료한 뒤에만 보여요.
   await page.getByText('GitHub 웹에서 이어 하기', { exact: false }).click();
   await page.getByText('Create pull request', { exact: true }).waitFor();
   const editingHelp = page.getByRole('link', { name: /GitHub 문서 편집 도움말/ });
@@ -256,17 +268,6 @@ async function practiceTracks(page, url) {
   await helpTab.waitForURL('https://docs.github.com/**');
   assert.match(page.url(), /#\/chapter\/4$/);
   await helpTab.close();
-
-  for (const label of ['새 브랜치 만들기', '다음 기록에 담기', '기록 남기기', '팀에 공유하기', '검토 요청하기', '팀원 승인 확인하기', '검토한 변경 합치기', '기본 브랜치로 이동하기', '합친 내용 가져오기']) {
-    assert.equal(await guide.innerText(), label);
-    await guide.click();
-  }
-  await expectProgress(page, 9, 9);
-  await runCommand(page, 'git show origin/main:회의록.md');
-  await page.getByRole('log').getByText(/장소는 2층 모임방이에요\./).waitFor();
-  // 합친 뒤 내 컴퓨터의 main에도 같은 내용이 반영돼요.
-  await runCommand(page, 'git show HEAD:회의록.md');
-  await page.getByRole('log').getByText(/장소는 2층 모임방이에요\./).last().waitFor();
 
   const advanced = page.getByRole('combobox', { name: '심화 실습 선택', exact: true });
   await advanced.selectOption('ch3');
@@ -530,19 +531,40 @@ async function advancedVisualCards(browser, url) {
 }
 
 async function mobileLessonLayout(browser, url) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 760 }, isMobile: true, hasTouch: true });
-  await openChapter(page, url, 1);
-  const allTerms = page.getByTestId('all-terms');
-  // 전체 용어 상자는 접혀 있고, 다음 단계 버튼보다 아래에 있어요.
-  assert.equal(await allTerms.evaluate((el) => el.open), false);
-  const buttonBox = await page.getByTestId('guided-command').boundingBox();
-  const termsBox = await allTerms.boundingBox();
-  assert(buttonBox.y < termsBox.y, 'Guided button sits below the full terms list on mobile');
-  // 지금 단계에서 쓰는 용어만 보여 줘요.
-  const stepTerms = page.getByTestId('step-terms');
-  await stepTerms.waitFor();
-  assert.match(await stepTerms.innerText(), /회의록.md/);
-  assert.doesNotMatch(await stepTerms.innerText(), /HEAD/);
+  for (const [width, height] of [[390, 760], [320, 568]]) {
+    const page = await browser.newPage({ viewport: { width, height }, isMobile: true, hasTouch: true });
+    await openChapter(page, url, 1);
+    const allTerms = page.getByTestId('all-terms');
+    // 전체 용어 상자는 접혀 있고, 다음 단계 버튼보다 아래에 있어요.
+    assert.equal(await allTerms.evaluate((el) => el.open), false);
+    const buttonBox = await page.getByTestId('guided-command').boundingBox();
+    const termsBox = await allTerms.boundingBox();
+    assert(buttonBox.y < termsBox.y, 'Guided button sits below the full terms list on mobile');
+    // 다음 단계 버튼이 스크롤 없이 첫 화면에 보여요.
+    assert(buttonBox.y >= 0 && buttonBox.y + buttonBox.height <= height,
+      `Guided button not visible without scrolling at ${width}x${height}`);
+    // 지금 단계에서 쓰는 용어만 보여 줘요.
+    const stepTerms = page.getByTestId('step-terms');
+    await stepTerms.waitFor();
+    assert.match(await stepTerms.innerText(), /회의록.md/);
+    assert.doesNotMatch(await stepTerms.innerText(), /HEAD/);
+    // 비교를 실행하기 전에는 결과 한 줄이 보이지 않아요.
+    assert.equal(await page.getByText('비교 결과:', { exact: false }).count(), 0);
+    await page.close();
+  }
+}
+
+async function advancedGuidedCompletion(browser, url) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  // 심화 5~9장을 안내 버튼만으로 끝까지 완료해요(1~4장은 다른 검사에서 완료).
+  for (const [chapter, total] of [[5, 4], [6, 4], [7, 4], [8, 4], [9, 5]]) {
+    await openChapter(page, url, chapter);
+    const guide = page.getByTestId('guided-command');
+    for (let i = 0; i < total; i++) {
+      await guide.click();
+    }
+    await expectProgress(page, total, total);
+  }
   await page.close();
 }
 
@@ -591,7 +613,9 @@ async function main() {
     await advancedVisualCards(browser, url);
     console.log('[QA] Token scope and AI test result cards passed');
     await mobileLessonLayout(browser, url);
-    console.log('[QA] Mobile lesson layout (contextual terms, button above full terms) passed');
+    console.log('[QA] Mobile lesson layout (contextual terms, button visible without scroll) passed');
+    await advancedGuidedCompletion(browser, url);
+    console.log('[QA] Advanced chapters 5-9 completed via guide buttons passed');
 
     const link = await browser.newPage();
     await link.goto(url + 'docs/deeper/');

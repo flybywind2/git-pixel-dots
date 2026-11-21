@@ -212,7 +212,7 @@ function areAllStepsCompleted(state: PixelSimState): boolean {
 function nextStepHintText(state: PixelSimState): string {
   const next = getNextPendingStep(state);
   if (next) {
-    return `다음 목표: ${next.command} (${next.goal})`;
+    return `다음 목표: ${next.goal} (${next.command})`;
   }
   return `${STAGE_MAP[state.stageId].number}장 실습을 마쳤어요.`;
 }
@@ -326,7 +326,7 @@ function stageSeed(id: StageId): StageSeed {
             54,
             '공유할 문서 두 개가 있어요',
             `회의록.md의 모임 시간을 바꿨고 ${ATTENDANCE_PATH}를 새로 썼어요. 두 문서를 다음 커밋에 담아서 팀에 보낼 수 있어요.`,
-            '아래 추천 버튼을 누르거나 git add . 를 입력해 보세요!',
+            '아래 추천 버튼을 눌러 두 문서를 다음 기록에 담아 보세요.',
             [{ label: '다음 기록에 담기', command: 'git add .', tone: 'mint' }],
           ),
         ],

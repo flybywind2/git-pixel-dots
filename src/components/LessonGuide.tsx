@@ -42,8 +42,10 @@ export function LessonGuide() {
       ? nextStep.terms.map((name) => ({ name, meaning: CANONICAL_TERMS[name] }))
       : lesson.terms.filter(({ name }) => nextStep.goal.includes(name) || nextStep.command.includes(name))
     : [];
-  // 1장은 비교 결과를 안내 카드에 한 줄로 보여 줘서, 아래로 스크롤하지 않아도 무슨 일이 일어났는지 알 수 있게 해요.
-  const docComparison = lesson.id === 'docs' && sim.document ? getDocumentComparison(sim, sim.document.comparison) : null;
+  // 1장은 비교 단계를 한 번이라도 실행한 뒤에만 결과를 안내 카드에 한 줄로 보여 줘요.
+  const docDiffDone = lesson.id === 'docs' && sim.completedActions.some((action) =>
+    action === 'DOCUMENT_WORKING_DIFF' || action === 'DOCUMENT_STAGED_DIFF' || action === 'DOCUMENT_COMMIT_DIFF');
+  const docComparison = docDiffDone && sim.document ? getDocumentComparison(sim, sim.document.comparison) : null;
   const docLines = docComparison ? diffDocumentLines(docComparison.before, docComparison.after) : [];
   const docRemoved = docLines.filter((line) => line.kind === 'removed').length;
   const docAdded = docLines.filter((line) => line.kind === 'added').length;
@@ -77,7 +79,7 @@ export function LessonGuide() {
           {lesson.track === 'advanced' && (
             <p className="mt-1 text-xs text-[#715A43]">선택 심화 과정이에요. 기본 1~4장만 완주해도 팀 협업의 기본은 충분해요.</p>
           )}
-          {(lesson.id === 'docs' || lesson.id === 'ch4') && <GitHubWebGuide />}
+          {(lesson.id === 'docs' || lesson.id === 'ch4') && !nextStep && <GitHubWebGuide />}
         </div>
         <div className="min-w-0 border-l-[3px] border-[#D69724] pl-3.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-[#715A43]" aria-live="polite">
@@ -107,9 +109,11 @@ export function LessonGuide() {
           {label ? (
             <>
               {nextStep && !saveDraft && <p className="mt-1.5 break-keep text-sm">{nextStep.goal}</p>}
-              {lesson.id === 'docs' && docLines.length > 0 && (
+              {docDiffDone && (
                 <p role="status" className="mt-1 text-xs font-semibold text-[#196446]">
-                  비교 결과: 빠진 줄 {docRemoved}개 · 들어간 줄 {docAdded}개
+                  {docRemoved + docAdded > 0
+                    ? `비교 결과: 빠진 줄 ${docRemoved}개 · 들어간 줄 ${docAdded}개`
+                    : '비교 결과: 바뀐 줄이 없어요'}
                 </p>
               )}
               <button
@@ -182,8 +186,7 @@ export function LessonGuide() {
 function GitHubWebGuide() {
   return (
     <details className="mt-2 max-w-[68ch] rounded-md border border-[#DED1B8] bg-[#F9F3E8] px-2.5 text-xs">
-      <summary className="cursor-pointer py-1.5 font-semibold text-[#166447]">GitHub 웹에서 이어 하기 (실제 GitHub에서 써보기 · 선택)</summary>
-      <p className="mb-2 break-keep leading-relaxed text-[#715A43]">지금은 실습에 집중하세요. 이 안내는 나중에 실제 GitHub에서 써볼 때 참고하는 선택 과정이에요.</p>
+      <summary className="cursor-pointer py-1.5 font-semibold text-[#166447]">GitHub 웹에서 이어 하기 (실제 GitHub에서 써보기)</summary>
       <ol className="mb-2 ml-4 list-decimal space-y-1.5 break-keep leading-relaxed text-[#59483B]">
         <li>저장소에서 문서를 열고 연필 버튼으로 편집해요. <strong>Preview</strong>에서 문서가 어떻게 보이는지 확인해요.</li>
         <li><strong>Commit changes</strong>에서 변경 이유를 적고 새 브랜치에 기록해요. 쓰기 권한이 없는 저장소에서는 포크(다른 사람 저장소를 내 계정으로 복사)를 만들어 <strong>Propose changes</strong>로 변경을 제안할 수 있어요.</li>
