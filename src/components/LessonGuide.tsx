@@ -1,6 +1,7 @@
 import { ArrowRight, Pencil, Play, Save } from 'lucide-react';
 import { getNextPendingStep, isPracticeCommand, isStepCompleted, STAGE_MAP, STAGE_TRACKS } from '../engine';
 import { DOCUMENT_REVERT } from '../engine/documentDiff';
+import { CANONICAL_TERMS } from '../engine/terms';
 import { usePixelStore } from '../store/usePixelStore';
 
 export function LessonGuide() {
@@ -35,9 +36,11 @@ export function LessonGuide() {
   const saveDraft = draft !== null;
   const ButtonIcon = saveDraft ? Save : editDocument ? Pencil : Play;
   const label = saveDraft ? '문서 저장하기' : nextStep?.label;
-  // 지금 단계에서 쓰는 용어만 보여 줘서 첫 화면을 가볍게 해요.
+  // 지금 단계에서 쓰는 용어만 보여 줘서 첫 화면을 가볍게 해요. 단계에 명시된 용어를 우선 사용해요.
   const stepTerms = nextStep
-    ? lesson.terms.filter(({ name }) => nextStep.goal.includes(name) || nextStep.command.includes(name))
+    ? nextStep.terms
+      ? nextStep.terms.map((name) => ({ name, meaning: CANONICAL_TERMS[name] }))
+      : lesson.terms.filter(({ name }) => nextStep.goal.includes(name) || nextStep.command.includes(name))
     : [];
 
   function runGuidedStep() {
@@ -164,7 +167,7 @@ function GitHubWebGuide() {
       <summary className="cursor-pointer py-1.5 font-semibold text-[#166447]">GitHub 웹에서 이어 하기</summary>
       <ol className="mb-2 ml-4 list-decimal space-y-1.5 break-keep leading-relaxed text-[#59483B]">
         <li>저장소에서 문서를 열고 연필 버튼으로 편집해요. <strong>Preview</strong>에서 문서가 어떻게 보이는지 확인해요.</li>
-        <li><strong>Commit changes</strong>에서 변경 이유를 적고 새 브랜치에 기록해요. 쓰기 권한이 없는 저장소에서는 포크를 만들어 <strong>Propose changes</strong>로 변경을 제안할 수 있어요.</li>
+        <li><strong>Commit changes</strong>에서 변경 이유를 적고 새 브랜치에 기록해요. 쓰기 권한이 없는 저장소에서는 포크(다른 사람 저장소를 내 계정으로 복사)를 만들어 <strong>Propose changes</strong>로 변경을 제안할 수 있어요.</li>
         <li><strong>Compare &amp; pull request</strong>에서 변경을 확인하고 <strong>Create pull request</strong>로 팀에 검토를 요청해요.</li>
       </ol>
       <p className="mb-2 break-keep leading-relaxed text-[#715A43]">

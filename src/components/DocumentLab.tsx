@@ -11,6 +11,7 @@ import {
 import { usePixelStore } from '../store/usePixelStore';
 import type { DocumentComparison } from '../types/sim';
 import { treeEntry } from '../engine/repoVersions';
+import { SPEAKER_THEMES } from '../pixel/palette';
 
 const COMPARISON_MODES: DocumentComparison[] = ['working', 'staged', 'commits'];
 const DIFF_STYLES = {
@@ -49,9 +50,48 @@ export function DocumentLab() {
   }
   if (unsaved) fileStatus = '저장할 수정이 있어요';
 
+  // 충돌 안내 영역이 이미 제공하는 버튼은 말풍선에서 중복해서 보여 주지 않아요.
+  const conflictCommands = new Set(conflict?.revert ? ['resolve ours', 'resolve theirs', 'git revert --continue', 'git revert --abort'] : []);
+  const bubbleActions = (sim.bubbles[0]?.actions ?? []).filter((act) => !conflictCommands.has(act.command));
+
   return (
     <div className="dot-bg flex flex-1 bg-[#F6EFE2]">
       <div className="mx-auto grid w-full max-w-[1440px] min-w-0 items-start gap-4 px-4 py-5 sm:px-6 lg:grid-cols-2">
+        {sim.bubbles.length > 0 && (
+          <section
+            aria-live="polite"
+            data-testid="speech-bubble"
+            style={{ borderColor: SPEAKER_THEMES[sim.bubbles[0].speaker].border }}
+            className="rounded-xl border bg-[#FFFDF8] px-4 py-3 lg:col-span-2"
+          >
+            <div className="flex items-center gap-2">
+              <span
+                style={{
+                  backgroundColor: SPEAKER_THEMES[sim.bubbles[0].speaker].badgeBg,
+                  color: SPEAKER_THEMES[sim.bubbles[0].speaker].badgeText,
+                  borderColor: SPEAKER_THEMES[sim.bubbles[0].speaker].border,
+                }}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 font-pixel text-xs"
+              >
+                <span style={{ backgroundColor: SPEAKER_THEMES[sim.bubbles[0].speaker].dot }} className="h-1.5 w-1.5 shrink-0 rounded-[1px]" />
+                {sim.bubbles[0].speakerName}
+              </span>
+              <h2 className="min-w-0 break-keep text-sm font-bold text-[#2F241D]">{sim.bubbles[0].title}</h2>
+            </div>
+            <p className="mt-1 break-keep text-sm leading-relaxed text-[#4E3E33]">{sim.bubbles[0].message}</p>
+            {sim.bubbles[0].nextHint && <p className="mt-1 break-words text-xs leading-relaxed text-[#79521D]">{sim.bubbles[0].nextHint}</p>}
+            {bubbleActions.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {bubbleActions.map((act) => (
+                  <button key={`${act.label}-${act.command}`} type="button" onClick={() => runCommand(act.command)}
+                    className="pixel-btn cursor-pointer rounded-md border border-[#CDBCA3] bg-[#FAF4E8] px-2.5 py-1 text-xs font-semibold hover:bg-[#F0E5CF]">
+                    {act.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
         {conflict?.revert && (
           <section aria-labelledby="document-conflict-title" className="rounded-xl border border-[#D69B61] bg-[#FFF2D7] p-4 lg:col-span-2">
             <h2 id="document-conflict-title" className="font-bold">커밋 취소 중 변경이 겹쳤어요</h2>

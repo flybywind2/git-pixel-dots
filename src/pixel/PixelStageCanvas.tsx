@@ -23,7 +23,7 @@ const SCOPE_LABELS: Readonly<Record<string, string>> = {
   'repo': '저장소 읽기·쓰기',
   'admin:org': '조직 설정 관리',
   'delete_repo': '저장소 삭제',
-  'workflow': '워크플로 수정',
+  'workflow': '자동 검사(워크플로) 설정 수정',
   'contents:write (gitdots/app)': 'gitdots/app 파일 쓰기',
   'expires:30d': '30일 뒤 만료',
 };
@@ -297,7 +297,7 @@ export function PixelStageCanvas() {
             <ul className="mt-2 space-y-1 break-keep text-xs leading-relaxed text-[#59483B]">
               <li>· 현재 브랜치 내용 유지 → 내 브랜치 줄만 남아요.</li>
               <li>· 상대 브랜치 내용 사용 → 상대 브랜치 줄만 남아요.</li>
-              <li>· 두 내용 함께 담기 → 두 줄을 모두 남해요.</li>
+              <li>· 두 내용 함께 담기 → 두 줄을 모두 남겨요.</li>
             </ul>
           </div>
         </div>
@@ -326,7 +326,7 @@ export function PixelStageCanvas() {
             <p className="mt-1 break-keep text-xs leading-relaxed text-[#59483B]">2와 3을 더한 결과가 5인지 자동으로 확인했고, 통과했어요.</p>
             <ul className="font-mono-code mt-2 space-y-1 text-xs text-[#147A5B]">
               <li>✓ unit test: sum(2, 3) === 5 PASS</li>
-              {sim.ai.prNumber !== null && <li>✓ PR #{sim.ai.prNumber} CI: Lint · Unit Test · Secret Scan PASS</li>}
+              {sim.ai.prNumber !== null && <li>✓ PR #{sim.ai.prNumber} 자동 검사: 코드 형식(Lint) · 단위 테스트(Unit Test) · 비밀키 검사(Secret Scan) 통과</li>}
             </ul>
             <p className="mt-2 break-keep text-xs leading-relaxed text-[#59483B]">buggy.ts 변경: a - b → a + b (빼기를 더하기로 고침)</p>
           </div>

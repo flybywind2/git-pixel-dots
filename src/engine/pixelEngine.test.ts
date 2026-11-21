@@ -319,9 +319,9 @@ describe('Full stage walkthroughs', () => {
     expect(blocked.lastAnim.kind).toBe('IDLE');
     expect(blocked.prs[0]?.status).toBe('open');
     expect(blocked.prs[0]?.approved).toBe(false);
-    expect(blocked.bubbles[0]?.actions?.some((action) => action.command === 'gh pr view')).toBe(true);
+    expect(blocked.bubbles[0]?.actions?.some((action) => action.command === 'gh pr view --comments')).toBe(true);
 
-    const reviewed = executePixelCommand(blocked, 'gh pr view');
+    const reviewed = executePixelCommand(blocked, 'gh pr view --comments');
     expect(reviewed.prs[0]?.approved).toBe(true);
     expect(reviewed.completedActions).toContain('PR_REVIEW');
     expect(reviewed.bubbles[0]?.message).toContain(MEETING_REVIEWER);
@@ -748,7 +748,8 @@ describe('Utility commands, unknown commands & autocomplete', () => {
     expect(next.lastAnim.seq).toBe(1);
     expect(next.lastAnim.kind).toBe('IDLE');
     assertValidBubbles(next);
-    expect(next.bubbles[0]?.message).toContain('어라, 모르는 명령어예요!');
+    expect(next.bubbles[0]?.title).toContain('어라, 모르는 명령어예요!');
+    expect(next.bubbles[0]?.message).toContain('help를 입력해');
     expect(next.bubbles[0]?.actions?.some((a) => a.command === 'help')).toBe(true);
   });
 

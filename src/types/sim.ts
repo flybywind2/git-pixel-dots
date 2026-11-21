@@ -1,3 +1,5 @@
+import type { TermName } from '../engine/terms';
+
 // 이 순서는 공개 URL 번호(#/chapter/N)와 같아요. 이미 공유된 링크가 다른 장을 열지 않도록 순서를 바꾸지 마세요.
 export const ALL_STAGE_IDS = [
   'docs',
@@ -189,6 +191,7 @@ export interface StageStep {
   goal: string;
   command: string;
   doneAction: LessonAction | LessonAction[];
+  terms?: TermName[];
 }
 
 export const LESSON_ACTIONS = [

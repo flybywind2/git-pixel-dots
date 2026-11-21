@@ -1157,7 +1157,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         46,
         52,
         `충돌 해결 완료! (${choiceLabel}) 🧩`,
-        `${conflictFile} 파일의 충돌을 해결하고 다음 커밋에 담았어요.`,
+        `${conflictFile}에서 선택한 내용을 남기고 스테이징했어요. 실제 Git에서는 파일을 직접 수정해 충돌 표시를 지운 뒤 git add로 해결을 표시해요.`,
         `${finish}로 기록을 마무리하세요.`,
         [{ label: '해결한 내용 기록하기', command: finish, tone: 'mint' }],
       ),
@@ -1261,7 +1261,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           56,
           48,
           '회사 계정으로 신원을 확인했어요',
-          'SAML SSO를 쓰는 조직에서는 회사 계정과 GitHub 계정을 연결해요. Fine-grained 토큰의 조직 인증은 토큰을 만들 때 이뤄져요.',
+          '회사 통합 로그인(SSO)을 쓰는 조직에서는 회사 계정과 GitHub 계정을 연결해요. Fine-grained 토큰의 조직 인증은 토큰을 만들 때 이뤄져요.',
           nextStepHintText({ ...draft, completedActions: withCompletedAction(draft.completedActions, 'TOKEN_SSO') }),
           !state.token.sshReady
             ? [{ label: 'SSH 공개키 등록하기', command: 'token ssh', tone: 'mint' }]
@@ -1295,7 +1295,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           56,
           48,
           'SSH 암호화 열쇠 짝꿍 완성! 🔐',
-          '비밀키는 내 컴퓨터에만 두고 공개키만 GitHub에 등록해서 비밀번호 없이도 안전하게 연결해요!',
+          '개인키는 내 컴퓨터에만 두고 공개키만 GitHub에 등록해서 비밀번호 없이도 안전하게 연결해요!',
           nextStepHintText({ ...draft, completedActions: withCompletedAction(draft.completedActions, 'TOKEN_SSH') }),
         ),
       );
@@ -1317,7 +1317,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         [
           { text: 'remote: error: GH013: Repository rule violations found!', tone: 'coral' },
           { text: 'remote: - GITHUB PUSH PROTECTION: GitHub Personal Access Token 감지됨', tone: 'coral' },
-          { text: '🛡️ 비밀키가 외부에 올라가기 직전에 자동으로 막았어요!', tone: 'mint' },
+          { text: '🛡️ 개인키가 외부에 올라가기 직전에 자동으로 막았어요!', tone: 'mint' },
         ],
         makeBubble(
           `token-leak-${seqNext}`,
@@ -1816,11 +1816,13 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
       // 담은 직후에는 스테이징 비교를 바로 보여 줘서 "고친 게 사라졌나?" 하는 오해를 줄여요.
       if (state.document) draft.document = { comparison: 'staged' };
+      const addMessage = state.document
+        ? '고친 내용을 다음 기록의 장바구니(스테이징 영역)에 담았어요. 작업 문서와 스테이징 영역이 같아진 건 사라져서가 아니라 같은 내용이 장바구니에 담겨서예요. 아래 비교에서 스테이징 탭으로 확인할 수 있어요.'
+        : `수정한 파일(${draft.staged.join(', ')})을 다음 기록의 장바구니(스테이징 영역)에 담았어요. 이제 기록 남기기로 커밋할 수 있어요.`;
       return finalizeTransition(
         state, draft, 'ADD', '다음 기록에 담기', draft.staged.join(', '), cmd,
         [{ text: `스테이징: ${draft.staged.join(', ')}`, tone: 'mint' }],
-        makeBubble(`add-${seqNext}`, 'buddy', 38, 54, '다음 기록에 담았어요',
-          '고친 내용을 그대로 복사해 담았어요. 작업 문서와 스테이징 영역이 같아진 건 사라져서가 아니라 똑같이 담겨서예요. 아래 비교에서 스테이징 탭으로 확인할 수 있어요.'),
+        makeBubble(`add-${seqNext}`, 'buddy', 38, 54, '다음 기록에 담았어요', addMessage),
       );
     }
 
@@ -1894,7 +1896,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
       const message = isMergeCommit
         ? '합친 파일이 새 커밋에 기록됐어요.'
-        : `스테이징 영역에 담았던 변경을 “${parsedMsg}” 커밋으로 기록했어요. ID는 ${newCommit.hash}예요.`;
+        : `스테이징 영역에 담았던 변경을 “${parsedMsg}” 커밋으로 기록했어요. 커밋 ID(7자리 고유 번호)는 ${newCommit.hash}예요.`;
       return finalizeTransition(
         state, draft, 'COMMIT', '커밋 기록', newCommit.hash, cmd,
         [
@@ -1927,7 +1929,9 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       }
 
       const draft = { ...state, remoteBranches: { ...state.remoteBranches, [remoteBranch]: localHead } };
-      const message = `이제 GitHub(원격)에 있는 ${remoteBranch} 브랜치에 내 ${branch}의 새 커밋이 올라갔어요.`;
+      const message = (state.stageId === 'ch1' || state.stageId === 'ch2')
+        ? '방금 만든 새 커밋을 팀의 GitHub(원격 저장소)에 올렸어요.'
+        : `이제 GitHub(원격)에 있는 ${remoteBranch} 브랜치에 내 ${branch}의 새 커밋이 올라갔어요.`;
       return finalizeTransition(
         state, draft, 'PUSH', '변경 공유', `origin/${remoteBranch}`, cmd,
         [{ text: `${branch} → origin/${remoteBranch}`, tone: 'mint' }, { text: message, tone: 'sky' }],
@@ -2007,11 +2011,13 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         branches: { ...state.branches, [state.headBranch]: commit.id },
         completedActions: syncingMain ? withCompletedAction(state.completedActions, 'SYNC_MAIN') : state.completedActions,
       }, checkout.working, checkout.index);
-      const message = `origin/${branch}의 변경을 현재 브랜치에 적용했어요.`;
+      const message = syncingMain
+        ? 'GitHub의 최신 main을 내 컴퓨터에도 가져왔어요. 방금 합친 회의록 수정과 팀원의 참석 안내가 모두 반영됐어요.'
+        : `origin/${branch}의 변경을 현재 브랜치에 적용했어요.`;
       return finalizeTransition(
         state, draft, 'PULL', '원격 변경 적용', `origin/${branch}`, cmd,
         [{ text: message, tone: 'mint' }],
-        makeBubble(`pull-${seqNext}`, 'cloud', 66, 48, '팀원의 변경을 가져왔어요', message),
+        makeBubble(`pull-${seqNext}`, 'cloud', 66, 48, syncingMain ? '합친 내용을 내 컴퓨터로 가져왔어요' : '팀원의 변경을 가져왔어요', message),
       );
     }
 
@@ -2359,7 +2365,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             'buddy',
             40,
             54,
-            '현재 평행우주 브랜치 목록이에요! 🌿',
+            '현재 작업 갈래(브랜치) 목록이에요! 🌿',
             `별표(*)가 붙은 ${state.headBranch} 브랜치에 서 있어요.`,
             nextStepHintText(state),
           ),
@@ -2431,7 +2437,9 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         previousBranch: state.headBranch === targetBranch ? state.previousBranch : state.headBranch,
         completedActions: returningToMain ? withCompletedAction(state.completedActions, 'RETURN_MAIN') : state.completedActions,
       }, checkout.working, checkout.index);
-      const message = `${targetBranch} 브랜치의 커밋 ${target.hash}에 맞게 작업 파일이 열렸어요.`;
+      const message = isCreate
+        ? `새 브랜치 ${targetBranch}${objectParticle(targetBranch)} 만들고 이동했어요. 고쳐 둔 작업 파일 변경은 그대로 따라와요.`
+        : `${targetBranch} 브랜치의 커밋 ${target.hash}에 맞게 작업 파일이 열렸어요.`;
       return finalizeTransition(
         state, draft, isCreate ? 'BRANCH' : 'SWITCH', '브랜치 전환', targetBranch, cmd,
         [
@@ -2608,7 +2616,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           66,
           52,
           `AI 작업 폴더(${dirName})를 열었어요`,
-          `${dirName}에서 ${branchName} 브랜치의 파일을 편집할 수 있어요. 이제 아래 프롬프트가 ${dirName} $로 바뀌는데, 그 폴더에서 작업 중이라는 뜻이에요. 두 작업 폴더는 같은 저장소의 커밋 기록을 공유해요.`,
+          `${dirName} 폴더에서 ${branchName} 브랜치의 파일을 편집할 수 있어요. 아래 터미널을 열면 입력 줄 앞 표시도 ${dirName} $로 바뀐 걸 볼 수 있어요. 두 작업 폴더는 같은 저장소의 커밋 기록을 공유해요.`,
           'ai code 를 입력해서 AI가 코드를 수정하도록 시켜 보세요!',
           [{ label: '덧셈 오류 고치기', command: 'ai code', tone: 'mint' }],
         ),
@@ -2725,8 +2733,8 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             'guard',
             56,
             48,
-            '표준 입력으로 인증하는 예제예요',
-            '--with-token은 토큰을 표준 입력으로 받아요. 여기서는 연습 계정으로 인증 결과만 확인해요.',
+            '화면에 남기지 않고 안전하게 토큰을 넘겨주는 방식이에요',
+            '--with-token은 토큰을 화면에 남기지 않고 안전하게 받아요. 여기서는 연습 계정으로 인증 결과만 확인해요.',
             nextStepHintText(draft),
           ),
         );
@@ -2805,7 +2813,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             68,
             48,
             `PR #${nextNum} 리뷰 요청서 도착! 📋`,
-            `"${title}" PR이 열리고 자동 검사도 통과했어요! 팀원에게 검토를 요청했으니, 팀원의 의견과 승인을 확인한 뒤 합쳐요.`,
+            `"${title}" PR이 열리고 자동 검사(문제 없는지 자동으로 확인하는 절차)도 통과했어요! 팀원에게 검토를 요청했으니, 팀원의 의견과 승인을 확인한 뒤 합쳐요.`,
             nextStepHintText(previewState),
             nextStep
               ? [{ label: `▶ ${nextStep.command}`, command: nextStep.command, tone: 'mint' }]
@@ -2931,8 +2939,8 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
               48,
               '팀원 승인을 먼저 확인하세요',
               '이 PR은 아직 팀원 승인이 없어요. gh pr view로 팀원의 검토 의견과 승인을 확인한 뒤 합쳐 주세요.',
-              'gh pr view 명령을 실행해 보세요.',
-              [{ label: '팀원 승인 확인하기', command: 'gh pr view', tone: 'primary' }],
+              'gh pr view --comments 명령을 실행해 보세요.',
+              [{ label: '팀원 승인 확인하기', command: 'gh pr view --comments', tone: 'primary' }],
             ),
           );
         }
@@ -2988,7 +2996,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             68,
             48,
             `PR #${targetPr.number} 합치기 완료! 🎊`,
-            `"${targetPr.title}" 변경이 검토를 마치고 기본 브랜치(main)에 합쳐졌어요.`,
+            `"${targetPr.title}" 변경이 GitHub의 main에는 합쳐졌어요! 아직 내 컴퓨터의 main은 옛날 상태라, 이제 main으로 돌아가 합친 내용을 가져와요.`,
             nextStepHintText({ ...draft, completedActions: withCompletedAction(draft.completedActions, 'PR_MERGE') }),
           ),
         );
@@ -3109,7 +3117,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             lastFlow: 'blocked',
             auditLogs: [
               ...state.ghes.auditLogs.slice(-5),
-              '[DENY] 미인증 /api/v3 호출 — 사내 VPN 로그인 필요',
+              '[DENY] 미인증 /api/v3 호출 — VPN은 연결됐지만 사내 GitHub 로그인 전',
             ],
           };
           const draft: PixelSimState = { ...state, ghes: nextGhes };
@@ -3173,7 +3181,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             68,
             48,
             '사내 전용 /api/v3 응답 도착! 📡',
-            '사내 GitHub는 API 주소 앞에 /api/v3가 붙어요. gh api user가 이 서버 주소와 user 경로를 합쳐 계정 정보를 요청했어요. 응답의 login 값이 현재 계정 이름이에요.',
+            `사내 GitHub는 API 주소 앞에 /api/v3가 붙어요. gh api user가 이 서버 주소와 user 경로를 합쳐 계정 정보를 요청했어요. 응답의 login 값으로 현재 계정(${state.ghUser})을 확인했어요. 전체 응답은 아래 터미널에서 볼 수 있어요.`,
             nextStepHintText({ ...draft, completedActions: afterCompleted }),
             nextStep
               ? [{ label: `▶ ${nextStep.command}`, command: nextStep.command, tone: 'mint' }]
@@ -3218,7 +3226,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           68,
           48,
           'GitHub API JSON 응답 도착! 📡',
-          '응답에서 full_name은 저장소 이름이고 default_branch는 기본 브랜치예요. 이 저장소의 기본 브랜치는 main이에요.',
+          '저장소 정보를 받았어요! 저장소 이름(full_name)은 gitdots/app, 기본 브랜치(default_branch)는 main이에요. 전체 데이터(JSON)는 아래 터미널을 열어 볼 수 있어요.',
           nextStepHintText(draft),
         ),
       );
@@ -3254,7 +3262,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       38,
       54,
       '어라, 모르는 명령어예요! 🤔',
-      '어라, 모르는 명령어예요! 아래 추천 버튼을 누르거나 `help`를 입력해 볼까요?',
+      '아래 추천 버튼을 누르거나 help를 입력해 사용 가능한 명령을 확인해 보세요.',
       nextStepHintText(state),
       fallbackActions,
     ),
