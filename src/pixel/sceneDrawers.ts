@@ -753,26 +753,29 @@ function drawCh4Scene(
   const cloudY = h * 0.58 + Math.sin(time * 2.2) * 4;
   drawPixelSprite(ctx, CLOUD_CASTLE, CLOUD_CASTLE_COLORS, xCloud, cloudY, dot * 1.02, 'dot');
 
-  // 브랜치를 만들어 이동해도 main이 사라지지 않도록, 내 쪽과 GitHub 쪽 모두 두 브랜치를 나란히 보여 줘요.
+  // 브랜치를 만들어 이동해도 main이 사라지지 않도록, main 철도에서 가지가 갈라져 올라가는 모양을 내 쪽과 GitHub 쪽 모두에 그려요.
   const localFeature = Object.keys(sim.branches).find((name) => name !== 'main');
   const remoteFeature = Object.keys(sim.remoteBranches).find((name) => name !== 'main');
-  const mainBadgeY = h * 0.44;
-  const featureBadgeY = h * 0.3;
-  const drawBranchBadge = (name: string, cx: number, cy: number, isHead: boolean, border: string, textColor: string) => {
-    drawPixelBadge(ctx, cx, cy, isHead ? `HEAD · ${name}` : name, PALETTE.cream, textColor, border, 12, true);
+  const drawBranchFork = (cx: number, feature: string | undefined, head: string | null, merged: boolean, forkActive: boolean) => {
+    const railY = h * 0.46;
+    const featY = h * 0.32;
+    const baseX = cx + padW * 0.25;
+    const tipX = cx + padW * 0.4;
+    const mainColor = merged ? PALETTE.mint : PALETTE.sky;
+    const mainDark = merged ? PALETTE.mintDark : PALETTE.skyDark;
+    drawDottedTrack(ctx, cx - padW * 0.45, railY, baseX, railY, mainColor, time, head === 'main' || merged);
+    drawPixelSprite(ctx, COMMIT_GEM, makeGemColors(mainColor, PALETTE.cream, mainDark), baseX, railY, dot * 0.8, 'dot');
+    drawPixelBadge(ctx, cx - padW * 0.3, railY - dot * 5 - 12, head === 'main' ? 'HEAD · main' : 'main',
+      PALETTE.cream, mainDark, mainColor, 12, true);
+    if (feature) {
+      drawDottedTrack(ctx, baseX, railY, tipX, featY, PALETTE.lavender, time, forkActive, -6);
+      drawPixelSprite(ctx, COMMIT_GEM, makeGemColors(PALETTE.lavender, PALETTE.lavenderLight, PALETTE.lavenderDark), tipX, featY, dot * 0.8, 'dot');
+      drawPixelBadge(ctx, tipX, featY - dot * 5 - 12, head === feature ? `HEAD · ${feature}` : feature,
+        PALETTE.cream, PALETTE.lavenderDark, PALETTE.lavender, 12, true);
+    }
   };
-  if (localFeature) {
-    drawDottedTrack(ctx, xLocal, mainBadgeY - 14, xLocal, featureBadgeY + 14, PALETTE.lavender, time, sim.headBranch === localFeature);
-    drawBranchBadge(localFeature, xLocal, featureBadgeY, sim.headBranch === localFeature, PALETTE.lavender, PALETTE.lavenderDark);
-  }
-  drawBranchBadge('main', xLocal, mainBadgeY, sim.headBranch === 'main', PALETTE.sky, PALETTE.skyDark);
-  if (remoteFeature) {
-    drawDottedTrack(ctx, xCloud, mainBadgeY - 14, xCloud, featureBadgeY + 14,
-      prMerged ? PALETTE.mint : PALETTE.lavender, time, kind === 'PUSH' || kind === 'PR_MERGE');
-    drawBranchBadge(remoteFeature, xCloud, featureBadgeY, false, PALETTE.lavender, PALETTE.lavenderDark);
-  }
-  drawBranchBadge('main', xCloud, mainBadgeY, false,
-    prMerged ? PALETTE.mint : PALETTE.sky, prMerged ? PALETTE.mintDark : PALETTE.skyDark);
+  drawBranchFork(xLocal, localFeature, sim.headBranch, false, sim.headBranch === localFeature);
+  drawBranchFork(xCloud, remoteFeature, null, prMerged, kind === 'PUSH' || kind === 'PR_MERGE');
 
   // Animated PR Rocket flight
   const t = easeOutCubic(animProgress);
