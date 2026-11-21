@@ -242,7 +242,7 @@ async function practiceTracks(page, url) {
   await page.getByRole('heading', { name: '팀에 회의록 수정 제안하기' }).waitFor();
   await page.getByText(/브랜치는 기본 문서를 그대로 두고/).waitFor();
   // 진행 표시가 세 묶음으로 나뉘어 보여요.
-  for (const phase of ['내 컴퓨터에서', 'GitHub에서', '다시 내 컴퓨터로']) {
+  for (const phase of ['내 컴퓨터에서', 'GitHub에 올리고 검토받기', '다시 내 컴퓨터로']) {
     await page.getByText(phase, { exact: true }).waitFor();
   }
   for (const label of ['새 브랜치 만들기', '다음 기록에 담기', '기록 남기기', '팀에 공유하기', '검토 요청하기', '팀원 승인 확인하기', '검토한 변경 합치기', '기본 브랜치로 이동하기', '합친 내용 가져오기']) {
