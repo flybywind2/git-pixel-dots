@@ -676,6 +676,9 @@ function drawCh4Scene(
   const latestPr = sim.prs[sim.prs.length - 1] ?? null;
   const ciPass = latestPr?.ci === 'pass' || latestPr?.status === 'merged';
   const prMerged = latestPr?.status === 'merged';
+  const returned = sim.completedActions.includes('RETURN_MAIN');
+  const approved = Boolean(latestPr?.approved) && !prMerged;
+  const localMerged = prMerged && sim.branches.main === sim.remoteBranches.main;
 
   // Connecting tracks
   drawDottedTrack(
@@ -700,7 +703,7 @@ function drawCh4Scene(
   );
 
   // 3 Cozy station pads
-  drawZonePad(ctx, xLocal, padY, padW, '내 브랜치', sim.headBranch, PALETTE.sky, kind === 'PUSH', time, true);
+  drawZonePad(ctx, xLocal, padY, padW, '내 저장소', sim.headBranch, PALETTE.sky, kind === 'PUSH' || returned, time, true);
   drawZonePad(
     ctx,
     xCi,
@@ -720,7 +723,7 @@ function drawCh4Scene(
     'GitHub 저장소',
     prMerged ? 'PR 합치기 완료!' : '원격 저장소',
     PALETTE.lavender,
-    prMerged || kind === 'PR_MERGE',
+    (prMerged || kind === 'PR_MERGE') && !returned,
     time,
   );
 
@@ -745,9 +748,13 @@ function drawCh4Scene(
     PALETTE.cream,
     ciPass ? PALETTE.mintDark : PALETTE.butterDark,
     ringColor,
-    10.5,
+    12,
     true,
   );
+  // 팀원 승인이 확인되면 게이트 위에 LGTM 배지를 띄워 검사 통과와 구분해요.
+  if (approved) {
+    drawPixelBadge(ctx, xCi, gateY - ringR - 13, 'LGTM', PALETTE.mint, PALETTE.cream, PALETTE.mintDark, 12, true);
+  }
 
   // Floating GitHub Cloud Castle on the right
   const cloudY = h * 0.58 + Math.sin(time * 2.2) * 4;
@@ -756,26 +763,38 @@ function drawCh4Scene(
   // 브랜치를 만들어 이동해도 main이 사라지지 않도록, main 철도에서 가지가 갈라져 올라가는 모양을 내 쪽과 GitHub 쪽 모두에 그려요.
   const localFeature = Object.keys(sim.branches).find((name) => name !== 'main');
   const remoteFeature = Object.keys(sim.remoteBranches).find((name) => name !== 'main');
-  const drawBranchFork = (cx: number, feature: string | undefined, head: string | null, merged: boolean, forkActive: boolean) => {
+  const drawBranchFork = (cx: number, feature: string | undefined, head: string | null, merged: boolean, forkActive: boolean, hasCommit: boolean) => {
     const railY = h * 0.46;
     const featY = h * 0.32;
     const baseX = cx + padW * 0.25;
     const tipX = cx + padW * 0.4;
+    const mergeX = cx + padW * 0.52;
     const mainColor = merged ? PALETTE.mint : PALETTE.sky;
     const mainDark = merged ? PALETTE.mintDark : PALETTE.skyDark;
-    drawDottedTrack(ctx, cx - padW * 0.45, railY, baseX, railY, mainColor, time, head === 'main' || merged);
+    const railEnd = merged && feature ? mergeX : baseX;
+    drawDottedTrack(ctx, cx - padW * 0.45, railY, railEnd, railY, mainColor, time, head === 'main' || merged);
     drawPixelSprite(ctx, COMMIT_GEM, makeGemColors(mainColor, PALETTE.cream, mainDark), baseX, railY, dot * 0.8, 'dot');
     drawPixelBadge(ctx, cx - padW * 0.3, railY - dot * 5 - 12, head === 'main' ? 'HEAD · main' : 'main',
-      PALETTE.cream, mainDark, mainColor, 12, true);
+      PALETTE.cream, mainDark, mainColor, 13, true);
     if (feature) {
       drawDottedTrack(ctx, baseX, railY, tipX, featY, PALETTE.lavender, time, forkActive, -6);
-      drawPixelSprite(ctx, COMMIT_GEM, makeGemColors(PALETTE.lavender, PALETTE.lavenderLight, PALETTE.lavenderDark), tipX, featY, dot * 0.8, 'dot');
+      // 커밋 전에는 가지 끝에 보석을 찍지 않아, 브랜치 생성과 커밋 기록을 구분해요.
+      if (hasCommit) {
+        drawPixelSprite(ctx, COMMIT_GEM, makeGemColors(PALETTE.lavender, PALETTE.lavenderLight, PALETTE.lavenderDark), tipX, featY, dot * 0.8, 'dot');
+      }
       drawPixelBadge(ctx, tipX, featY - dot * 5 - 12, head === feature ? `HEAD · ${feature}` : feature,
-        PALETTE.cream, PALETTE.lavenderDark, PALETTE.lavender, 12, true);
+        PALETTE.cream, PALETTE.lavenderDark, PALETTE.lavender, 13, true);
+      // 합치기가 끝나면 가지 끝이 main으로 휘어 들어가며 민트 병합 보석이 찍혀요.
+      if (merged) {
+        drawDottedTrack(ctx, tipX, featY, mergeX, railY, PALETTE.mint, time, true, -6);
+        drawPixelSprite(ctx, COMMIT_GEM, makeGemColors(PALETTE.mint, PALETTE.cream, PALETTE.mintDark, PALETTE.butter), mergeX, railY, dot * 0.95, 'dot');
+      }
     }
   };
-  drawBranchFork(xLocal, localFeature, sim.headBranch, false, sim.headBranch === localFeature);
-  drawBranchFork(xCloud, remoteFeature, null, prMerged, kind === 'PUSH' || kind === 'PR_MERGE');
+  const localFeatureHasCommit = localFeature ? sim.branches[localFeature] !== sim.branches.main : false;
+  const remoteFeatureHasCommit = remoteFeature ? sim.remoteBranches[remoteFeature] !== sim.remoteBranches.main : false;
+  drawBranchFork(xLocal, localFeature, sim.headBranch, localMerged, sim.headBranch === localFeature, localFeatureHasCommit);
+  drawBranchFork(xCloud, remoteFeature, null, prMerged, kind === 'PUSH' || kind === 'PR_MERGE', remoteFeatureHasCommit);
 
   // Animated PR Rocket flight
   const t = easeOutCubic(animProgress);
@@ -801,9 +820,9 @@ function drawCh4Scene(
   }
 
   // Buddy cheers from local computer / hops toward gate
-  const targetX = prMerged ? 0.68 : latestPr ? 0.33 : 0.18;
+  const targetX = returned ? 0.18 : prMerged ? 0.68 : latestPr ? 0.33 : 0.18;
   const b = moveBuddySmooth(motion, 'ch4', targetX, 0.65);
-  const pose: BuddyPose = (kind === 'PR_MERGE' || kind === 'PR_CREATE') && animProgress < 0.9 ? 'happy' : 'idle';
+  const pose: BuddyPose = (kind === 'PR_MERGE' || kind === 'PR_CREATE' || kind === 'PULL') && animProgress < 0.9 ? 'happy' : 'idle';
   drawBuddyWithIdleLife(ctx, b.x * w, b.y * h, dot, pose, b.walking, b.flipX, time);
 }
 
@@ -1498,6 +1517,12 @@ export function getParticleCuesForAnim(
       ];
     case 'PULL':
     case 'FETCH':
+      if (stageId === 'ch4' && animKind === 'PULL') {
+        return [
+          { kind: 'parcel', x: w * 0.82, y: h * 0.46, x1: w * 0.18, y1: h * 0.46, color: PALETTE.mint },
+          { kind: 'sparkles', x: w * 0.18, y: h * 0.46, color: PALETTE.mint },
+        ];
+      }
       return [
         { kind: 'parcel', x: w * 0.84, y: h * 0.56, x1: w * 0.62, y1: h * 0.66, color: PALETTE.mint },
         { kind: 'sparkles', x: w * 0.62, y: h * 0.66, color: PALETTE.mint },

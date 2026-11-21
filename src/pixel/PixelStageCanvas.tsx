@@ -36,6 +36,7 @@ export function PixelStageCanvas() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const queueDraw = useRef<(() => void) | null>(null);
+  const replayNonce = useRef(0);
 
   const simRef = useRef<PixelSimState>(sim);
   simRef.current = sim;
@@ -83,6 +84,7 @@ export function PixelStageCanvas() {
     let animProgress = 1;
     let lastSeq = simRef.current.lastAnim.seq;
     let lastStageId = simRef.current.stageId;
+    let lastReplay = 0;
 
     const renderFrame = (now: number) => {
       rafId = 0;
@@ -115,22 +117,9 @@ export function PixelStageCanvas() {
         particles.clear();
       }
 
-      // Trigger fresh animation curve + pixel particle bursts on every new command!
-      if (reduced) {
-        particles.clear();
-        motion = createSceneMotion();
-        lastSeq = currentSim.lastAnim.seq;
-        animProgress = 1;
-      } else if (currentSim.lastAnim.seq !== lastSeq) {
-        lastSeq = currentSim.lastAnim.seq;
-        animProgress = 0;
-
-        const cues = getParticleCuesForAnim(
-          currentSim.stageId,
-          currentSim.lastAnim.kind,
-          sceneWidth,
-          sceneHeight,
-        );
+      // Spawn the pixel particle burst for the current command's animation.
+      const burst = () => {
+        const cues = getParticleCuesForAnim(currentSim.stageId, currentSim.lastAnim.kind, sceneWidth, sceneHeight);
         for (const cue of cues) {
           if (cue.kind === 'sparkles') {
             particles.spawnSparkles(cue.x, cue.y, cue.color, 14);
@@ -146,6 +135,25 @@ export function PixelStageCanvas() {
             particles.spawnParcel(cue.x, cue.y, cue.x1, cue.y1, cue.color, 58, 0.65);
           }
         }
+      };
+
+      // Trigger fresh animation curve + pixel particle bursts on every new command!
+      if (reduced) {
+        particles.clear();
+        motion = createSceneMotion();
+        lastSeq = currentSim.lastAnim.seq;
+        animProgress = 1;
+      } else if (currentSim.lastAnim.seq !== lastSeq) {
+        lastSeq = currentSim.lastAnim.seq;
+        animProgress = 0;
+        burst();
+      }
+
+      // '다시 보기'는 상태를 바꾸지 않고 지난 명령의 애니메이션만 다시 재생해요.
+      if (!reduced && replayNonce.current !== lastReplay) {
+        lastReplay = replayNonce.current;
+        animProgress = 0;
+        burst();
       }
 
       // Smoothly advance action transition (0..1 over ~0.88s)
@@ -211,6 +219,16 @@ export function PixelStageCanvas() {
           role="img"
           aria-label={`${scenario.title} · ${sim.lastAnim.label}`}
         />
+        {sim.lastAnim.kind !== 'IDLE' && (
+          <button
+            type="button"
+            onClick={() => { replayNonce.current += 1; queueDraw.current?.(); }}
+            aria-label="지난 애니메이션 다시 보기"
+            className="pixel-btn absolute right-2 top-2 z-10 cursor-pointer rounded-md border border-[#CDBCA3] bg-[#FFFDF8]/90 px-2 py-1 text-xs font-semibold text-[#59483B] hover:bg-[#F0E5CF]"
+          >
+            다시 보기
+          </button>
+        )}
       </div>
       <div className="order-1 px-3 pt-3 sm:px-6" aria-live="polite">
         {sim.bubbles.map((bubble) => {
