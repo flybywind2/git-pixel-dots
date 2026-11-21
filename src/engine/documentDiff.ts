@@ -14,7 +14,7 @@ export const DOCUMENT_COMPARISONS = {
   working: {
     label: '바뀐 줄',
     command: 'git diff -- 회의록.md',
-    before: '원래 초안(스테이징)',
+    before: '원래 초안',
     after: '지금 작업 문서',
     empty: '작업 문서와 스테이징 영역의 내용이 같아요.',
     action: 'DOCUMENT_WORKING_DIFF',
@@ -28,7 +28,7 @@ export const DOCUMENT_COMPARISONS = {
     action: 'DOCUMENT_STAGED_DIFF',
   },
   commits: {
-    label: '이전 기록 비교',
+    label: '이전 기록',
     command: 'git diff HEAD~1 HEAD -- 회의록.md',
     before: '이전 커밋',
     after: '최근 커밋',

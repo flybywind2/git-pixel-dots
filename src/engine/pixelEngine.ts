@@ -416,7 +416,7 @@ function stageSeed(id: StageId): StageSeed {
             54,
             '작업 중에 급한 수정이 생겼어요',
             `마지막 커밋에 ${MISTAKEN_NOTICE_PATH}를 실수로 넣었어요. 회의록에 적던 준비물을 임시 보관한 뒤 잘못 올린 안내를 취소해 보세요.`,
-            'git stash로 작업 중인 변경을 임시 보관해 보세요.',
+            '아래 추천 버튼을 눌러 작업 중인 변경을 임시 보관해 보세요.',
             [{ label: '작업 임시 보관하기', command: 'git stash', tone: 'amber' }],
           ),
         ],
@@ -466,8 +466,8 @@ function stageSeed(id: StageId): StageSeed {
             54,
             'theme.js의 두 버전을 합쳐 봐요',
             'main과 feat/ui가 같은 줄에 서로 다른 색을 골랐어요. main에서 새 브랜치를 만들어 합치기를 연습해요.',
-            'git switch -c feat/dark 로 새 브랜치를 만들어 보세요!',
-            [{ label: '🌿 새 브랜치 만들기', command: 'git switch -c feat/dark', tone: 'primary' }],
+            '아래 추천 버튼을 눌러 새 브랜치를 만들어 보세요.',
+            [{ label: '새 브랜치 만들기', command: 'git switch -c feat/dark', tone: 'primary' }],
           ),
         ],
         terminal: [
@@ -511,8 +511,8 @@ function stageSeed(id: StageId): StageSeed {
             34,
             54,
             '회의록 장소를 바꿨어요',
-            '작업 폴더의 회의록에 바꾼 장소가 아직 기록되지 않았어요. 팀원은 GitHub에 참석 안내를 올려 두었어요. 새 브랜치를 만들어 내 변경을 기록해 보세요.',
-            `git switch -c ${MEETING_PR_BRANCH} 로 새 브랜치를 만들어 보세요!`,
+            '작업 폴더의 회의록에 바꾼 장소가 아직 기록되지 않았어요. 팀원은 GitHub에 참석 안내를 올려 두었어요(마지막에 함께 가져올 거예요). 새 브랜치를 만들어 내 변경을 기록해 보세요.',
+            '아래 추천 버튼을 눌러 새 브랜치를 만들어 보세요.',
             [{ label: '새 브랜치 만들기', command: `git switch -c ${MEETING_PR_BRANCH}`, tone: 'primary' }],
           ),
         ],
@@ -532,7 +532,7 @@ function stageSeed(id: StageId): StageSeed {
         staged: [],
         commits: [
           { id: 'c1', hash: 'b11c22d', message: '초기 앱 구조', branch: 'main', parents: [], tree: {} },
-          { id: 'c2', hash: 'e33f44a', message: '다크모드 스타일 추가', branch: 'feat/darkmode', parents: ['c1'] },
+          { id: 'c2', hash: 'e33f44a', message: '다크 모드 스타일 추가', branch: 'feat/darkmode', parents: ['c1'] },
         ],
         branches: { main: 'c1', 'feat/darkmode': 'c2' },
         headBranch: 'feat/darkmode',
@@ -569,8 +569,8 @@ function stageSeed(id: StageId): StageSeed {
             54,
             '다크 모드 변경이 준비됐어요',
             'feat/darkmode 브랜치가 GitHub 연습 저장소에 올라가 있어요. 먼저 gh가 어느 계정으로 작업하는지 확인해요.',
-            '먼저 gh auth status 로 로그인 상태를 확인해 볼까요?',
-            [{ label: '🔑 로그인 상태 확인하기', command: 'gh auth status', tone: 'primary' }],
+            '아래 추천 버튼을 눌러 로그인 상태를 확인해 보세요.',
+            [{ label: '로그인 상태 확인하기', command: 'gh auth status', tone: 'primary' }],
           ),
         ],
         terminal: [
@@ -613,7 +613,7 @@ function stageSeed(id: StageId): StageSeed {
             48,
             '토큰 보안 관문에 오신 걸 환영해요! 🛡️',
             '예제에서는 gitdots/app 한 곳에만 쓸 수 있으면 돼요. 두 토큰으로 각각 어느 저장소를 열 수 있는지 확인해 보세요.',
-            'token classic 으로 예제 토큰의 권한을 확인해 보세요!',
+            '아래 추천 버튼을 눌러 예제 토큰의 권한을 확인해 보세요.',
             [{ label: '넓은 권한 살펴보기', command: 'token classic', tone: 'coral' }],
           ),
         ],
@@ -657,13 +657,13 @@ function stageSeed(id: StageId): StageSeed {
             48,
             '이 회사는 사내 GitHub를 써요',
             '이 예제 회사의 방화벽은 github.com 전송을 막아요. 사내 GitHub의 주소는 github.corp.internal이에요.',
-            'ghes test-public 으로 외부 차단부터 확인해 보세요!',
+            '아래 추천 버튼을 눌러 외부 차단부터 확인해 보세요.',
             [{ label: '외부 전송 차단 확인하기', command: 'ghes test-public', tone: 'coral' }],
           ),
         ],
         terminal: [
           makeLogEntry(0, 'welcome', 'main', [
-            { text: '대상 호스트: github.corp.internal (사내 폐쇄망)', tone: 'muted' },
+            { text: '대상 호스트: github.corp.internal (회사 내부망)', tone: 'muted' },
           ]),
         ],
       };
@@ -709,7 +709,7 @@ function stageSeed(id: StageId): StageSeed {
             52,
             '삐빅! AI 에이전트 준비 완료 🤖',
             'buggy.ts의 덧셈 버그를 고쳐드릴게요! 다만 main 폴더를 바로 건드리면 위험하니 별도 작업 폴더(worktree)를 먼저 열어 주세요.',
-            'git worktree add -b ai/fix wt-ai 로 AI 작업 폴더를 만들어 보세요!',
+            '아래 추천 버튼을 눌러 AI 작업 폴더를 만들어 보세요.',
             [{ label: 'AI 작업 폴더 만들기', command: 'git worktree add -b ai/fix wt-ai', tone: 'mint' }],
           ),
         ],
@@ -825,7 +825,7 @@ export function savePracticeDocument(
       { text: `${DOCUMENT_COMPARISONS.working.command}로 바뀐 줄을 확인할 수 있어요.`, tone: 'muted' },
     ],
     makeBubble(`document-save-${state.lastAnim.seq + 1}`, 'buddy', 32, 54, '작업 파일에 저장했어요',
-      '작업 파일에 저장했을 뿐 아직 기록(커밋)은 아니에요. 기록 남기기를 눌러야 커밋이 돼요. 바뀐 줄은 비교에서 확인할 수 있어요.'),
+      '작업 파일에 저장했을 뿐 아직 기록(커밋)은 아니에요. 먼저 바뀐 줄을 확인해 볼까요?'),
   );
 }
 
@@ -943,7 +943,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           36,
           54,
           '처음 상태로 깔끔하게 초기화했어요! 🔄',
-          `${scenario.shortTitle} 스테이지를 다시 시작할 준비가 됐어요.`,
+          `${scenario.number}장 실습을 다시 시작할 준비가 됐어요.`,
           nextStepHintText(fresh),
           fresh.bubbles[0]?.actions,
         ),
@@ -1195,7 +1195,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           48,
           '이 토큰에는 삭제 권한도 있어요',
           '이 예제 토큰에는 delete_repo 범위를 선택했어요. 실제로 할 수 있는 일은 계정의 권한과 토큰에 부여한 범위에 따라 달라져요.',
-          'token fine 으로 Fine-Grained 최소 권한 토큰으로 교체해 보세요!',
+          'token fine으로 Fine-Grained 최소 권한 토큰으로 교체해 보세요.',
           [{ label: '필요한 권한만 주기', command: 'token fine', tone: 'mint' }],
         ),
       );
@@ -1369,7 +1369,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           48,
           '외부 전송 철벽 차단! 🧱',
           '회사 대외비 코드는 바깥 github.com으로 못 나가요. 대신 사내 전용 GHES 서버에 VPN으로 접속해야 해요!',
-          'gh auth login --hostname github.corp.internal 로 사내 서버에 로그인해 보세요!',
+          'gh auth login --hostname github.corp.internal로 사내 서버에 로그인해 보세요.',
           [
             {
               label: '사내 서버 로그인',
@@ -1477,7 +1477,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             52,
             '잠깐! AI 작업 폴더부터 만들어 주세요 🏗️',
             '사람이 쓰는 main 작업 폴더를 바로 건드리면 충돌이 날 수 있어요. 독립된 worktree 공간을 먼저 열어 주세요!',
-            'git worktree add -b ai/fix wt-ai 를 실행해 보세요!',
+            'git worktree add -b ai/fix wt-ai를 실행해 보세요.',
             [
               {
                 label: 'AI 작업 폴더 만들기',
@@ -2534,7 +2534,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           makeBubble(
             `merge-need-branch-${seqNext}`, 'buddy', 40, 52, '먼저 새 브랜치를 만들어 주세요',
             'main에서 바로 합치면 기본 기록이 섞여요. 새 브랜치를 만들고 그 위에서 합치는 것이 이 장의 핵심이에요.',
-            'git switch -c feat/dark 로 새 브랜치를 만들어 보세요!',
+            'git switch -c feat/dark로 새 브랜치를 만들어 보세요.',
             [{ label: '새 브랜치 만들기', command: 'git switch -c feat/dark', tone: 'primary' }],
           ),
         );
@@ -2686,7 +2686,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           52,
           `AI 작업 폴더(${dirName})를 열었어요`,
           `${dirName} 폴더에서 ${branchName} 브랜치의 파일을 편집할 수 있어요. 아래 터미널을 열면 입력 줄 앞 표시도 ${dirName} $로 바뀐 걸 볼 수 있어요. 두 작업 폴더는 같은 저장소의 커밋 기록을 공유해요.`,
-          'ai code 를 입력해서 AI가 코드를 수정하도록 시켜 보세요!',
+          'ai code를 입력해서 AI가 코드를 수정하도록 시켜 보세요.',
           [{ label: '덧셈 오류 고치기', command: 'ai code', tone: 'mint' }],
         ),
       );
@@ -3207,7 +3207,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
               48,
               '먼저 사내망 로그인을 해 주세요! 🔒',
               '사내 GHES API는 VPN + SAML 로그인을 마친 직원만 호출할 수 있어요.',
-              'gh auth login --hostname github.corp.internal 로 먼저 로그인해 보세요!',
+              'gh auth login --hostname github.corp.internal로 먼저 로그인해 보세요.',
               [
                 {
                   label: '🔓 사내망 로그인',
@@ -3323,7 +3323,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
     cmd,
     [
       { text: `어라, '${cmd}' 명령어는 아직 모르는 말이에요!`, tone: 'coral' },
-      { text: '아래 추천 버튼을 누르거나 help 를 입력해 사용 가능한 명령어를 확인해 보세요.', tone: 'muted' },
+      { text: '아래 추천 버튼을 누르거나 help를 입력해 사용 가능한 명령어를 확인해 보세요.', tone: 'muted' },
     ],
     makeBubble(
       `unknown-${seqNext}`,

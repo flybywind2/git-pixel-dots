@@ -10,7 +10,7 @@ import {
 } from '../engine/documentDiff';
 import { usePixelStore } from '../store/usePixelStore';
 import type { DocumentComparison } from '../types/sim';
-import { treeEntry } from '../engine/repoVersions';
+import { headTree, treeEntry } from '../engine/repoVersions';
 import { SPEAKER_THEMES } from '../pixel/palette';
 
 const COMPARISON_MODES: DocumentComparison[] = ['working', 'staged', 'commits'];
@@ -33,6 +33,10 @@ export function DocumentLab() {
   const unsaved = text !== working;
   const mode = sim.document?.comparison ?? 'working';
   const view = DOCUMENT_COMPARISONS[mode];
+  // 담은 뒤 문서를 또 고치면 비교 기준은 원래 초안이 아니라 담아 둔 문서예요.
+  const beforeLabel = mode === 'working' && treeEntry(sim.index, DOCUMENT_PATH) !== treeEntry(headTree(sim), DOCUMENT_PATH)
+    ? '담아 둔 문서'
+    : view.before;
   const comparison = getDocumentComparison(sim, mode);
   const before = comparison?.before;
   const after = comparison?.after;
@@ -176,7 +180,7 @@ export function DocumentLab() {
             </div>
           </header>
           <div className="border-b border-[#E9DFCE] px-4 py-3">
-            <p className="text-sm font-semibold">{view.before} 기준으로 {view.after} 비교</p>
+            <p className="text-sm font-semibold">{beforeLabel} 기준으로 {view.after} 비교</p>
             <code className="font-mono-code break-words text-xs text-[#705638]">{view.command}</code>
           </div>
           <div role="status" className="px-4 py-2.5 text-sm text-[#59483B]">
