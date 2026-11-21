@@ -18,6 +18,16 @@ const ACTION_TONE_CLASSES: Readonly<Record<NonNullable<BubbleAction['tone']>, st
   amber: 'bg-[#FFE08A] hover:bg-[#FFD363] text-[#6E4004] border-[#D18D20]',
 };
 
+// 비개발자가 권한 이름을 바로 읽을 수 있게 짧은 풀이를 붙여요.
+const SCOPE_LABELS: Readonly<Record<string, string>> = {
+  'repo': '저장소 읽기·쓰기',
+  'admin:org': '조직 설정 관리',
+  'delete_repo': '저장소 삭제',
+  'workflow': '워크플로 수정',
+  'contents:write (gitdots/app)': 'gitdots/app 파일 쓰기',
+  'expires:30d': '30일 뒤 만료',
+};
+
 export function PixelStageCanvas() {
   const stageId = usePixelStore((s) => s.stageId);
   const sim = usePixelStore((s) => s.sim);
@@ -302,7 +312,9 @@ export function PixelStageCanvas() {
                 : 'Classic 토큰은 계정에 넓은 권한을 줘요. 저장소 삭제 권한도 포함될 수 있어요.'}
             </p>
             <ul className="mt-2 space-y-1 break-keep text-xs leading-relaxed text-[#59483B]">
-              {sim.token.scopes.map((scope) => <li key={scope}>· {scope}</li>)}
+              {sim.token.scopes.map((scope) => (
+                <li key={scope}>· {scope}{SCOPE_LABELS[scope] ? ` — ${SCOPE_LABELS[scope]}` : ''}</li>
+              ))}
             </ul>
           </div>
         </div>
@@ -311,6 +323,7 @@ export function PixelStageCanvas() {
         <div className="order-2 mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="ai-tests">
           <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] p-3">
             <h2 className="break-keep text-sm font-bold text-[#2F241D]">자동 테스트 결과</h2>
+            <p className="mt-1 break-keep text-xs leading-relaxed text-[#59483B]">2와 3을 더한 결과가 5인지 자동으로 확인했고, 통과했어요.</p>
             <ul className="font-mono-code mt-2 space-y-1 text-xs text-[#147A5B]">
               <li>✓ unit test: sum(2, 3) === 5 PASS</li>
               {sim.ai.prNumber !== null && <li>✓ PR #{sim.ai.prNumber} CI: Lint · Unit Test · Secret Scan PASS</li>}

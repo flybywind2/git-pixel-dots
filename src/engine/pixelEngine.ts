@@ -709,7 +709,7 @@ function stageSeed(id: StageId): StageSeed {
             52,
             '삐빅! AI 에이전트 준비 완료 🤖',
             'buggy.ts의 덧셈 버그를 고쳐드릴게요! 다만 main 폴더를 바로 건드리면 위험하니 별도 작업 폴더(worktree)를 먼저 열어 주세요.',
-            'git worktree add -b ai/fix wt-ai 로 AI 작업 폴더을 만들어 보세요!',
+            'git worktree add -b ai/fix wt-ai 로 AI 작업 폴더를 만들어 보세요!',
             [{ label: 'AI 작업 폴더 만들기', command: 'git worktree add -b ai/fix wt-ai', tone: 'mint' }],
           ),
         ],
@@ -1476,7 +1476,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             66,
             52,
             '잠깐! AI 작업 폴더부터 만들어 주세요 🏗️',
-            '사람이 쓰는 main 작업 폴더을 바로 건드리면 충돌이 날 수 있어요. 독립된 worktree 공간을 먼저 열어 주세요!',
+            '사람이 쓰는 main 작업 폴더를 바로 건드리면 충돌이 날 수 있어요. 독립된 worktree 공간을 먼저 열어 주세요!',
             'git worktree add -b ai/fix wt-ai 를 실행해 보세요!',
             [
               {
@@ -3173,7 +3173,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             68,
             48,
             '사내 전용 /api/v3 응답 도착! 📡',
-            'gh가 사내 서버의 /api/v3/user에 요청했어요. 응답의 login 값이 현재 계정 이름이에요.',
+            '사내 GitHub는 API 주소 앞에 /api/v3가 붙어요. gh api user가 이 서버 주소와 user 경로를 합쳐 계정 정보를 요청했어요. 응답의 login 값이 현재 계정 이름이에요.',
             nextStepHintText({ ...draft, completedActions: afterCompleted }),
             nextStep
               ? [{ label: `▶ ${nextStep.command}`, command: nextStep.command, tone: 'mint' }]

@@ -30,7 +30,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     ],
     steps: [
       { id: 'docs-edit', label: '문서 편집하기', goal: '회의록.md의 "금요일 저녁 7시"를 다른 시간으로 바꾸고 저장하기', command: 'edit 회의록.md', doneAction: 'EDIT' },
-      { id: 'docs-diff', label: '바뀐 줄 확인하기', goal: '현재 문서와 스테이징 영역 비교하기', command: working.command, doneAction: working.action },
+      { id: 'docs-diff', label: '바뀐 줄 확인하기', goal: '현재 문서와 스테이징 영역 비교하기(-- 뒤에 비교할 파일 이름)', command: working.command, doneAction: working.action },
       { id: 'docs-add', label: '다음 기록에 담기', goal: '검토한 회의록.md를 다음 커밋에 담기', command: 'git add 회의록.md', doneAction: 'ADD' },
       { id: 'docs-staged', label: '담아 둔 변경 확인하기', goal: '최근 커밋과 비교해 다음 커밋에 들어갈 줄 확인하기', command: staged.command, doneAction: staged.action },
       { id: 'docs-commit', label: '기록 남기기', goal: '스테이징 영역의 문서를 새 커밋에 기록하기', command: 'git commit -m "모임 안내 수정"', doneAction: 'COMMIT' },
@@ -70,7 +70,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       {
         id: 'ch1-add',
         label: '다음 기록에 담기',
-        goal: '회의록.md와 참석안내.md의 변경을 다음 커밋에 담기',
+        goal: '현재 폴더의 모든 변경(회의록.md·참석안내.md)을 다음 커밋에 담기. 점(.)은 폴더 안 변경 전체를 뜻해요.',
         command: 'git add .',
         doneAction: 'ADD',
       },
@@ -140,7 +140,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       {
         id: 'ch2-push',
         label: '팀에 공유하기',
-        goal: '취소 커밋을 GitHub에 올려 팀 쪽에서도 임시 안내가 사라지게 하기',
+        goal: '취소 커밋을 GitHub에 올려 팀 쪽에서도 임시 안내를 없애기. 복원한 준비물 수정은 커밋 전이라 내 컴퓨터에만 남아요.',
         command: 'git push',
         doneAction: 'PUSH',
       },
@@ -204,7 +204,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       {
         id: 'ch4-push',
         label: '팀에 공유하기',
-        goal: '회의록을 고친 작업 브랜치를 GitHub에 올리기',
+        goal: '회의록을 고친 브랜치를 GitHub에 올리기. -u는 원격 브랜치와 연결해 다음부터 git push만으로 보내게 해요.',
         command: `git push -u origin ${MEETING_PR_BRANCH}`,
         doneAction: 'PUSH',
       },
@@ -398,7 +398,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     track: 'advanced',
     shortTitle: '인증과 권한',
     title: '토큰이 접근할 저장소와 권한 고르기',
-    tagline: '토큰은 프로그램이 내 계정으로 작업할 때 쓰는 인증 수단이에요. 예제 토큰 두 개를 비교하고 회사 로그인과 SSH 키의 역할도 살펴보세요.',
+    tagline: '토큰(개인 액세스 토큰, PAT)은 프로그램이 내 계정으로 작업할 때 쓰는 인증 수단이에요. 예제 토큰 두 개를 비교하고 회사 로그인과 SSH 키의 역할도 살펴보세요.',
     takeaway: '이 실습에서는 한 저장소에 필요한 쓰기 권한만 줬어요. 회사의 SSO는 조직에서 신원을 확인하고, SSH 키는 Git 연결을 인증해요.',
     accent: '#fb7185',
     terms: [
@@ -456,10 +456,11 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     track: 'advanced',
     shortTitle: '사내 GitHub',
     title: '회사에서 운영하는 GitHub에 접속하기',
-    tagline: 'GitHub Enterprise Server(GHES)는 조직이 직접 운영하는 GitHub예요. 이 예제 회사는 VPN이 이미 연결됐다고 가정하고, 사내 주소로 로그인하는 과정을 실습해요.',
+    tagline: 'GitHub Enterprise Server(GHES)는 조직이 직접 운영하는 GitHub예요. VPN(회사 내부망에 안전하게 접속하는 연결)이 이미 연결됐다고 가정하고, 사내 주소로 로그인하는 과정을 실습해요.',
     takeaway: '사내 호스트에 로그인해 내 계정 정보를 조회했어요. 이 회사의 자동 빌드는 사내 실행기(runner)가 맡아요.',
     accent: '#60a5fa',
     terms: [
+      term('VPN'),
       term('호스트'),
       term('실행기(runner)'),
     ],
@@ -474,7 +475,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       {
         id: 'ch7-login',
         label: '사내 서버 로그인하기',
-        goal: 'VPN에 연결된 예제 환경에서 사내 GitHub에 로그인하기',
+        goal: 'VPN에 연결된 예제 환경에서 사내 호스트(--hostname)에 로그인하기',
         command: 'gh auth login --hostname github.corp.internal',
         doneAction: 'GHES_LOGIN',
       },
