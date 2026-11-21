@@ -22,7 +22,7 @@ export function LessonGuide() {
   const nextStage = nextLesson?.id ?? (unfinishedBasic ? unfinishedBasic.id : lesson.track === 'basic' ? advanced.lessons[0].id : 'docs');
   const nextLabel = nextLesson ? `다음 장 · ${nextLesson.shortTitle}`
     : unfinishedBasic ? `기본 이어 하기 · ${unfinishedBasic.shortTitle}`
-      : lesson.track === 'basic' ? '심화 실습 보기' : '1장으로 돌아가기';
+      : lesson.track === 'basic' ? `심화 ${advanced.lessons[0].number}장 · ${advanced.lessons[0].shortTitle}` : '1장으로 돌아가기';
   const finishedBasic = lesson.id === 'ch4' && !nextStep && !unfinishedBasic;
   const doneCount = lesson.steps.filter((step) => isStepCompleted(sim, step)).length;
   let phaseOffset = 0;

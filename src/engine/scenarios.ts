@@ -107,7 +107,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     track: 'basic',
     shortTitle: '보관과 취소',
     title: '작업 도중에 지난 커밋을 취소하려면?',
-    tagline: `회의록에 준비물을 적다가 실수로 올린 ${MISTAKEN_NOTICE_PATH}를 발견했어요. 회의록 수정을 잠시 보관하고 잘못 올린 안내부터 되돌려 보세요.`,
+    tagline: `지난 장에서 커밋한 회의록에 준비물을 더 적다가, 실수로 올린 ${MISTAKEN_NOTICE_PATH}를 발견했어요. 아직 커밋하지 않은 준비물 수정을 잠시 보관하고 잘못 올린 안내부터 되돌려 보세요.`,
     takeaway: 'stash로 하던 일을 보관하고, revert로 지난 변경을 취소하는 커밋을 남겼어요. stash pop으로 중단했던 작업도 되찾았어요.',
     accent: '#fbbf24',
     terms: [
@@ -268,7 +268,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     track: 'advanced',
     shortTitle: '브랜치와 충돌',
     title: '두 사람이 같은 줄을 고쳤다면?',
-    tagline: '브랜치는 각자 작업할 수 있는 기록의 갈래예요. 두 갈래에서 다르게 고친 theme.js를 합치며 어느 내용을 남길지 골라 보세요.',
+    tagline: '브랜치는 각자 작업할 수 있는 기록의 갈래예요. 팀원이 이미 올린 feat/ui와 내가 새로 만들 feat/dark에서 theme.js를 다르게 고쳤어요. 두 갈래를 합치며 어느 내용을 남길지 골라 보세요.',
     takeaway: 'Git이 같은 줄의 변경을 자동으로 합칠 수 없을 때 충돌이 생겨요. 남길 내용을 정하고 커밋하면 합치기가 끝나요.',
     accent: '#c084fc',
     terms: [
@@ -419,7 +419,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       },
       {
         id: 'ch6-ssh',
-        label: '연결 키 준비하기',
+        label: 'SSH 공개키 등록하기',
         goal: 'Git 연결에 쓸 SSH 공개키 등록 체험하기',
         command: 'token ssh',
         doneAction: 'TOKEN_SSH',
@@ -446,7 +446,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     track: 'advanced',
     shortTitle: '사내 GitHub',
     title: '회사에서 운영하는 GitHub에 접속하기',
-    tagline: 'GitHub Enterprise Server(GHES)는 조직이 직접 운영하는 GitHub예요. 이 예제 회사에서는 VPN에 연결한 뒤 사내 주소로 로그인해요.',
+    tagline: 'GitHub Enterprise Server(GHES)는 조직이 직접 운영하는 GitHub예요. 이 예제 회사는 VPN이 이미 연결됐다고 가정하고, 사내 주소로 로그인하는 과정을 실습해요.',
     takeaway: '사내 호스트에 로그인해 내 계정 정보를 조회했어요. 이 회사의 자동 빌드는 사내 실행기(runner)가 맡아요.',
     accent: '#60a5fa',
     terms: [
@@ -493,7 +493,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     cheatSheet: [
       { cmd: 'ghes test-public', desc: '사내 방화벽이 외부 github.com 전송을 차단하는 걸 확인해요.' },
       { cmd: 'gh auth login --hostname github.corp.internal', desc: '접속할 GitHub 호스트를 사내 주소로 지정해요.' },
-      { cmd: 'gh api user --hostname github.corp.internal', desc: 'gh가 사내 서버의 /api/v3/user에 요청해 로그인한 계정을 보여줘요.' },
+      { cmd: 'gh api user --hostname github.corp.internal', desc: 'gh가 사내 서버의 /api/v3/user에 요청해 로그인한 계정을 보여줘요. /api/v3은 사내 GitHub가 데이터를 주고받는 API 주소예요.' },
       { cmd: 'ghes runner', desc: '사내 컴퓨터에 설치된 실행기가 자동 빌드를 처리해요.' },
       { cmd: 'ghes cloud', desc: 'GitHub.com 클라우드와 사내 GHES의 차이를 비교해요.' },
     ],
@@ -502,7 +502,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     track: 'advanced',
     shortTitle: 'AI와 협업',
     title: 'AI가 고친 코드를 검토하고 합치기',
-    tagline: '덧셈 함수가 빼기를 하고 있어요. AI가 별도 폴더에서 고치고, 테스트 결과와 코드 변경을 사람이 확인하는 과정을 따라가 보세요.',
+    tagline: '덧셈 함수가 빼기를 하고 있어요. AI가 별도 폴더에서 고치는 과정을 버튼으로 진행하고, 테스트 결과와 코드 변경을 사람이 확인하는 과정을 따라가 보세요.',
     takeaway: 'worktree로 작업 폴더를 나누고, 브랜치 보호 규칙으로 main에 들어갈 변경을 관리했어요. 사람이 검토한 수정이 PR을 통해 합쳐졌어요.',
     accent: '#34d399',
     terms: [

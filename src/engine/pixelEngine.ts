@@ -1264,7 +1264,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           'SAML SSO를 쓰는 조직에서는 회사 계정과 GitHub 계정을 연결해요. Fine-grained 토큰의 조직 인증은 토큰을 만들 때 이뤄져요.',
           nextStepHintText({ ...draft, completedActions: withCompletedAction(draft.completedActions, 'TOKEN_SSO') }),
           !state.token.sshReady
-            ? [{ label: '연결 키 준비하기', command: 'token ssh', tone: 'mint' }]
+            ? [{ label: 'SSH 공개키 등록하기', command: 'token ssh', tone: 'mint' }]
             : undefined,
         ),
       );
@@ -1528,7 +1528,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           'AI 작업 폴더에서 덧셈을 고쳤어요',
           'wt-ai 폴더 안에서만 코드를 고치고 테스트까지 통과했어요. 이제 main에 바로 푸시하면 어떻게 될까요?',
           'ai push-main 을 실행해서 브랜치 보호 가드레일을 시험해 보세요!',
-          [{ label: '직접 공유 제한 확인', command: 'ai push-main', tone: 'coral' }],
+          [{ label: '직접 공유 제한 확인하기', command: 'ai push-main', tone: 'coral' }],
         ),
       );
     }

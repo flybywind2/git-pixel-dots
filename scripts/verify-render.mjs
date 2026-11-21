@@ -507,6 +507,28 @@ async function crossTabSync(browser, url) {
   await context.close();
 }
 
+async function advancedVisualCards(browser, url) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const guide = page.getByTestId('guided-command');
+  // 7장: 토큰 권한 목록이 화면에 보이고, fine-grained에는 삭제 권한이 없어요.
+  await openChapter(page, url, 7);
+  const scopes = page.getByTestId('token-scopes');
+  await guide.click();
+  await scopes.waitFor();
+  assert.match(await scopes.innerText(), /delete_repo/);
+  await guide.click();
+  assert.match(await scopes.innerText(), /contents:write/);
+  assert.doesNotMatch(await scopes.innerText(), /delete_repo/);
+  // 9장: 자동 테스트 결과 화면이 보여요.
+  await openChapter(page, url, 9);
+  await guide.click();
+  await guide.click();
+  const tests = page.getByTestId('ai-tests');
+  await tests.waitFor();
+  assert.match(await tests.innerText(), /sum\(2, 3\) === 5 PASS/);
+  await page.close();
+}
+
 async function main() {
   fs.mkdirSync(out, { recursive: true });
   const local = publicUrl ? undefined : await startServer();
@@ -549,6 +571,8 @@ async function main() {
     await warningPage.close();
     await crossTabSync(browser, url);
     console.log('[QA] Storage failure warning and cross-tab sync passed');
+    await advancedVisualCards(browser, url);
+    console.log('[QA] Token scope and AI test result cards passed');
 
     const link = await browser.newPage();
     await link.goto(url + 'docs/deeper/');

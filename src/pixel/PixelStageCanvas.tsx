@@ -292,6 +292,33 @@ export function PixelStageCanvas() {
           </div>
         </div>
       )}
+      {stageId === 'ch6' && (
+        <div className="order-2 mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="token-scopes">
+          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] p-3">
+            <h2 className="break-keep text-sm font-bold text-[#2F241D]">지금 토큰에 준 권한</h2>
+            <p className="mt-1 break-keep text-xs leading-relaxed text-[#59483B]">
+              {sim.token.mode === 'fine-grained'
+                ? 'Fine-grained 토큰은 고른 저장소에만 필요한 권한을 줘요.'
+                : 'Classic 토큰은 계정에 넓은 권한을 줘요. 저장소 삭제 권한도 포함될 수 있어요.'}
+            </p>
+            <ul className="mt-2 space-y-1 break-keep text-xs leading-relaxed text-[#59483B]">
+              {sim.token.scopes.map((scope) => <li key={scope}>· {scope}</li>)}
+            </ul>
+          </div>
+        </div>
+      )}
+      {stageId === 'ch8' && sim.ai.codeWritten && (
+        <div className="order-2 mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="ai-tests">
+          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] p-3">
+            <h2 className="break-keep text-sm font-bold text-[#2F241D]">자동 테스트 결과</h2>
+            <ul className="font-mono-code mt-2 space-y-1 text-xs text-[#147A5B]">
+              <li>✓ unit test: sum(2, 3) === 5 PASS</li>
+              {sim.ai.prNumber !== null && <li>✓ PR #{sim.ai.prNumber} CI: Lint · Unit Test · Secret Scan PASS</li>}
+            </ul>
+            <p className="mt-2 break-keep text-xs leading-relaxed text-[#59483B]">buggy.ts 변경: a - b → a + b (빼기를 더하기로 고침)</p>
+          </div>
+        </div>
+      )}
       {visibleHistory && (
         <ol aria-label="최근 커밋" className="order-2 mx-auto mt-3 flex w-full max-w-5xl flex-wrap justify-center gap-2 px-3 pb-2 text-sm">
           {visibleHistory.map(({ commit, rewound }) => (

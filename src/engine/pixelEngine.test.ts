@@ -412,6 +412,8 @@ describe('Full stage walkthroughs', () => {
     expect(s.lastAnim.kind).toBe('TOKEN_FINE');
     expect(s.token.mode).toBe('fine-grained');
     expect(s.token.riskScore).toBeLessThan(30);
+    expect(s.token.scopes).toContain('contents:write (gitdots/app)');
+    expect(s.token.scopes.join(' ')).not.toContain('delete_repo');
 
     s = deepFreeze(executePixelCommand(s, 'token sso'));
     expect(s.lastAnim.kind).toBe('TOKEN_SSO');
