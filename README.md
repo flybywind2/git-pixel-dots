@@ -12,9 +12,9 @@
 
 | 비교 기준 | 확인할 수 있는 내용 |
 | --- | --- |
-| 작업 중 · `git diff -- 회의록.md` | 지금 저장한 문서에서 스테이징 영역과 다른 줄 |
-| 스테이징 · `git diff --staged -- 회의록.md` | 최근 커밋 이후 다음 기록에 담아 둔 변경 |
-| 커밋 이력 · `git diff HEAD~1 HEAD -- 회의록.md` | 바로 이전 커밋과 최근 커밋 사이에 바뀐 줄 |
+| 바뀐 줄 · `git diff -- 회의록.md` | 지금 저장한 문서에서 스테이징 영역과 다른 줄 |
+| 담아 둔 변경 · `git diff --staged -- 회의록.md` | 최근 커밋 이후 다음 기록에 담아 둔 변경 |
+| 이전 기록 비교 · `git diff HEAD~1 HEAD -- 회의록.md` | 바로 이전 커밋과 최근 커밋 사이에 바뀐 줄 |
 
 화면 아래 **직접 입력해 보기**를 누르면 실습 터미널이 열려요. 명령을 입력하고 Tab을 눌러 후보를 순환하거나, **명령어 사전**에서 다른 장의 예제까지 검색할 수 있어요.
 
@@ -47,5 +47,17 @@
 
 - 파일을 열고 연필 버튼으로 수정한 뒤 **Commit changes**에서 변경 메시지를 남길 수 있어요. 다른 브랜치나 포크로 변경을 제안할 때는 **Propose changes**가 표시될 수 있어요. [GitHub 파일 편집 안내](https://docs.github.com/ko/repositories/working-with-files/managing-files/editing-files)
 - 새 브랜치의 변경을 제안하려면 **Compare & pull request**에서 대상 브랜치를 확인하고 **Create pull request**를 누르세요. [GitHub 풀 리퀘스트 안내](https://docs.github.com/ko/pull-requests/how-tos/create-pull-requests/creating-a-pull-request)
+
+## 로컬에서 실행하기
+
+Node.js 22 이상이 필요해요.
+
+```bash
+npm install
+npm run dev      # 개발 서버 (http://localhost:5173)
+npm test         # 단위 테스트
+npm run build    # 타입 검사 + 프로덕션 빌드
+npm run qa:visual  # 빌드 결과 브라우저 검증 (Chromium 필요)
+```
 
 픽셀 글꼴 GitDots Pixel은 Galmuri11 2.40.3에서 캔버스와 이름표에 쓰는 글자를 추린 버전이에요. 라벨에 새 글자를 추가한 뒤에는 `fonttools[woff]`가 설치된 환경에서 `python scripts/subset-pixel-font.py /경로/Galmuri11.woff2`로 다시 만들 수 있어요. CI는 `python scripts/subset-pixel-font.py --check`로 캔버스와 이름표에 필요한 글자를 검사해요. [Galmuri 라이선스](public/licenses/Galmuri-OFL.txt)

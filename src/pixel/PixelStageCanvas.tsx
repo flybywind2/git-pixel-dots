@@ -295,13 +295,13 @@ export function PixelStageCanvas() {
               </div>
             </div>
             <div className="mt-2 rounded-md border border-[#22A882] bg-[#E0F4E9] p-2">
-              <p className="text-xs font-semibold text-[#115843]">두 내용 함께 담기 결과 미리보기</p>
+              <p className="text-xs font-semibold text-[#115843]">두 변경 함께 남기기 결과 미리보기</p>
               <code className="font-mono-code mt-1 block whitespace-pre-wrap text-xs text-[#2F241D]">{sim.conflict.bothCode}</code>
             </div>
             <ul className="mt-2 space-y-1 break-keep text-xs leading-relaxed text-[#59483B]">
               <li>· 현재 브랜치 내용 유지 → 내 브랜치 줄만 남아요.</li>
               <li>· 상대 브랜치 내용 사용 → 상대 브랜치 줄만 남아요.</li>
-              <li>· 두 내용 함께 담기 → 위 미리보기처럼 두 내용을 절충해 남아요. 항상 정답은 아니니 결과를 확인하세요.</li>
+              <li>· 두 변경 함께 남기기 → 위 미리보기처럼 두 내용을 절충해 남아요. 항상 정답은 아니니 결과를 확인하세요.</li>
             </ul>
           </div>
         </div>

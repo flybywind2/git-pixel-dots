@@ -124,8 +124,8 @@ export function TerminalDock() {
         </button>
         {notice && <p role="status" className="shrink-0 border-b border-[#DDBE8A] bg-[#FFF2D7] px-3 py-1 text-xs font-semibold text-[#73450E]">{notice}</p>}
         <div id="terminal-content" hidden={!open} className={open ? 'flex min-h-0 flex-1 flex-col' : undefined}>
-          <div role="group" aria-label="빠른 실행" className="terminal-quick-actions flex max-h-[44%] shrink-0 flex-wrap items-start gap-1.5 overflow-y-auto overscroll-y-contain border-y border-[#E3D5BE] bg-[#F6EDDE] px-3 py-1.5">
-            <span className="mr-1 text-xs font-semibold text-[#715D49]">빠른 실행</span>
+          <div role="group" aria-label="빠른 실행" className="terminal-quick-actions flex shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain border-y border-[#E3D5BE] bg-[#F6EDDE] px-3 py-1.5">
+            <span className="mr-1 shrink-0 text-xs font-semibold text-[#715D49]">빠른 실행</span>
             {scenario.chips.map((chip) => {
               const step = chip.stepIndex === undefined ? undefined : scenario.steps[chip.stepIndex];
               const recommended = next?.command === chip.command;
@@ -136,7 +136,7 @@ export function TerminalDock() {
                   type="button"
                   onClick={() => { runCommand(chip.command); setDismissed(true); }}
                   title={chip.command}
-                  className={`inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-1 text-left text-xs ${recommended ? 'border-[#BF8B29] bg-[#FFE7A8] font-bold' : 'border-[#D7C7AE] bg-[#FFFDF8]'}`}
+                  className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-left text-xs ${recommended ? 'border-[#BF8B29] bg-[#FFE7A8] font-bold' : 'border-[#D7C7AE] bg-[#FFFDF8]'}`}
                 >
                   {done && <Check aria-hidden="true" className="h-3 w-3 shrink-0 text-[#147A5B]" />}
                   {chip.label}

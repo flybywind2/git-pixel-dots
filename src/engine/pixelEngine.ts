@@ -98,7 +98,7 @@ function mergeConflictBubble(file: string, seq: number): SpeechBubble {
     `${file}의 같은 부분을 두 브랜치가 바꿨어요. 아래 버튼에서 남길 내용을 고르세요.`, undefined, [
       { label: '현재 브랜치 내용 유지', command: 'resolve ours', tone: 'primary' },
       { label: '상대 브랜치 내용 사용', command: 'resolve theirs', tone: 'amber' },
-      { label: '두 내용 함께 담기', command: 'resolve both', tone: 'mint' },
+      { label: '두 변경 함께 남기기', command: 'resolve both', tone: 'mint' },
     ]);
 }
 

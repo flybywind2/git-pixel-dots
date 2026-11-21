@@ -118,7 +118,7 @@ async function documentLesson(page, url, capture) {
   await guide.click();
   await expectProgress(page, 1, 6);
 
-  await comparison.getByRole('button', { name: '스테이징', exact: true }).click();
+  await comparison.getByRole('button', { name: '담아 둔 변경', exact: true }).click();
   await expectProgress(page, 1, 6);
   assert.equal(await guide.innerText(), '바뀐 줄 확인하기');
   await guide.click();

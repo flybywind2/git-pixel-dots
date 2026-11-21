@@ -192,6 +192,7 @@ export interface StageStep {
   command: string;
   doneAction: LessonAction | LessonAction[];
   terms?: TermName[];
+  commandNote?: string;
 }
 
 export const LESSON_ACTIONS = [

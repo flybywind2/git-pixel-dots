@@ -408,10 +408,10 @@ describe('Full stage walkthroughs', () => {
     s = deepFreeze(executePixelCommand(s, 'gh repo view'));
     expect(s.lastAnim.kind).toBe('GH_CMD');
 
-    s = deepFreeze(executePixelCommand(s, 'gh pr create --title "다크모드"'));
+    s = deepFreeze(executePixelCommand(s, 'gh pr create --title "다크 모드 색상 추가"'));
     expect(s.lastAnim.kind).toBe('PR_CREATE');
     expect(s.prs).toHaveLength(initialPrs + 1);
-    expect(s.prs[s.prs.length - 1]?.title).toBe('다크모드');
+    expect(s.prs[s.prs.length - 1]?.title).toBe('다크 모드 색상 추가');
 
     s = deepFreeze(executePixelCommand(s, 'gh pr list'));
     expect(s.lastAnim.kind).toBe('GH_CMD');

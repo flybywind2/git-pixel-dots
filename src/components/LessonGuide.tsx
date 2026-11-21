@@ -1,6 +1,6 @@
 import { ArrowRight, Pencil, Play, Save } from 'lucide-react';
 import { getNextPendingStep, isPracticeCommand, isStepCompleted, STAGE_MAP, STAGE_TRACKS } from '../engine';
-import { DOCUMENT_REVERT } from '../engine/documentDiff';
+import { diffDocumentLines, DOCUMENT_REVERT, getDocumentComparison } from '../engine/documentDiff';
 import { CANONICAL_TERMS } from '../engine/terms';
 import { usePixelStore } from '../store/usePixelStore';
 
@@ -42,6 +42,11 @@ export function LessonGuide() {
       ? nextStep.terms.map((name) => ({ name, meaning: CANONICAL_TERMS[name] }))
       : lesson.terms.filter(({ name }) => nextStep.goal.includes(name) || nextStep.command.includes(name))
     : [];
+  // 1장은 비교 결과를 안내 카드에 한 줄로 보여 줘서, 아래로 스크롤하지 않아도 무슨 일이 일어났는지 알 수 있게 해요.
+  const docComparison = lesson.id === 'docs' && sim.document ? getDocumentComparison(sim, sim.document.comparison) : null;
+  const docLines = docComparison ? diffDocumentLines(docComparison.before, docComparison.after) : [];
+  const docRemoved = docLines.filter((line) => line.kind === 'removed').length;
+  const docAdded = docLines.filter((line) => line.kind === 'added').length;
 
   function runGuidedStep() {
     if (saveDraft) {
@@ -77,15 +82,16 @@ export function LessonGuide() {
         <div className="min-w-0 border-l-[3px] border-[#D69724] pl-3.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-[#715A43]" aria-live="polite">
             {phaseGroups ? (
-              <span aria-hidden="true" className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 {phaseGroups.map((group) => (
                   <span key={group.label} className="flex items-center gap-1.5">
-                    <span className="flex gap-1">
+                    <span aria-hidden="true" className="flex gap-1">
                       {group.steps.map((step) => (
                         <span key={step.id} className={`h-2 w-2 rounded-[2px] ${isStepCompleted(sim, step) ? 'bg-[#198361]' : 'bg-[#DED1B8]'}`} />
                       ))}
                     </span>
                     <span className={group.done ? 'font-semibold text-[#198361]' : undefined}>{group.label}</span>
+                    <span className="sr-only">{group.done ? '완료' : '진행 중'}</span>
                   </span>
                 ))}
               </span>
@@ -101,6 +107,11 @@ export function LessonGuide() {
           {label ? (
             <>
               {nextStep && !saveDraft && <p className="mt-1.5 break-keep text-sm">{nextStep.goal}</p>}
+              {lesson.id === 'docs' && docLines.length > 0 && (
+                <p role="status" className="mt-1 text-xs font-semibold text-[#196446]">
+                  비교 결과: 빠진 줄 {docRemoved}개 · 들어간 줄 {docAdded}개
+                </p>
+              )}
               <button
                 type="button"
                 data-testid="guided-command"
@@ -111,10 +122,13 @@ export function LessonGuide() {
                 <span className="break-keep">{label}</span>
               </button>
               {nextStep && !editDocument && !saveDraft && (
-                <p className="mt-2 text-xs text-[#715A43]">
-                  <code className="font-mono-code break-words">{nextStep.command}</code>
-                  {isPracticeCommand(nextStep.command) && <span className="ml-2">실습 전용</span>}
-                </p>
+                <div className="mt-2 text-xs text-[#715A43]">
+                  <p>
+                    <code className="font-mono-code break-words">{nextStep.command}</code>
+                    {isPracticeCommand(nextStep.command) && <span className="ml-2">실습 전용</span>}
+                  </p>
+                  {nextStep.commandNote && <p className="mt-1 break-keep leading-relaxed">{nextStep.commandNote}</p>}
+                </div>
               )}
               {stepTerms.length > 0 && (
                 <dl data-testid="step-terms" className="mt-2 space-y-1 rounded-md border border-[#E3D5BE] bg-[#F9F3E8] px-2.5 py-1.5 text-xs leading-relaxed text-[#59483B]">

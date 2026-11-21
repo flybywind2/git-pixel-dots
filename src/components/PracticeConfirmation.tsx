@@ -34,9 +34,9 @@ export function PracticeConfirmation() {
       </h2>
       <p id="practice-confirm-description" className="mt-2 break-keep text-sm leading-relaxed text-[#59483B]">
         {hardReset
-          ? '작업 파일과 스테이징 영역을 대상 커밋에 맞춥니다. 커밋하지 않은 변경이 사라질 수 있어요.'
+          ? '작업 파일과 스테이징 영역을 대상 커밋에 맞춰요. 커밋하지 않은 변경이 사라질 수 있어요.'
           : replaceDraft ? '저장하지 않은 수정이 예시 문장으로 바뀌어요.'
-            : '작성 중인 문서와 이 장에서 진행한 실습을 시작 상태로 돌립니다.'}
+            : '작성 중인 문서와 이 장에서 진행한 실습을 시작 상태로 돌려요.'}
       </p>
       {hardReset && <code className="mt-2 block break-all text-sm">{confirmation.command}</code>}
       <div className="mt-5 flex flex-wrap justify-end gap-2">
