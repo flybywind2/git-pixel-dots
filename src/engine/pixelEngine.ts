@@ -1703,8 +1703,10 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       const untrackedFiles = state.files.filter((f) => f.status === 'untracked');
       const conflictFiles = state.files.filter((f) => f.status === 'conflict');
 
+      // worktree 폴더에서 작업 중이면 프롬프트와 맞게 그 브랜치를 보여 줘요.
+      const statusBranch = state.stageId === 'ch8' && state.ai.worktreeActive ? state.ai.worktreeBranch : state.headBranch;
       const lines: TerminalLine[] = [
-        { text: `On branch ${state.headBranch}`, tone: 'sky' },
+        { text: `On branch ${statusBranch}`, tone: 'sky' },
       ];
       if (conflictFiles.length > 0) {
         lines.push({
@@ -1989,6 +1991,16 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         return commandNotice(state, cmd, '가져올 원격 브랜치를 확인하세요', 'git pull origin main처럼 원격과 브랜치를 지정할 수 있어요.', 'amber');
       }
       if (reachableCommits(state, local.id).has(remote.id)) {
+        // 합친 뒤 main이 이미 최신이어도 마무리 단계는 완료로 인정해요.
+        if (state.headBranch === 'main' && state.completedActions.includes('PR_MERGE')) {
+          const draft = { ...state, completedActions: withCompletedAction(state.completedActions, 'SYNC_MAIN') };
+          return finalizeTransition(
+            state, draft, 'PULL', '원격 변경 적용', `origin/${branch}`, cmd,
+            [{ text: '이미 최신이에요. 합친 내용이 내 컴퓨터의 main에 반영돼 있어요.', tone: 'mint' }],
+            makeBubble(`pull-${seqNext}`, 'cloud', 66, 48, '합친 내용을 내 컴퓨터로 가져왔어요',
+              '내 컴퓨터의 main이 이미 GitHub의 최신 main과 같아요. 합친 회의록 수정과 팀원의 참석 안내가 모두 반영돼 있어요.'),
+          );
+        }
         return commandNotice(state, cmd, '이미 가져온 커밋이에요', '현재 브랜치에 원격 변경이 들어 있어요.');
       }
       const common = mergeBase(state, local.id, remote.id);

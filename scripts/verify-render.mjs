@@ -245,7 +245,7 @@ async function practiceTracks(page, url) {
   for (const phase of ['내 컴퓨터에서', 'GitHub에서', '다시 내 컴퓨터로']) {
     await page.getByText(phase, { exact: true }).waitFor();
   }
-  await page.getByText('GitHub 웹에서 이어 하기', { exact: true }).click();
+  await page.getByText('GitHub 웹에서 이어 하기', { exact: false }).click();
   await page.getByText('Create pull request', { exact: true }).waitFor();
   const editingHelp = page.getByRole('link', { name: /GitHub 문서 편집 도움말/ });
   const prHelp = page.getByRole('link', { name: /GitHub 검토 요청 도움말/ });

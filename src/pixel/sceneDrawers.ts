@@ -198,7 +198,7 @@ function drawCh1Scene(
     padY,
     padW,
     '작업 폴더',
-    workingCount > 0 ? `변경 ${workingCount}개` : '변경 없음',
+    workingCount > 0 ? `변경 ${workingCount}개` : '스테이징과 같음',
     PALETTE.butter,
     activeIdx === 0,
     time,

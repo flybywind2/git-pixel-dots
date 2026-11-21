@@ -370,6 +370,31 @@ describe('Full stage walkthroughs', () => {
     expect(s.commits.find((commit) => commit.id === s.branches.main)?.tree[DOCUMENT_PATH]).toContain('2층 모임방');
   });
 
+  it('Ch4: pull completes the sync step even when main is already up to date', () => {
+    let s = runSequence('ch4', [
+      `git switch -c ${MEETING_PR_BRANCH}`,
+      'git add 회의록.md',
+      `git commit -m "${MEETING_PR_TITLE}"`,
+      `git push -u origin ${MEETING_PR_BRANCH}`,
+      `gh pr create --title "${MEETING_PR_TITLE}" --body "장소를 2층 모임방으로 바꿨어요."`,
+      'gh pr view --comments',
+      'gh pr merge',
+      'git switch main',
+    ]);
+    expect(s.completedActions).not.toContain('SYNC_MAIN');
+
+    // 다른 경로로 main을 이미 최신으로 만들어 둔 상황(저장된 진도 8/9)을 재현해요.
+    s = deepFreeze(executePixelCommand(s, 'git merge origin/main'));
+    expect(s.branches.main).toBe(s.remoteBranches.main);
+    expect(s.completedActions).not.toContain('SYNC_MAIN');
+
+    // 가져올 변경이 없어도 pull이 마무리 단계를 완료해야 해요.
+    const pulled = executePixelCommand(s, 'git pull origin main');
+    expect(pulled.lastAnim.kind).toBe('PULL');
+    expect(pulled.completedActions).toContain('SYNC_MAIN');
+    expect(getNextPendingStep(pulled)).toBeNull();
+  });
+
   it('Ch5: gh CLI full walkthrough (auth, repo, pr, issue, run watch, api)', () => {
     let s = deepFreeze(createStageState('ch5'));
     const initialIssues = s.issues.length;

@@ -51,7 +51,8 @@ export function LessonGuide() {
     } else if (nextStep) {
       runCommand(nextStep.command);
       if (lesson.id === 'docs' && nextStep.command.startsWith('git diff ') && !usePixelStore.getState().notice) {
-        document.getElementById('document-comparison')?.focus();
+        // 비교 영역으로 스크롤을 끌어내리지 않아 안내 카드가 화면 밖에 사라지지 않게 해요.
+        document.getElementById('document-comparison')?.focus({ preventScroll: true });
       }
     }
   }
@@ -64,10 +65,13 @@ export function LessonGuide() {
           <h1 id="lesson-title" className="break-keep text-xl font-bold leading-tight tracking-tight sm:text-2xl">{lesson.title}</h1>
           <p className="mt-1.5 max-w-[68ch] break-keep text-sm leading-relaxed text-[#59483B]">
             {nextStep ? lesson.tagline : finishedBasic
-              ? '이제 팀 저장소의 문서를 고치고 변경을 기록한 뒤, GitHub에서 검토를 요청하고 합친 내용을 내 컴퓨터로 가져올 수 있어요.'
+              ? '이제 팀 저장소의 문서를 고치고 변경을 기록한 뒤, GitHub에서 검토를 요청하고 합친 내용을 내 컴퓨터로 가져올 수 있어요. 기본 1~4장만으로도 팀 협업 시작은 충분해요. 5~9장은 선택 심화예요.'
               : lesson.takeaway}
           </p>
           <p className="mt-1.5 text-xs text-[#715A43]">이 브라우저 안의 가상 실습이에요. 실제 GitHub에는 반영되지 않아요.</p>
+          {lesson.track === 'advanced' && (
+            <p className="mt-1 text-xs text-[#715A43]">선택 심화 과정이에요. 기본 1~4장만 완주해도 팀 협업의 기본은 충분해요.</p>
+          )}
           {(lesson.id === 'docs' || lesson.id === 'ch4') && <GitHubWebGuide />}
         </div>
         <div className="min-w-0 border-l-[3px] border-[#D69724] pl-3.5">
@@ -164,7 +168,8 @@ export function LessonGuide() {
 function GitHubWebGuide() {
   return (
     <details className="mt-2 max-w-[68ch] rounded-md border border-[#DED1B8] bg-[#F9F3E8] px-2.5 text-xs">
-      <summary className="cursor-pointer py-1.5 font-semibold text-[#166447]">GitHub 웹에서 이어 하기</summary>
+      <summary className="cursor-pointer py-1.5 font-semibold text-[#166447]">GitHub 웹에서 이어 하기 (실제 GitHub에서 써보기 · 선택)</summary>
+      <p className="mb-2 break-keep leading-relaxed text-[#715A43]">지금은 실습에 집중하세요. 이 안내는 나중에 실제 GitHub에서 써볼 때 참고하는 선택 과정이에요.</p>
       <ol className="mb-2 ml-4 list-decimal space-y-1.5 break-keep leading-relaxed text-[#59483B]">
         <li>저장소에서 문서를 열고 연필 버튼으로 편집해요. <strong>Preview</strong>에서 문서가 어떻게 보이는지 확인해요.</li>
         <li><strong>Commit changes</strong>에서 변경 이유를 적고 새 브랜치에 기록해요. 쓰기 권한이 없는 저장소에서는 포크(다른 사람 저장소를 내 계정으로 복사)를 만들어 <strong>Propose changes</strong>로 변경을 제안할 수 있어요.</li>
