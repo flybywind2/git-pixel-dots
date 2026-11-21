@@ -298,6 +298,16 @@ function drawCh1Scene(
   const cloudY = padY - dot * 13 + Math.sin(time * 2.1) * 4;
   drawPixelSprite(ctx, CLOUD_CASTLE, CLOUD_CASTLE_COLORS, xs[3], cloudY, dot * 0.92, 'dot');
 
+  // 팀 저장소에도 커밋 보석을 그려 push 후 동기화가 보이게 해요.
+  const remoteCount = remoteHead ? reachableCommits(sim, remoteHead).size : 0;
+  const remoteGems = Math.min(remoteCount, 4);
+  for (let i = 0; i < remoteGems; i++) {
+    const gx = xs[3] + (i - (remoteGems - 1) * 0.5) * (dot * 7.2);
+    const gy = padY - dot * 6.5 - (i % 2) * (dot * 2.5) + Math.sin(time * 3 + i * 0.8) * 2;
+    const gemColor = shared ? PALETTE.mint : PALETTE.lavender;
+    drawPixelSprite(ctx, COMMIT_GEM, makeGemColors(gemColor, PALETTE.cream, shared ? PALETTE.mintDark : PALETTE.lavenderDark), gx, gy, dot * 0.85, 'dot');
+  }
+
   // Action animations!
   const t = easeOutCubic(animProgress);
   if (kind === 'ADD' && animProgress < 0.95) {
@@ -448,6 +458,9 @@ function drawCh2Scene(
     ctx.restore();
     drawCommitHash(ctx, c.hash, gx, gy + dot * 4.5 + 8, PALETTE.textPrimary);
   });
+
+  // 현재 HEAD 위치를 캔버스에도 이름표로 표시해요.
+  drawPixelBadge(ctx, headX, railY - dot * 6 - 16, 'HEAD', PALETTE.cream, PALETTE.skyDark, PALETTE.sky, 11, true);
 
   const stashX = w * 0.2;
   const stashY = h * 0.32;
@@ -855,12 +868,13 @@ function drawCh5Scene(
   const hubY = h * 0.6;
   const padW = clamp(w * 0.175, 102, 148);
   const activeIsland = detectGhTargetIsland(sim);
+  const latestPr = sim.prs[sim.prs.length - 1] ?? null;
 
   const islands = [
     { x: w * 0.56, y: h * 0.34, label: '저장소', sub: sim.ghUser || 'gitdots/app', color: PALETTE.sky },
     { x: w * 0.83, y: h * 0.34, label: '검토 요청', sub: `열린 PR ${sim.prs.length}개`, color: PALETTE.lavender },
     { x: w * 0.56, y: h * 0.76, label: '이슈', sub: `열린 글 ${sim.issues.length}개`, color: PALETTE.butter },
-    { x: w * 0.83, y: h * 0.76, label: '자동 검사', sub: '실행 결과', color: PALETTE.mint },
+    { x: w * 0.83, y: h * 0.76, label: '자동 검사', sub: latestPr?.ci === 'pass' ? '검사 통과' : '실행 결과', color: PALETTE.mint },
   ] as const;
 
   // Dot laser beams from Buddy's remote to each island
@@ -1028,7 +1042,7 @@ function drawCh6Scene(
     if (door.danger) {
       const blink = Math.sin(time * 8 + idx) > 0;
       if (blink) {
-        drawPixelBadge(ctx, door.x, doorTopY - dot * 3.2, '권한 과다', PALETTE.coral, PALETTE.ink, PALETTE.cream, 10);
+        drawPixelBadge(ctx, door.x, doorTopY - dot * 3.2, '권한 과다', PALETTE.coral, PALETTE.ink, PALETTE.cream, 11);
       }
     } else if (!door.open) {
       drawPixelSprite(
@@ -1151,7 +1165,7 @@ function drawCh7Scene(
     PALETTE.cream,
     connected ? PALETTE.mintDark : PALETTE.textSecondary,
     connected ? PALETTE.mint : PALETTE.woodBorder,
-    9.5,
+    11,
   );
 
   // Right: Corporate GHES Castle Fortress
@@ -1202,7 +1216,7 @@ function drawCh7Scene(
     PALETTE.cream,
     runnerActive ? PALETTE.mintDark : PALETTE.textSecondary,
     runnerActive ? PALETTE.mint : PALETTE.woodBorder,
-    9.5,
+    11,
   );
 
   // Blocked intruder packet bouncing off firewall on GHES_BLOCK!
@@ -1364,6 +1378,10 @@ function drawCh8Scene(
 
   // Far Right: GitHub Cloud Castle
   drawPixelSprite(ctx, CLOUD_CASTLE, CLOUD_CASTLE_COLORS, ghX, ghY + Math.sin(time * 2.2) * 3, dot * 0.88, 'dot');
+  // 합치기가 끝나면 GitHub 구름 위에 민트 병합 보석을 찍어 반영을 보여 줘요.
+  if (ai.merged) {
+    drawPixelSprite(ctx, COMMIT_GEM, makeGemColors(PALETTE.mint, PALETTE.cream, PALETTE.mintDark, PALETTE.butter), ghX, ghY - dot * 8, dot * 0.85, 'dot');
+  }
   drawPixelBadge(
     ctx,
     ghX,
@@ -1372,7 +1390,7 @@ function drawCh8Scene(
     PALETTE.cream,
     ai.merged ? PALETTE.mintDark : PALETTE.skyDark,
     ai.merged ? PALETTE.mint : PALETTE.sky,
-    10,
+    11,
   );
 
   // Cute lavender AI Mini-Bot position & animations
