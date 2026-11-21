@@ -753,6 +753,27 @@ function drawCh4Scene(
   const cloudY = h * 0.58 + Math.sin(time * 2.2) * 4;
   drawPixelSprite(ctx, CLOUD_CASTLE, CLOUD_CASTLE_COLORS, xCloud, cloudY, dot * 1.02, 'dot');
 
+  // 브랜치를 만들어 이동해도 main이 사라지지 않도록, 내 쪽과 GitHub 쪽 모두 두 브랜치를 나란히 보여 줘요.
+  const localFeature = Object.keys(sim.branches).find((name) => name !== 'main');
+  const remoteFeature = Object.keys(sim.remoteBranches).find((name) => name !== 'main');
+  const mainBadgeY = h * 0.44;
+  const featureBadgeY = h * 0.3;
+  const drawBranchBadge = (name: string, cx: number, cy: number, isHead: boolean, border: string, textColor: string) => {
+    drawPixelBadge(ctx, cx, cy, isHead ? `HEAD · ${name}` : name, PALETTE.cream, textColor, border, 12, true);
+  };
+  if (localFeature) {
+    drawDottedTrack(ctx, xLocal, mainBadgeY - 14, xLocal, featureBadgeY + 14, PALETTE.lavender, time, sim.headBranch === localFeature);
+    drawBranchBadge(localFeature, xLocal, featureBadgeY, sim.headBranch === localFeature, PALETTE.lavender, PALETTE.lavenderDark);
+  }
+  drawBranchBadge('main', xLocal, mainBadgeY, sim.headBranch === 'main', PALETTE.sky, PALETTE.skyDark);
+  if (remoteFeature) {
+    drawDottedTrack(ctx, xCloud, mainBadgeY - 14, xCloud, featureBadgeY + 14,
+      prMerged ? PALETTE.mint : PALETTE.lavender, time, kind === 'PUSH' || kind === 'PR_MERGE');
+    drawBranchBadge(remoteFeature, xCloud, featureBadgeY, false, PALETTE.lavender, PALETTE.lavenderDark);
+  }
+  drawBranchBadge('main', xCloud, mainBadgeY, false,
+    prMerged ? PALETTE.mint : PALETTE.sky, prMerged ? PALETTE.mintDark : PALETTE.skyDark);
+
   // Animated PR Rocket flight
   const t = easeOutCubic(animProgress);
   if (kind === 'PR_CREATE') {
