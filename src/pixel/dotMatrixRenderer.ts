@@ -4,8 +4,12 @@ export const PIXEL_FONT = '"GitDots Pixel", system-ui, sans-serif';
 const MONO_FONT = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
 function setLabelFont(ctx: CanvasRenderingContext2D, size: number, mono = false): number {
-  const sceneScale = ctx.getTransform().a / Math.min(globalThis.devicePixelRatio || 1, 2);
-  const fontSize = Math.max(size, 12 / sceneScale);
+  const dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
+  const sceneScale = ctx.getTransform().a / dpr;
+  // 캔버스가 클수록 라벨도 비례해서 키워 여백 없이 꽉 차게 보여요.
+  const cssHeight = ctx.canvas.height / dpr;
+  const heightScale = Math.min(1.7, Math.max(1, cssHeight / 420));
+  const fontSize = Math.max(size, 12 / sceneScale) * heightScale;
   ctx.font = `400 ${fontSize}px ${mono ? MONO_FONT : PIXEL_FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';

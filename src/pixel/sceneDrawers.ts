@@ -68,7 +68,7 @@ function clamp(v: number, min: number, max: number): number {
 }
 
 function computeDotSize(w: number, h: number): number {
-  return clamp(Math.min(w / 225, h / 118), 2.5, 4.4);
+  return clamp(Math.min(w / 225, h / 118), 2.5, 7);
 }
 
 function moveBuddySmooth(
@@ -680,7 +680,7 @@ function drawCh4Scene(
   motion: SceneMotionState,
 ): void {
   const dot = computeDotSize(w, h);
-  const padY = h * 0.74;
+  const padY = h * 0.78;
   const xLocal = w * 0.18;
   const xCi = w * 0.5;
   const xCloud = w * 0.82;
@@ -741,7 +741,7 @@ function drawCh4Scene(
   );
 
   // Center holographic LED pixel CI Gate ring
-  const gateY = h * 0.58;
+  const gateY = h * 0.56;
   const ringR = dot * 10.5;
   const ringDots = 16;
   const ringColor = ciPass ? PALETTE.mint : latestPr ? PALETTE.butter : PALETTE.woodBorder;
@@ -770,15 +770,15 @@ function drawCh4Scene(
   }
 
   // Floating GitHub Cloud Castle on the right
-  const cloudY = h * 0.58 + Math.sin(time * 2.2) * 4;
+  const cloudY = h * 0.56 + Math.sin(time * 2.2) * 4;
   drawPixelSprite(ctx, CLOUD_CASTLE, CLOUD_CASTLE_COLORS, xCloud, cloudY, dot * 1.02, 'dot');
 
   // 브랜치를 만들어 이동해도 main이 사라지지 않도록, main 철도에서 가지가 갈라져 올라가는 모양을 내 쪽과 GitHub 쪽 모두에 그려요.
   const localFeature = Object.keys(sim.branches).find((name) => name !== 'main');
   const remoteFeature = Object.keys(sim.remoteBranches).find((name) => name !== 'main');
   const drawBranchFork = (cx: number, feature: string | undefined, head: string | null, merged: boolean, forkActive: boolean, hasCommit: boolean) => {
-    const railY = h * 0.46;
-    const featY = h * 0.32;
+    const railY = h * 0.38;
+    const featY = h * 0.18;
     const baseX = cx + padW * 0.25;
     const tipX = cx + padW * 0.4;
     const mergeX = cx + padW * 0.52;
@@ -834,7 +834,7 @@ function drawCh4Scene(
 
   // Buddy cheers from local computer / hops toward gate
   const targetX = returned ? 0.18 : prMerged ? 0.68 : latestPr ? 0.33 : 0.18;
-  const b = moveBuddySmooth(motion, 'ch4', targetX, 0.65);
+  const b = moveBuddySmooth(motion, 'ch4', targetX, 0.7);
   const pose: BuddyPose = (kind === 'PR_MERGE' || kind === 'PR_CREATE' || kind === 'PULL') && animProgress < 0.9 ? 'happy' : 'idle';
   drawBuddyWithIdleLife(ctx, b.x * w, b.y * h, dot, pose, b.walking, b.flipX, time);
 }
