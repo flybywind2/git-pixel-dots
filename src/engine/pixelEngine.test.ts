@@ -536,9 +536,16 @@ describe('Full stage walkthroughs', () => {
     expect(s.ai.prNumber).toBe(1);
     expect(s.prs[0]?.status).toBe('draft');
     expect(s.prs[0]?.ci).toBe('pass');
-    // AI bubble MUST include 1-click human approval button
+    // 초안 PR은 바로 합칠 수 없어요 — 검토 준비 전환을 안내해요.
     expect(s.bubbles[0]?.speaker).toBe('ai');
-    expect(s.bubbles[0]?.actions?.some((a) => a.command === 'ai approve')).toBe(true);
+    expect(s.bubbles[0]?.actions?.some((a) => a.command === 'ai ready')).toBe(true);
+    const prematureApprove = executePixelCommand(s, 'ai approve');
+    expect(prematureApprove.lastAnim.kind).toBe('IDLE');
+    expect(prematureApprove.ai.merged).toBe(false);
+
+    s = deepFreeze(executePixelCommand(s, 'ai ready'));
+    expect(s.prs[0]?.status).toBe('open');
+    expect(s.completedActions).toContain('AI_READY');
 
     s = deepFreeze(executePixelCommand(s, 'ai approve'));
     expect(s.lastAnim.kind).toBe('AI_APPROVE');
@@ -809,13 +816,15 @@ describe('Utility commands, unknown commands & autocomplete', () => {
     const conflictAc = getCommandAutocomplete('res', conflictState);
     expect(conflictAc[0]?.cmd).toBe('resolve both');
 
-    // AI PR context boosts ai approve to top
+    // 초안 PR 상태에서는 검토 준비 전환(ai ready)을 맨 위로 추천해요.
     const aiPrState = runSequence('ch8', [
       'git worktree add wt-ai -b ai/fix',
       'ai code',
       'ai pr',
     ]);
     const aiAc = getCommandAutocomplete('ai', aiPrState);
-    expect(aiAc[0]?.cmd).toBe('ai approve');
+    expect(aiAc[0]?.cmd).toBe('ai ready');
+    const aiReadyState = deepFreeze(executePixelCommand(aiPrState, 'ai ready'));
+    expect(getCommandAutocomplete('ai', aiReadyState)[0]?.cmd).toBe('ai approve');
   });
 });

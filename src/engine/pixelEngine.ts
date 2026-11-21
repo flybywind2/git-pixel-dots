@@ -1602,8 +1602,43 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           66,
           52,
           `초안 PR #${nextNum}의 자동 테스트가 통과했어요`,
-          '자동 테스트를 모두 통과했어요! 이제 사람이 변경 내역을 최종 확인하고 승인해 주시면 main에 합칠게요.',
-          '말풍선 버튼을 누르거나 ai approve 를 입력해 승인해 주세요!',
+          '자동 테스트를 모두 통과했어요! 초안 PR이라 바로 합칠 수 없으니, 먼저 검토 준비로 전환한 뒤 사람의 승인을 받아요.',
+          nextStepHintText(draft),
+          [{ label: '검토 준비로 전환하기', command: 'ai ready', tone: 'primary' }],
+        ),
+      );
+    }
+
+    if (sub === 'ready') {
+      if (state.ai.prNumber === null) {
+        return commandNotice(state, cmd, '먼저 초안 PR이 필요해요', 'ai pr로 초안 PR을 연 뒤에 검토 준비로 전환할 수 있어요.', 'amber');
+      }
+      const prNum = state.ai.prNumber;
+      const targetPr = state.prs.find((p) => p.number === prNum);
+      if (!targetPr || targetPr.status !== 'draft') {
+        return commandNotice(state, cmd, '이미 검토 준비 상태예요', '초안 PR이 아니에요. 바로 승인하고 합칠 수 있어요.');
+      }
+      const draft: PixelSimState = {
+        ...state,
+        prs: state.prs.map((p) => (p.number === prNum ? { ...p, status: 'open' } : p)),
+        completedActions: withCompletedAction(state.completedActions, 'AI_READY'),
+      };
+      return finalizeTransition(
+        state,
+        draft,
+        'GH_CMD',
+        `PR #${prNum} 검토 준비로 전환`,
+        `#${prNum}`,
+        cmd,
+        [{ text: `초안 PR #${prNum}을 검토 준비(Ready for review) 상태로 전환했어요.`, tone: 'mint' }],
+        makeBubble(
+          `ai-ready-${seqNext}`,
+          'ai',
+          66,
+          52,
+          `PR #${prNum}을 검토 준비로 전환했어요`,
+          '초안 PR은 바로 합칠 수 없어요. 검토 준비로 전환해야 리뷰어가 승인하고 합칠 수 있어요. 이제 변경을 확인하고 승인해 주세요.',
+          nextStepHintText(draft),
           [{ label: '승인하고 합치기', command: 'ai approve', tone: 'mint' }],
         ),
       );
@@ -1633,6 +1668,28 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       }
 
       const prNum = state.ai.prNumber;
+      const targetPr = state.prs.find((p) => p.number === prNum);
+      if (targetPr?.status === 'draft') {
+        return finalizeTransition(
+          state,
+          state,
+          'IDLE',
+          '초안 PR은 바로 합칠 수 없어요',
+          undefined,
+          cmd,
+          [{ text: '초안 PR은 검토 준비로 전환해야 합칠 수 있어요. ai ready를 먼저 실행하세요.', tone: 'amber' }],
+          makeBubble(
+            `ai-need-ready-${seqNext}`,
+            'ai',
+            66,
+            52,
+            '초안 PR은 바로 합칠 수 없어요',
+            '초안 PR은 아직 검토 준비가 안 됐어요. 먼저 검토 준비로 전환한 뒤 승인하고 합쳐 주세요.',
+            'ai ready 명령을 실행해 보세요.',
+            [{ label: '검토 준비로 전환하기', command: 'ai ready', tone: 'primary' }],
+          ),
+        );
+      }
       const aiBranch = state.ai.worktreeBranch;
       const mainHead = state.remoteBranches.main ?? state.branches.main ?? 'c1';
       const aiHead = state.branches[aiBranch] ?? mainHead;
@@ -3362,7 +3419,12 @@ export function getCommandAutocomplete(
   }
 
   if (state.stageId === 'ch8' && state.ai.prNumber !== null && !state.ai.merged) {
-    pushUnique('ai approve', '사람이 검토하고 승인한 변경 합치기');
+    const aiPr = state.prs.find((p) => p.number === state.ai.prNumber);
+    if (aiPr?.status === 'draft') {
+      pushUnique('ai ready', '초안 PR을 검토 준비로 전환');
+    } else {
+      pushUnique('ai approve', '사람이 검토하고 승인한 변경 합치기');
+    }
   }
 
   // Stage steps & chips next

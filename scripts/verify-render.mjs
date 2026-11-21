@@ -557,7 +557,7 @@ async function mobileLessonLayout(browser, url) {
 async function advancedGuidedCompletion(browser, url) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   // 심화 5~9장을 안내 버튼만으로 끝까지 완료해요(1~4장은 다른 검사에서 완료).
-  for (const [chapter, total] of [[5, 4], [6, 4], [7, 4], [8, 4], [9, 5]]) {
+  for (const [chapter, total] of [[5, 4], [6, 4], [7, 4], [8, 4], [9, 6]]) {
     await openChapter(page, url, chapter);
     const guide = page.getByTestId('guided-command');
     for (let i = 0; i < total; i++) {
