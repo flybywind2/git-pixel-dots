@@ -49,6 +49,18 @@ export function buildStageFileItems(sim: PixelSimState, stageId: StageId): Stage
 
   if (stageId !== 'ch2') return items;
 
+  // 스테이징된 삭제처럼 작업 폴더에 없지만 장바구니에 남은 항목도 카드에 보여 줘요.
+  for (const name of sim.staged) {
+    if (items.some((item) => item.name === name)) continue;
+    const stagedContent = treeEntry(sim.index, name);
+    items.push({
+      id: `index:${name}`,
+      name,
+      badges: ['staged', 'deleted'],
+      stagedContent,
+    });
+  }
+
   const head = headTree(sim);
   sim.stashes.forEach((stash, index) => {
     const label = stashLabel(sim.stashes.length, index);

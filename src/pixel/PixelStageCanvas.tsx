@@ -252,9 +252,10 @@ export function PixelStageCanvas() {
   const visibleHistory = stageId === 'ch2' ? recentTimelineCommits(sim) : null;
   const showFileStatusCard = stageId === 'ch1' || stageId === 'ch2' || stageId === 'ch4';
   const hasActiveMergeConflict = Boolean(sim.conflict && sim.conflict.resolvedChoice === 'none' && !sim.conflict.revert);
+  const conflict = sim.conflict;
   const stageFileItems = showFileStatusCard ? buildStageFileItems(sim, stageId) : [];
   const activePreviewFile = selectedFile ? stageFileItems.find((item) => item.id === selectedFile) ?? null : null;
-  const shareRelation = stageId === 'ch2' ? remoteRelation(sim) : null;
+  const shareRelation = stageId === 'ch2' || stageId === 'ch1' ? remoteRelation(sim) : null;
 
   function closePreview() {
     const lastId = selectedFile;
@@ -373,6 +374,11 @@ export function PixelStageCanvas() {
             <div className="mt-1.5 rounded-md border border-[#22A882] bg-[#E0F4E9] px-2 py-1">
               <p className="text-xs font-semibold text-[#115843]">두 변경 함께 남기기 미리보기 <span className="font-normal text-[#2D5E4A]">(항상 정답은 아니니 결과를 확인하세요)</span></p>
               <code className="font-mono-code mt-0.5 block whitespace-pre-wrap text-xs text-[#2F241D]">{sim.conflict.bothCode}</code>
+              {sim.conflict.bothCode.includes('alternateTheme') && (
+                <p className="mt-1 break-keep text-[11px] text-[#2D5E4A]">
+                  같은 이름이 두 번 선언되지 않도록 상대 줄의 이름만 alternateTheme으로 바꿔 함께 담아요. 앱은 첫 번째 theme 색을 계속 쓰고, 실제 Git은 이렇게 이름을 자동으로 바꿔 주지 않아요.
+                </p>
+              )}
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-[#E9DFCE] pt-1.5">
               {CONFLICT_RESOLUTION_ACTIONS.map((act) => {
@@ -392,25 +398,25 @@ export function PixelStageCanvas() {
           </div>
         </div>
       )}
-      {stageId === 'ch2' && shareRelation && (
+      {stageId === 'ch2' || stageId === 'ch1' ? shareRelation && (
         <div className="order-2 mx-auto mt-1.5 w-full max-w-3xl px-3 sm:px-6" data-testid="stage-sync-status" role="status">
           <p className="break-keep rounded-md border border-[#D8C9B0] bg-[#FAF4E8] px-2.5 py-1 text-xs font-semibold text-[#59483B]">
             팀 저장소: {SHARE_STATUS_TEXT[shareRelation]}
           </p>
-          {(sim.lastAnim.kind === 'PUSH' || sim.lastAnim.kind === 'UNSTAGE') && (
+          {(sim.lastAnim.kind === 'PUSH' || sim.lastAnim.kind === 'UNSTAGE' || sim.lastAnim.kind === 'COMMIT') && (
             <p data-testid="stage-command-status" className="mt-1 break-keep text-xs text-[#715A43]">
               {sim.lastAnim.label}{sim.lastAnim.detail ? ` · ${sim.lastAnim.detail}` : ''} 완료
             </p>
           )}
         </div>
-      )}
+      ) : null}
       <div ref={containerRef} className={`relative order-3 flex-1 ${canvasMinHeight}`}>
         <canvas
           ref={canvasRef}
           data-testid="pixel-stage-canvas"
           className="absolute inset-0 block h-full w-full"
           role="img"
-          aria-label={`${scenario.title} · ${sim.lastAnim.label}`}
+          aria-label={`${scenario.title} · 현재 브랜치 ${sim.headBranch} · ${sim.prs.length > 0 ? `PR ${sim.prs.length}건` : 'PR 없음'} · ${sim.lastAnim.label}`}
         />
         {sim.lastAnim.kind !== 'IDLE' && (
           <button
@@ -465,7 +471,7 @@ export function PixelStageCanvas() {
                   );
                 })}
               </div>
-              <span className="ml-auto hidden text-[11px] text-[#715A43] sm:inline">파일을 눌러 내용 미리보기</span>
+              <span className="ml-auto text-[11px] text-[#715A43]">파일을 눌러 내용 미리보기</span>
             </div>
             {activePreviewFile && (
               <div
@@ -493,7 +499,7 @@ export function PixelStageCanvas() {
                 {activePreviewFile.stash ? (
                   <div className="mt-1 space-y-1.5">
                     <p className="break-keep text-[11px] font-semibold text-[#5B3E9E]">
-                      {activePreviewFile.stash.label}에 보관된 사본이에요. 삭제된 상태는 값이 없는 것으로 표시해요.
+                      {activePreviewFile.stash.label}에 보관된 사본이에요. stash@{'{'}0{'}'}이 가장 최근 항목이에요.
                     </p>
                     {([
                       ['보관 기준(base)', activePreviewFile.stash.base],
@@ -503,7 +509,9 @@ export function PixelStageCanvas() {
                       <div key={label}>
                         <p className="text-[11px] font-semibold text-[#59483B]">{label}</p>
                         {content === undefined ? (
-                          <p className="mt-0.5 rounded border border-[#D9C8EE] bg-[#F8F3FD] px-2 py-1 text-[11px] text-[#6B5743]">이 사본에는 파일이 없어요(삭제 상태).</p>
+                          <p className="mt-0.5 rounded border border-[#D9C8EE] bg-[#F8F3FD] px-2 py-1 text-[11px] text-[#6B5743]">
+                            {index === 0 ? '기준 커밋에는 없던 파일이에요(새로 추가됨).' : '이 사본에는 파일이 없어요(삭제 상태).'}
+                          </p>
                         ) : (
                           <pre className={`font-mono-code mt-0.5 max-h-24 overflow-auto whitespace-pre-wrap rounded p-2 text-xs leading-relaxed text-[#2F241D] ${index === 2 ? 'border border-[#D9C8EE] bg-[#F8F3FD]' : 'bg-[#FFFDF8]'}`}>
                             {content}
@@ -524,13 +532,19 @@ export function PixelStageCanvas() {
                         </pre>
                       )}
                     </div>
-                    {activePreviewFile.stagedContent !== undefined && (
+                    {activePreviewFile.stagedContent !== undefined ? (
                       <div>
-                        <p className="text-[11px] font-semibold text-[#5B3E9E]">장바구니 사본(index) · 다음 커밋에 들어갈 내용</p>
+                        <p className="text-[11px] font-semibold text-[#5B3E9E]">
+                          {activePreviewFile.badges.includes('staged')
+                            ? '장바구니 사본(index) · 다음 커밋에 들어갈 내용'
+                            : '최근 커밋과 같은 사본(index) · 아직 담은 변경 없음'}
+                        </p>
                         <pre className="font-mono-code mt-0.5 max-h-28 overflow-auto whitespace-pre-wrap rounded border border-[#D9C8EE] bg-[#F8F3FD] p-2 text-xs leading-relaxed text-[#2F241D]">
                           {activePreviewFile.stagedContent}
                         </pre>
                       </div>
+                    ) : activePreviewFile.badges.includes('staged') && (
+                      <p className="text-[11px] text-[#5B3E9E]">장바구니 사본이 작업 파일과 같아요. 사라진 게 아니라 똑같이 담겨 있어요.</p>
                     )}
                   </div>
                 )}
@@ -538,6 +552,76 @@ export function PixelStageCanvas() {
             )}
           </div>
         </section>
+      )}
+      {stageId === 'ch3' && conflict && conflict.resolvedChoice !== 'none' && (
+        <div className="order-2 mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="resolved-preview">
+          <div className="rounded-xl border border-[#22A882] bg-[#E0F4E9] px-3 py-2">
+            <h2 className="break-keep text-sm font-bold text-[#115843]">해결한 최종 파일 내용이에요</h2>
+            <p className="mt-1 break-keep text-xs text-[#2D5E4A]">
+              버튼을 누르기 전에 이 내용을 확인하세요. 커밋하면 이 내용이 기록돼요.
+            </p>
+            <pre className="font-mono-code mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[#FFFDF8] px-2 py-1.5 text-xs text-[#2F241D]">
+              {sim.files.find((file) => file.name === conflict.file)?.content ?? ''}
+            </pre>
+            <p className="mt-1 break-keep text-xs text-[#2D5E4A]">
+              실제 Git에서는 이 파일에 남은 충돌 표시(&lt;&lt;&lt;&lt;&lt;&lt;&lt;)를 직접 지운 뒤 git add로 해결을 표시해요.
+            </p>
+          </div>
+        </div>
+      )}
+      {stageId === 'ch5' && sim.completedActions.includes('RUN_WATCH') && (
+        <div className="order-2 mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="ci-target">
+          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] px-3 py-2">
+            <h2 className="break-keep text-sm font-bold text-[#2F241D]">이번에 지켜본 자동 검사 대상</h2>
+            <ul className="mt-1 space-y-0.5 break-keep text-xs text-[#59483B]">
+              <li>· 브랜치: feat/darkmode</li>
+              <li>· 변경 파일: darkmode.css (다크 모드 색상 설정)</li>
+              <li>· 실행 workflow: CI Build &amp; Test — 코드 가져오기 → 설치·형식 검사 → 단위 테스트</li>
+            </ul>
+          </div>
+        </div>
+      )}
+      {stageId === 'ch7' && (
+        <div className="order-2 mx-auto mt-3 grid w-full max-w-3xl gap-2 px-3 sm:px-6" data-testid="ghes-status">
+          {sim.ghes.mode === 'cloud' && (
+            <div className="rounded-xl border border-[#3292CE] bg-[#F0F8FE] px-3 py-2">
+              <h2 className="break-keep text-sm font-bold text-[#174669]">공용 클라우드와 사내 GHES 비교</h2>
+              <ul className="mt-1 space-y-0.5 break-keep text-xs text-[#2F4B63]">
+                <li>· GitHub.com(클라우드): 주소 github.com · API api.github.com · GitHub-hosted runner</li>
+                <li>· 사내 GHES: 주소 {sim.ghes.host} · API /api/v3 · 사내 Private Runner</li>
+              </ul>
+            </div>
+          )}
+          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] px-3 py-2">
+            <h2 className="break-keep text-sm font-bold text-[#2F241D]">사내 보안 로그 (최근 기록)</h2>
+            <ul className="font-mono-code mt-1 space-y-0.5 break-keep text-[11px] text-[#59483B]">
+              {sim.ghes.auditLogs.slice(-3).map((log, index) => <li key={index}>· {log}</li>)}
+            </ul>
+          </div>
+        </div>
+      )}
+      {stageId === 'ch8' && sim.ai.codeWritten && (
+        <div className="order-2 mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="ai-diff">
+          <div className="rounded-xl border border-[#8BB9D9] bg-[#EEF7FD] px-3 py-2">
+            <h2 className="break-keep text-sm font-bold text-[#174669]">사람이 검토할 코드 변경</h2>
+            <p className="mt-1 break-keep text-xs text-[#2F4B63]">버그: 2 + 3을 -1로 계산했어요. AI가 아래처럼 고쳤어요.</p>
+            <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+              <div className="rounded-md border border-[#E08A95] bg-[#FDE9E8] px-2 py-1.5">
+                <p className="text-xs font-semibold text-[#8C2630]">고치기 전 (main)</p>
+                <code className="font-mono-code mt-0.5 block whitespace-pre-wrap text-xs text-[#2F241D]">
+                  {sim.commits.find((commit) => commit.id === sim.branches.main)?.tree['buggy.ts'] ?? 'export const sum = (a, b) => a - b;'}
+                </code>
+              </div>
+              <div className="rounded-md border border-[#22A882] bg-[#E0F4E9] px-2 py-1.5">
+                <p className="text-xs font-semibold text-[#115843]">고친 후 ({sim.ai.worktreeBranch})</p>
+                <code className="font-mono-code mt-0.5 block whitespace-pre-wrap text-xs text-[#2F241D]">
+                  {sim.commits.find((commit) => commit.id === sim.branches[sim.ai.worktreeBranch])?.tree['buggy.ts'] ?? ''}
+                </code>
+              </div>
+            </div>
+            <p className="mt-1 break-keep text-xs text-[#2F4B63]">터미널에서 git diff main {sim.ai.worktreeBranch}로 같은 변경을 직접 비교할 수 있어요.</p>
+          </div>
+        </div>
       )}
       {stageId === 'ch6' && (
         <div className="order-2 mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="token-scopes">
@@ -553,6 +637,20 @@ export function PixelStageCanvas() {
                 <li key={scope}>· {scope}{SCOPE_LABELS[scope] ? ` — ${SCOPE_LABELS[scope]}` : ''}</li>
               ))}
             </ul>
+            {sim.token.expires && (
+              <p className="mt-1 break-keep text-xs text-[#59483B]">· 만료: {sim.token.expires} (권한이 아니라 토큰 속성이에요)</p>
+            )}
+            <div className="mt-2">
+              <p className="break-keep text-xs font-semibold text-[#59483B]">
+                위험도 {sim.token.riskScore}/100 {sim.token.riskScore < 30 ? '— 안전한 최소 권한' : '— 넓은 권한'}
+              </p>
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#E7DCCB]">
+                <div
+                  className={`h-full ${sim.token.riskScore < 30 ? 'bg-[#22A882]' : 'bg-[#E05666]'}`}
+                  style={{ width: `${sim.token.riskScore}%` }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       )}

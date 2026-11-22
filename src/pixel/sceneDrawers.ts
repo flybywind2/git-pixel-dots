@@ -380,11 +380,10 @@ function drawCh1Scene(
 
 export function recentTimelineCommits(sim: PixelSimState) {
   const history = reachableCommits(sim, sim.branches[sim.headBranch]);
-  const previousHead = commitById(sim, sim.origHead);
-  const ghost = previousHead?.ghost && !history.has(previousHead.id) ? previousHead : undefined;
-  const recent = sim.commits.filter((commit) => history.has(commit.id)).slice(ghost ? -3 : -4);
+  const ghosts = sim.commits.filter((commit) => commit.ghost && !history.has(commit.id)).slice(-2);
+  const recent = sim.commits.filter((commit) => history.has(commit.id)).slice(ghosts.length ? -3 : -4);
   const visible = new Set(recent.map((commit) => commit.id));
-  if (ghost) visible.add(ghost.id);
+  for (const ghost of ghosts) visible.add(ghost.id);
   return sim.commits.filter((commit) => visible.has(commit.id))
     .map((commit) => ({ commit, rewound: !history.has(commit.id) }));
 }
@@ -405,6 +404,8 @@ function drawCh2Scene(
   const topY = h * 0.31;
   const padW = clamp(w * 0.21, 108, 154);
   const stashX = w * 0.18;
+  const workX = w * 0.2;
+  const workY = h * 0.9;
   const stageX = w * 0.5;
   const remoteX = w * 0.83;
   const kind = sim.lastAnim.kind;
@@ -514,6 +515,20 @@ function drawCh2Scene(
     'dot',
   );
 
+  // Bottom-left: Working folder (where uncommitted edits live)
+  const localChange = sim.files.some((file) => file.status === 'modified' || file.status === 'untracked');
+  drawZonePad(
+    ctx,
+    workX,
+    workY,
+    clamp(w * 0.19, 100, 148),
+    '작업 폴더',
+    localChange ? '커밋 전 수정' : '커밋과 같음',
+    PALETTE.sky,
+    stashActive,
+    time,
+  );
+
   // Top-center: Staging basket zone (with secret note warning when staged)
   const unstageActive = kind === 'UNSTAGE';
   const stageAccent = hasSecretStaged ? PALETTE.coral : PALETTE.mint;
@@ -589,13 +604,13 @@ function drawCh2Scene(
     drawPixelSprite(ctx, FILE_SPRITE, makeFileColors(PALETTE.coral, PALETTE.cream), fx, fy, dot * 0.88, 'dot');
   }
 
-  // Flying file arc for STASH / STASH_POP
+  // Flying file arc for STASH / STASH_POP between the working folder and the stash box.
   if (stashActive && animProgress < 0.92) {
     const t = easeOutCubic(animProgress);
-    const fromX = kind === 'STASH' ? headX : stashX;
-    const fromY = kind === 'STASH' ? railY - dot * 4 : topY - dot * 7;
-    const toX = kind === 'STASH' ? stashX : headX;
-    const toY = kind === 'STASH' ? topY - dot * 7 : railY - dot * 4;
+    const fromX = kind === 'STASH' ? workX : stashX;
+    const fromY = kind === 'STASH' ? workY - dot * 7 : topY - dot * 7;
+    const toX = kind === 'STASH' ? stashX : workX;
+    const toY = kind === 'STASH' ? topY - dot * 7 : workY - dot * 7;
     const fx = fromX + (toX - fromX) * t;
     const fy = fromY + (toY - fromY) * t - Math.sin(animProgress * Math.PI) * 44;
     drawPixelSprite(ctx, FILE_SPRITE, makeFileColors(PALETTE.butter, PALETTE.cream), fx, fy, dot * 0.88, 'dot');
@@ -676,9 +691,10 @@ function drawCh3Scene(
   const featureNodes = featureCommits.map((commit, index) => ({ commit, x: featureStart + index * featureGap }));
   const featureTip = featureNodes.at(-1);
   const hasConflict = Boolean(sim.conflict && sim.conflict.resolvedChoice === 'none');
+  const pendingResolve = Boolean(sim.conflict && sim.conflict.resolvedChoice !== 'none') || kind === 'RESOLVE';
   const mergeNode = mainNodes.filter(({ commit }) => commit.parents.slice(1).some((parent) =>
     upperHistory.some((ancestor) => ancestor.id === parent))).at(-1);
-  const hasMerged = Boolean(mergeNode) || kind === 'MERGE_OK' || kind === 'RESOLVE';
+  const hasMerged = Boolean(mergeNode) || kind === 'MERGE_OK';
 
   drawDottedTrack(ctx, w * 0.12, mainY, w * 0.9, mainY, PALETTE.sky, time, sim.headBranch === lowerBranch);
   if (fork && featureNodes.length > 0) {
@@ -686,9 +702,9 @@ function drawCh3Scene(
   }
   if (featureTip) {
     drawDottedTrack(ctx, featureStart, featY, featureTip.x, featY, PALETTE.lavender, time, sim.headBranch === featureName);
-    if (hasConflict || mergeNode) {
+    if (hasConflict || mergeNode || pendingResolve) {
       drawDottedTrack(ctx, featureTip.x, featY, mergeNode?.x ?? w * 0.86, mainY,
-        hasConflict ? PALETTE.coral : PALETTE.mint, time, true, -9);
+        hasConflict ? PALETTE.coral : mergeNode ? PALETTE.mint : PALETTE.butter, time, true, -9);
     }
   }
 
@@ -707,8 +723,15 @@ function drawCh3Scene(
   }
 
   const lowerLabel = lowerBranch === sim.headBranch ? `HEAD · ${lowerBranch}` : lowerBranch;
-  drawPixelBadge(ctx, mainNodes.at(-1)?.x ?? w * 0.37, mainY + dot * 5 + 39, lowerLabel,
+  const lowerLabelX = mainNodes.at(-1)?.x ?? w * 0.37;
+  const lowerLabelY = mainY + dot * 5 + 39;
+  drawPixelBadge(ctx, lowerLabelX, lowerLabelY, lowerLabel,
     PALETTE.cream, PALETTE.skyDark, PALETTE.sky, 12, true);
+  // 새 브랜치로 이동해도 main이 사라지지 않았음을 같은 보석 옆에 함께 표시해요.
+  if (lowerBranch !== 'main' && sim.branches.main === sim.branches[lowerBranch]) {
+    drawPixelBadge(ctx, lowerLabelX, lowerLabelY + dot * 4.5, 'main (같은 커밋)',
+      PALETTE.cream, PALETTE.skyDark, PALETTE.sky, 11, false);
+  }
   if (featureName && (featureTip || fork)) {
     const upperLabel = featureName === sim.headBranch ? `HEAD · ${featureName}` : featureName;
     drawPixelBadge(ctx, featureTip?.x ?? fork?.x ?? featureStart, (featureTip ? featY : mainY) - dot * 5 - 15, upperLabel,
@@ -770,15 +793,17 @@ function drawCh3Scene(
   }
 
   // Buddy hops cleanly between main & feature railways!
-  const onFeature = sim.headBranch !== 'main';
-  const targetX = hasConflict ? 0.58 : onFeature ? 0.7 : hasMerged ? 0.82 : 0.73;
-  const targetY = hasConflict ? 0.43 : onFeature ? 0.37 : 0.56;
+  const headOnUpper = sim.headBranch === featureName;
+  const targetX = hasConflict ? 0.58 : headOnUpper ? 0.72 : hasMerged ? 0.82 : 0.55;
+  const targetY = hasConflict ? 0.43 : headOnUpper ? 0.33 : hasMerged ? 0.66 : 0.62;
   const b = moveBuddySmooth(motion, 'ch3', targetX, targetY);
   const pose: BuddyPose = hasConflict
     ? 'shocked'
-    : (kind === 'MERGE_OK' || kind === 'RESOLVE' || kind === 'REBASE') && animProgress < 0.9
-      ? 'happy'
-      : 'idle';
+    : pendingResolve
+      ? 'idle'
+      : (kind === 'MERGE_OK' || kind === 'REBASE') && animProgress < 0.9
+        ? 'happy'
+        : 'idle';
 
   drawBuddyWithIdleLife(ctx, b.x * w, b.y * h, dot, pose, b.walking, b.flipX, time);
 }
@@ -799,8 +824,8 @@ function drawCh4Scene(
   const dot = computeDotSize(w, h);
   const padY = h * 0.78;
   const xLocal = w * 0.18;
-  const xCi = w * 0.5;
-  const xCloud = w * 0.82;
+  const xCi = w * 0.62;
+  const xCloud = w * 0.86;
   const padW = clamp(w * 0.19, 108, 162);
   const kind = sim.lastAnim.kind;
   const latestPr = sim.prs[sim.prs.length - 1] ?? null;
@@ -810,7 +835,17 @@ function drawCh4Scene(
   const approved = Boolean(latestPr?.approved) && !prMerged;
   const localMerged = prMerged && sim.branches.main === sim.remoteBranches.main;
 
-  // Connecting tracks
+  // Connecting tracks: push goes all the way to GitHub, CI runs on the GitHub side.
+  drawDottedTrack(
+    ctx,
+    xLocal + padW * 0.45,
+    padY,
+    xCloud - padW * 0.45,
+    padY,
+    PALETTE.sky,
+    time,
+    kind === 'PUSH',
+  );
   drawDottedTrack(
     ctx,
     xLocal + padW * 0.45,
@@ -840,7 +875,7 @@ function drawCh4Scene(
     padY,
     padW,
     '자동 검사',
-    ciPass ? '검사 통과' : latestPr ? '검사 대기 중' : 'PR 대기 중',
+    ciPass ? '검사 통과 (GitHub)' : latestPr ? '검사 대기 중' : 'PR 대기 중',
     ciPass ? PALETTE.mint : PALETTE.butter,
     Boolean(latestPr),
     time,
@@ -962,9 +997,13 @@ function drawCh4Scene(
 // ===========================================================================
 
 function detectGhTargetIsland(sim: PixelSimState): number {
-  const haystack = `${sim.lastAnim.label} ${sim.lastAnim.detail ?? ''} ${
-    sim.terminal[sim.terminal.length - 1]?.command ?? ''
-  }`.toLowerCase();
+  const command = sim.terminal[sim.terminal.length - 1]?.command.toLowerCase() ?? '';
+  if (/^gh\s+pr\b/.test(command)) return 1;
+  if (/^gh\s+issue\b/.test(command)) return 2;
+  if (/^gh\s+run\b/.test(command)) return 3;
+  if (/^gh\s+(?:repo|api)\b/.test(command)) return 0;
+  if (/^gh\s+auth\b/.test(command)) return -1;
+  const haystack = `${sim.lastAnim.label} ${sim.lastAnim.detail ?? ''}`.toLowerCase();
   if (haystack.includes('pr')) return 1;
   if (haystack.includes('issue')) return 2;
   if (haystack.includes('run') || haystack.includes('action') || haystack.includes('workflow')) return 3;
@@ -986,13 +1025,18 @@ function drawCh5Scene(
   const hubY = h * 0.6;
   const padW = clamp(w * 0.175, 102, 148);
   const activeIsland = detectGhTargetIsland(sim);
-  const latestPr = sim.prs[sim.prs.length - 1] ?? null;
+  const openPrCount = sim.prs.filter((pr) => pr.status !== 'merged').length;
+  const openIssueCount = sim.issues.filter((issue) => issue.status === 'open').length;
+  const openPr = [...sim.prs].reverse().find((pr) => pr.status === 'open');
+  const ciSub = sim.completedActions.includes('RUN_WATCH')
+    ? '방금 검사 통과'
+    : (openPr?.ci === 'pass' ? '검사 통과' : '실행 결과');
 
   const islands = [
-    { x: w * 0.56, y: h * 0.34, label: '저장소', sub: sim.ghUser || 'gitdots/app', color: PALETTE.sky },
-    { x: w * 0.83, y: h * 0.34, label: '검토 요청', sub: `열린 PR ${sim.prs.length}개`, color: PALETTE.lavender },
-    { x: w * 0.56, y: h * 0.76, label: '이슈', sub: `열린 글 ${sim.issues.length}개`, color: PALETTE.butter },
-    { x: w * 0.83, y: h * 0.76, label: '자동 검사', sub: latestPr?.ci === 'pass' ? '검사 통과' : '실행 결과', color: PALETTE.mint },
+    { x: w * 0.56, y: h * 0.34, label: '저장소', sub: 'gitdots/app', color: PALETTE.sky },
+    { x: w * 0.83, y: h * 0.34, label: '검토 요청', sub: `열린 PR ${openPrCount}개`, color: PALETTE.lavender },
+    { x: w * 0.56, y: h * 0.76, label: '이슈', sub: `열린 글 ${openIssueCount}개`, color: PALETTE.butter },
+    { x: w * 0.83, y: h * 0.76, label: '자동 검사', sub: ciSub, color: PALETTE.mint },
   ] as const;
 
   // Dot laser beams from Buddy's remote to each island
@@ -1077,7 +1121,7 @@ function drawCh6Scene(
     buddyZoneX,
     padY,
     clamp(w * 0.21, 120, 168),
-    isClassic ? '클래식 토큰' : '세분화 토큰',
+    isClassic ? '클래식 토큰' : 'Fine-grained(세분화) 토큰',
     isClassic ? '넓은 권한' : '한 곳에 쓰기',
     isClassic ? PALETTE.coral : PALETTE.mint,
     true,
@@ -1174,15 +1218,15 @@ function drawCh6Scene(
       );
     }
 
-    drawZonePad(ctx, door.x, padY, doorW + 10, door.name, door.open ? '열림' : '안전 잠금', accent, door.danger || idx === 0, time);
+    drawZonePad(ctx, door.x, padY, doorW + 10, door.name, `${door.open ? '열림' : '안전 잠금'} · ${door.sub}`, accent, door.danger || idx === 0, time);
   });
 
-  // SSO & SSH glowing badges above the vault doors
+  // SSO & SSH are connection identities, not vault locks. Keep them beside Buddy, away from the doors.
   if (sim.token.ssoAuthorized) {
-    drawPixelBadge(ctx, w * 0.52, h * 0.45, '조직 인증', PALETTE.cream, PALETTE.skyDark, PALETTE.sky);
+    drawPixelBadge(ctx, buddyZoneX, h * 0.52, '연결 인증 · SSO', PALETTE.cream, PALETTE.skyDark, PALETTE.sky);
   }
   if (sim.token.sshReady) {
-    drawPixelBadge(ctx, w * 0.77, h * 0.45, 'SSH 연결', PALETTE.cream, PALETTE.mintDark, PALETTE.mint);
+    drawPixelBadge(ctx, buddyZoneX + w * 0.17, h * 0.52, '연결 인증 · SSH', PALETTE.cream, PALETTE.mintDark, PALETTE.mint);
   }
 }
 
@@ -1200,12 +1244,28 @@ function drawCh7Scene(
   motion: SceneMotionState,
 ): void {
   const dot = computeDotSize(w, h);
-  const publicX = w * 0.19;
+  const publicX = w * 0.2;
+  const myX = w * 0.1;
   const wallX = w * 0.47;
   const castleX = w * 0.76;
   const baseY = h * 0.71;
   const kind = sim.lastAnim.kind;
   const connected = sim.ghes.connected;
+  const cloudCompare = sim.ghes.mode === 'cloud';
+  const unauth = kind === 'GHES_UNAUTH' || sim.ghes.lastFlow === 'unauth';
+
+  // Left: the employee computer (where outbound code originates)
+  drawZonePad(
+    ctx,
+    myX,
+    h * 0.9,
+    clamp(w * 0.16, 88, 128),
+    '내 컴퓨터',
+    '회사 내부',
+    PALETTE.butter,
+    kind === 'GHES_BLOCK' && !unauth,
+    time,
+  );
 
   // Left: Public GitHub.com Cloud
   drawPixelSprite(
@@ -1223,9 +1283,9 @@ function drawCh7Scene(
     baseY,
     clamp(w * 0.19, 104, 152),
     '공용 GitHub',
-    'github.com',
+    cloudCompare ? '비교: 클라우드 관점' : 'github.com',
     PALETTE.sky,
-    kind === 'GHES_BLOCK',
+    kind === 'GHES_BLOCK' || cloudCompare,
     time,
   );
 
@@ -1263,11 +1323,11 @@ function drawCh7Scene(
   );
   drawPixelBadge(ctx, wallX, wallTop - 14, '방화벽', PALETTE.cream, PALETTE.coralDark, PALETTE.coral);
 
-  // Lower VPN/SAML tunnel under the wall
+  // Lower VPN tunnel from my computer to the corporate castle
   const tunnelY = h * 0.94;
   drawDottedTrack(
     ctx,
-    publicX + w * 0.08,
+    myX + w * 0.05,
     tunnelY,
     castleX - w * 0.09,
     tunnelY,
@@ -1315,15 +1375,15 @@ function drawCh7Scene(
   const runnerActive = kind === 'GHES_RUNNER' || sim.ghes.lastFlow === 'runner';
   drawPixelSprite(
     ctx,
-    AI_BOT,
+    REMOTE_ICON,
     {
-      ...AI_BOT_COLORS,
+      ...REMOTE_COLORS,
       v: runnerActive ? PALETTE.mint : PALETTE.woodLight,
       l: runnerActive ? PALETTE.mintLight : PALETTE.slate,
     },
     runnerX,
     runnerY + Math.sin(time * (runnerActive ? 6 : 2)) * 2.5,
-    dot * 0.65,
+    dot * 0.72,
     'dot',
   );
   drawPixelBadge(
@@ -1337,21 +1397,32 @@ function drawCh7Scene(
     11,
   );
 
-  // Blocked intruder packet bouncing off firewall on GHES_BLOCK!
-  if ((kind === 'GHES_BLOCK' || sim.ghes.lastFlow === 'blocked') && animProgress < 0.95) {
-    const bounceT = animProgress < 0.45 ? animProgress / 0.45 : 1 - (animProgress - 0.45) / 0.5;
-    const pktX = publicX + (wallX - dot * 7 - publicX) * clamp(bounceT, 0, 1);
-    const pktY = h * 0.59 - Math.sin(bounceT * Math.PI) * 16;
+  // Outbound code packet leaves my computer, hits the firewall, and bounces back.
+  if ((kind === 'GHES_BLOCK' || (sim.ghes.lastFlow === 'blocked' && !unauth)) && !unauth && animProgress < 0.95) {
+    const bounceT = animProgress < 0.6 ? animProgress / 0.6 : 1 - (animProgress - 0.6) / 0.4;
+    const pktX = myX + w * 0.06 + (wallX - dot * 7 - (myX + w * 0.06)) * clamp(bounceT, 0, 1);
+    const pktY = h * 0.72 - Math.sin(bounceT * Math.PI) * 18;
     drawPixelSprite(ctx, FILE_SPRITE, makeFileColors(PALETTE.coral, PALETTE.coralLight), pktX, pktY, dot * 0.8, 'dot');
-    if (animProgress > 0.35 && animProgress < 0.85) {
+    if (animProgress > 0.4 && animProgress < 0.8) {
       drawPixelBadge(ctx, wallX - dot * 12, h * 0.52, '차단됨!', PALETTE.coral, PALETTE.ink, PALETTE.cream, 10);
     }
+  }
+
+  // 401: authentication failure, not a firewall block. Show a lock on the castle gate.
+  if (unauth) {
+    drawPixelBadge(ctx, castleX, h * 0.38, '인증 필요 · 401', PALETTE.butter, PALETTE.coralDark, PALETTE.coral, 11);
+    drawPixelSprite(ctx, LOCK_ICON.closed, makeLockColors(PALETTE.coral, PALETTE.coralDark), castleX, h * 0.48, dot * 0.8, 'dot');
+  }
+
+  // Cloud comparison: highlight the public side so the toggle is visible on canvas.
+  if (cloudCompare) {
+    drawPixelBadge(ctx, publicX, baseY - dot * 9, '클라우드 비교 중', PALETTE.cream, PALETTE.skyDark, PALETTE.sky, 11);
   }
 
   // Encrypted /api/v3 packet cruising through lower VPN tunnel!
   if (kind === 'GHES_API' && animProgress < 0.95) {
     const t = easeOutCubic(animProgress);
-    const px = publicX + w * 0.1 + (castleX - publicX - w * 0.16) * t;
+    const px = myX + w * 0.08 + (castleX - myX - w * 0.16) * t;
     drawPixelSprite(
       ctx,
       COMMIT_GEM,
@@ -1368,11 +1439,13 @@ function drawCh7Scene(
   const targetY = connected ? 0.72 : 0.69;
   const b = moveBuddySmooth(motion, 'ch7', targetX, targetY);
   const pose: BuddyPose =
-    kind === 'GHES_BLOCK' && animProgress < 0.85
+    kind === 'GHES_BLOCK' && animProgress < 0.85 && !unauth
       ? 'shocked'
-      : connected
-        ? 'hardhat'
-        : 'idle';
+      : unauth
+        ? 'idle'
+        : connected
+          ? 'hardhat'
+          : 'idle';
   drawBuddyWithIdleLife(ctx, b.x * w, b.y * h, dot, pose, b.walking, b.flipX, time);
 }
 
@@ -1428,7 +1501,7 @@ function drawCh8Scene(
     wtY,
     padW,
     'AI 작업 폴더',
-    ai.worktreeActive ? ai.worktreeBranch : '생성 대기 중',
+    ai.worktreeActive ? `폴더 ${ai.worktreeDir ?? 'wt-ai'} · ${ai.worktreeBranch}` : '생성 대기 중',
     PALETTE.lavender,
     ai.worktreeActive,
     time,
@@ -1637,6 +1710,12 @@ export function getParticleCuesForAnim(
     case 'EDIT':
       return [{ kind: 'sparkles', x: w * 0.16, y: h * 0.65, color: PALETTE.butter }];
     case 'ADD':
+      if (stageId === 'ch4') {
+        return [
+          { kind: 'parcel', x: w * 0.14, y: h * 0.66, x1: w * 0.19, y1: h * 0.6, color: PALETTE.mint },
+          { kind: 'sparkles', x: w * 0.19, y: h * 0.6, color: PALETTE.mint },
+        ];
+      }
       return [
         { kind: 'parcel', x: w * 0.16, y: h * 0.66, x1: w * 0.39, y1: h * 0.66, color: PALETTE.mint },
         { kind: 'sparkles', x: w * 0.39, y: h * 0.64, color: PALETTE.mint },
@@ -1653,11 +1732,14 @@ export function getParticleCuesForAnim(
         { kind: 'sparkles', x: w * from.x, y: h * from.y, color: PALETTE.mint },
       ];
     }
-    case 'COMMIT':
+    case 'COMMIT': {
+      const commitX = stageId === 'ch4' ? 0.24 : stageId === 'ch3' ? 0.55 : stageId === 'ch1' ? 0.62 : 0.56;
+      const commitY = stageId === 'ch4' ? 0.38 : stageId === 'ch3' ? 0.64 : 0.64;
       return [
-        { kind: 'shockwave', x: w * (stageId === 'ch1' ? 0.62 : 0.56), y: h * 0.64, color: PALETTE.cream },
-        { kind: 'sparkles', x: w * (stageId === 'ch1' ? 0.62 : 0.56), y: h * 0.64, color: PALETTE.sky },
+        { kind: 'shockwave', x: w * commitX, y: h * commitY, color: PALETTE.cream },
+        { kind: 'sparkles', x: w * commitX, y: h * commitY, color: PALETTE.sky },
       ];
+    }
     case 'PUSH':
       if (stageId === 'ch2') {
         return [
@@ -1682,15 +1764,25 @@ export function getParticleCuesForAnim(
         { kind: 'sparkles', x: w * 0.62, y: h * 0.66, color: PALETTE.mint },
       ];
     case 'STASH':
-      return [
-        { kind: 'parcel', x: w * 0.5, y: h * 0.65, x1: w * 0.2, y1: h * 0.28, color: PALETTE.butter },
-        { kind: 'smoke', x: w * 0.2, y: h * 0.28, color: PALETTE.butter },
-      ];
+      return stageId === 'ch2'
+        ? [
+          { kind: 'parcel', x: w * 0.2, y: h * 0.86, x1: w * 0.2, y1: h * 0.31, color: PALETTE.butter },
+          { kind: 'smoke', x: w * 0.2, y: h * 0.31, color: PALETTE.butter },
+        ]
+        : [
+          { kind: 'parcel', x: w * 0.5, y: h * 0.65, x1: w * 0.2, y1: h * 0.28, color: PALETTE.butter },
+          { kind: 'smoke', x: w * 0.2, y: h * 0.28, color: PALETTE.butter },
+        ];
     case 'STASH_POP':
-      return [
-        { kind: 'parcel', x: w * 0.2, y: h * 0.28, x1: w * 0.5, y1: h * 0.65, color: PALETTE.mint },
-        { kind: 'sparkles', x: w * 0.5, y: h * 0.6, color: PALETTE.mint },
-      ];
+      return stageId === 'ch2'
+        ? [
+          { kind: 'parcel', x: w * 0.2, y: h * 0.31, x1: w * 0.2, y1: h * 0.86, color: PALETTE.mint },
+          { kind: 'sparkles', x: w * 0.2, y: h * 0.86, color: PALETTE.mint },
+        ]
+        : [
+          { kind: 'parcel', x: w * 0.2, y: h * 0.28, x1: w * 0.5, y1: h * 0.65, color: PALETTE.mint },
+          { kind: 'sparkles', x: w * 0.5, y: h * 0.6, color: PALETTE.mint },
+        ];
     case 'RESET':
       return [
         { kind: 'smoke', x: w * 0.72, y: h * 0.6, color: PALETTE.slate },
@@ -1702,12 +1794,16 @@ export function getParticleCuesForAnim(
         { kind: 'sparkles', x: w * 0.78, y: h * 0.62, color: PALETTE.mint },
       ];
     case 'BRANCH':
-    case 'SWITCH':
-      return [{ kind: 'sparkles', x: w * 0.46, y: h * 0.54, color: PALETTE.lavender }];
+    case 'SWITCH': {
+      const branchPos = stageId === 'ch4' ? { x: 0.2, y: 0.38 }
+        : stageId === 'ch3' ? { x: 0.3, y: 0.5 }
+          : { x: 0.46, y: 0.54 };
+      return [{ kind: 'sparkles', x: w * branchPos.x, y: h * branchPos.y, color: PALETTE.lavender }];
+    }
     case 'CONFLICT':
       return [
-        { kind: 'shockwave', x: w * 0.7, y: h * 0.64, color: PALETTE.coral },
-        { kind: 'sweat', x: w * 0.58, y: h * 0.6, color: PALETTE.sky },
+        { kind: 'shockwave', x: w * (stageId === 'ch3' ? 0.77 : 0.7), y: h * (stageId === 'ch3' ? 0.43 : 0.64), color: PALETTE.coral },
+        { kind: 'sweat', x: w * (stageId === 'ch3' ? 0.58 : 0.58), y: h * (stageId === 'ch3' ? 0.43 : 0.6), color: PALETTE.sky },
       ];
     case 'RESOLVE':
     case 'MERGE_OK':
@@ -1748,14 +1844,23 @@ export function getParticleCuesForAnim(
     case 'GHES_BLOCK':
       return [
         { kind: 'shockwave', x: w * 0.47, y: h * 0.59, color: PALETTE.coral },
-        { kind: 'sweat', x: w * 0.3, y: h * 0.66, color: PALETTE.sky },
+        { kind: 'sweat', x: w * 0.14, y: h * 0.72, color: PALETTE.sky },
       ];
     case 'GHES_LOGIN':
     case 'GHES_API':
+      return [
+        { kind: 'parcel', x: w * 0.12, y: h * 0.8, x1: w * 0.72, y1: h * 0.8, color: PALETTE.mint },
+        { kind: 'sparkles', x: w * 0.76, y: h * 0.58, color: PALETTE.mint },
+      ];
     case 'GHES_RUNNER':
       return [
-        { kind: 'parcel', x: w * 0.28, y: h * 0.81, x1: w * 0.74, y1: h * 0.81, color: PALETTE.mint },
-        { kind: 'sparkles', x: w * 0.76, y: h * 0.58, color: PALETTE.mint },
+        { kind: 'parcel', x: w * 0.76, y: h * 0.42, x1: w * 0.88, y1: h * 0.36, color: PALETTE.mint },
+        { kind: 'sparkles', x: w * 0.9, y: h * 0.36, color: PALETTE.mint },
+      ];
+    case 'GHES_UNAUTH':
+      return [
+        { kind: 'shockwave', x: w * 0.76, y: h * 0.46, color: PALETTE.butter },
+        { kind: 'sparkles', x: w * 0.76, y: h * 0.4, color: PALETTE.coral },
       ];
     case 'AI_WORKTREE':
     case 'AI_CODE':

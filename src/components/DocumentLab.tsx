@@ -59,6 +59,8 @@ export function DocumentLab() {
   const removals = lines.filter((line) => line.kind === 'removed').length;
 
   const staged = sim.staged.includes(DOCUMENT_PATH);
+  const workingDiffersFromIndex = working !== treeEntry(sim.index, DOCUMENT_PATH);
+  const showEmptyHelpers = Boolean(comparison) && lines.length === 0 && (workingDiffersFromIndex || unsaved);
   let fileStatus = staged ? '장바구니에 담김' : '최근 커밋과 같음';
   if (working !== treeEntry(sim.index, DOCUMENT_PATH)) {
     fileStatus = staged ? '장바구니에 담은 뒤 추가 수정됨' : '작업 문서에 저장됨';
@@ -84,6 +86,10 @@ export function DocumentLab() {
   }
 
   function showWorkingComparison() {
+    if (unsaved) {
+      setPendingCompare('working');
+      return;
+    }
     setPendingCompare(null);
     runCommand(DOCUMENT_COMPARISONS.working.command);
   }
@@ -253,7 +259,15 @@ export function DocumentLab() {
                     : view.empty
                   : <><span className="font-semibold text-[#8C2630]">− 빠진 줄 {removals}개</span><span className="mx-2" aria-hidden="true">·</span><span className="font-semibold text-[#155C40]">+ 들어간 줄 {additions}개</span></>}
             </p>
-            {comparison && lines.length === 0 && sim.staged.length === 0 && (
+            {comparison && lines.length === 0 && mode === 'working' && staged && (
+              <div className="mt-2">
+                <button type="button" onClick={() => handleSelectComparison('staged')}
+                  className="min-h-8 rounded-md border border-[#4D8C6E] bg-[#E2F3E8] px-2.5 text-xs font-semibold text-[#145439] hover:bg-[#D2EEDD]">
+                  담아 둔 변경 탭으로 이동
+                </button>
+              </div>
+            )}
+            {showEmptyHelpers && (
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 <button type="button" onClick={showWorkingComparison}
                   className="min-h-8 rounded-md border border-[#CDBCA3] bg-[#FAF4E8] px-2.5 text-xs font-semibold hover:bg-[#F0E5CF]">
@@ -264,9 +278,14 @@ export function DocumentLab() {
                   다음 기록에 담기
                 </button>
                 <span className="break-keep text-xs text-[#715A43]">
-                  장바구니가 비어 있어요. 바뀐 줄을 확인한 뒤 다음 기록에 담아 보세요.
+                  {staged
+                    ? '장바구니에 담긴 변경은 ‘담아 둔 변경’ 탭에서 확인해요.'
+                    : '바뀐 줄을 확인한 뒤 다음 기록에 담아 보세요.'}
                 </span>
               </div>
+            )}
+            {comparison && lines.length === 0 && !showEmptyHelpers && mode === 'working' && !staged && (
+              <p className="mt-2 break-keep text-xs text-[#715A43]">먼저 편집기에서 회의록을 고쳐 보세요. 저장하면 바뀐 줄이 여기에 보여요.</p>
             )}
           </div>
           {lines.length > 0 && (

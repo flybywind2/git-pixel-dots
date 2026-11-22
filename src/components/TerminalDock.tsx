@@ -34,7 +34,10 @@ export function TerminalDock() {
 
   const scenario = STAGE_MAP[sim.stageId];
   const next = scenario.steps.find((step) => !isStepCompleted(sim, step));
-  const promptLabel = sim.stageId === 'ch8' && sim.ai.worktreeActive ? 'wt-ai' : sim.headBranch;
+  const promptLabel = sim.headBranch;
+  const promptTitle = sim.stageId === 'ch8' && sim.ai.worktreeActive
+    ? `현재 브랜치: ${sim.headBranch} · AI 작업 폴더: ${sim.ai.worktreeDir ?? 'wt-ai'} (${sim.ai.worktreeBranch})`
+    : `현재 브랜치: ${sim.headBranch}`;
   const options = useMemo(() => {
     if (cycle) return cycle.options;
     return input.trim() ? getCommandAutocomplete(input, sim).slice(0, 5) : [];
@@ -71,6 +74,11 @@ export function TerminalDock() {
       document.getElementById(`terminal-option-${active}`)?.scrollIntoView({ block: 'nearest' });
     }
   }, [showOptions, active]);
+
+  useEffect(() => {
+    if (!open) return;
+    document.getElementById('quick-action-recommended')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [open, next?.command]);
 
   function submit() {
     if (!input.trim()) return;
@@ -120,6 +128,7 @@ export function TerminalDock() {
         >
           <Terminal aria-hidden="true" className="h-4 w-4 shrink-0 text-[#126549]" />
           {open ? '터미널 접기' : '직접 입력해 보기'}
+          <span aria-hidden="true" className="hidden text-xs font-normal text-[#715D49] sm:inline">빠른 실행·결과</span>
           {open ? <ChevronDown aria-hidden="true" className="ml-auto h-4 w-4" /> : <ChevronUp aria-hidden="true" className="ml-auto h-4 w-4" />}
         </button>
         {notice && <p role="status" className="shrink-0 border-b border-[#DDBE8A] bg-[#FFF2D7] px-3 py-1 text-xs font-semibold text-[#73450E]">{notice}</p>}
@@ -133,6 +142,7 @@ export function TerminalDock() {
               return (
                 <button
                   key={chip.command}
+                  id={recommended ? 'quick-action-recommended' : undefined}
                   type="button"
                   onClick={() => { runCommand(chip.command); setDismissed(true); }}
                   title={chip.command}
@@ -178,7 +188,7 @@ export function TerminalDock() {
                 ))}
               </ul>
             )}
-            <span aria-hidden="true" className="font-mono-code max-w-[25%] truncate text-xs font-bold text-[#126549]">{promptLabel} $</span>
+            <span aria-hidden="true" title={promptTitle} className="font-mono-code max-w-[25%] truncate text-xs font-bold text-[#126549]">{promptLabel} $</span>
             <input
               ref={prompt}
               data-testid="terminal-input"

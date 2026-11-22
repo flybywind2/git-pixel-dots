@@ -17,8 +17,9 @@ export function TopStageBar() {
   const undoStep = usePixelStore((state) => state.undoStep);
   const resetStage = usePixelStore((state) => state.resetStage);
   const setHelpOpen = usePixelStore((state) => state.setHelpOpen);
+  const certificateOpen = usePixelStore((state) => state.certificateOpen);
+  const setCertificateOpen = usePixelStore((state) => state.setCertificateOpen);
   const inAdvanced = STAGE_MAP[stageId].track === 'advanced';
-  const [certificateOpen, setCertificateOpen] = useState(false);
   const grass = STAGE_SCENARIOS.map((lesson) => {
     const session = sessions[lesson.id];
     const done = session ? lesson.steps.filter((step) => isStepCompleted(session.sim, step)).length : 0;

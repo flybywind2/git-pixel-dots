@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, Pencil, Play, Save } from 'lucide-react';
-import { getNextPendingStep, isPracticeCommand, isStepCompleted, STAGE_MAP, STAGE_TRACKS } from '../engine';
+import { getNextPendingStep, isPracticeCommand, isStepCompleted, STAGE_MAP, STAGE_SCENARIOS, STAGE_TRACKS } from '../engine';
 import { diffDocumentLines, DOCUMENT_COMPARISONS, DOCUMENT_REVERT, getDocumentComparison } from '../engine/documentDiff';
 import { CANONICAL_TERMS } from '../engine/terms';
 import { usePixelStore } from '../store/usePixelStore';
@@ -12,6 +12,7 @@ export function LessonGuide() {
   const saveDocument = usePixelStore((state) => state.saveDocument);
   const runCommand = usePixelStore((state) => state.runCommand);
   const setStage = usePixelStore((state) => state.setStage);
+  const setCertificateOpen = usePixelStore((state) => state.setCertificateOpen);
   const lesson = STAGE_MAP[sim.stageId];
   const [basic, advanced] = STAGE_TRACKS;
   const track = lesson.track === 'basic' ? basic : advanced;
@@ -35,6 +36,15 @@ export function LessonGuide() {
     : unfinishedBasic ? `기본 이어 하기 · ${unfinishedBasic.shortTitle}`
       : lesson.track === 'basic' ? `심화 ${advanced.lessons[0].number}장 · ${advanced.lessons[0].shortTitle}` : '1장으로 돌아가기';
   const finishedBasic = lesson.id === 'ch4' && !nextStep && !unfinishedBasic;
+  // 9장을 모두 마쳤다면 마지막 장에서 바로 수료증으로 이어져요.
+  const allComplete = STAGE_SCENARIOS.every((scenario) => {
+    const session = sessions[scenario.id];
+    return session !== undefined && getNextPendingStep(session.sim) === null;
+  });
+  const showCertificateCta = !nextStep && allComplete;
+  const effectiveNote = nextStep?.id === 'docs-diff' && sim.staged.includes('회의록.md')
+    ? '이미 장바구니에 담겨 있어서 바뀐 줄 탭은 비어 보여요. ‘담아 둔 변경’ 탭에서 방금 담은 줄을 확인해 보세요.'
+    : nextStep?.commandNote;
   const doneCount = lesson.steps.filter((step) => isStepCompleted(sim, step)).length;
   let phaseOffset = 0;
   const phaseGroups = lesson.phases?.map((phase) => {
@@ -122,7 +132,7 @@ export function LessonGuide() {
               {introExpanded ? '접기' : '더 보기'}
             </button>
           </div>
-          {!(quiz && quiz.stepId === nextStep?.id) && (
+          {true && (
             <p className={`${introExpanded ? 'mt-1 block' : 'hidden sm:mt-1.5 sm:block'} text-xs text-[#715A43]`}>
               이 브라우저 안의 가상 실습이에요. 실제 GitHub에는 반영되지 않아요.
             </p>
@@ -224,7 +234,7 @@ export function LessonGuide() {
                       </span>
                     )}
                   </p>
-                  {nextStep.commandNote && <p className="mt-1 break-keep leading-relaxed">{nextStep.commandNote}</p>}
+                  {effectiveNote && <p className="mt-1 break-keep leading-relaxed">{effectiveNote}</p>}
                 </div>
               )}
               {stepTerms.length > 0 && (
@@ -243,12 +253,18 @@ export function LessonGuide() {
               <button
                 type="button"
                 data-testid={nextLesson ? 'next-chapter-btn' : 'all-chapters-done-btn'}
-                onClick={() => setStage(nextStage)}
+                onClick={() => showCertificateCta ? setCertificateOpen(true) : setStage(nextStage)}
                 className="pixel-btn inline-flex items-center gap-2 rounded-md border-[#116349] bg-[#197957] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#14694F]"
               >
-                {nextLabel}
+                {showCertificateCta ? '수료증 보기 · 9장 완주 🎉' : nextLabel}
                 <ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0" />
               </button>
+              {showCertificateCta && (
+                <button type="button" onClick={() => setStage(nextStage)}
+                  className="rounded-md border border-[#CDBCA3] px-3 py-1.5 text-sm font-semibold">
+                  {nextLabel}
+                </button>
+              )}
               {lesson.id === 'docs' && !sim.completedActions.includes('REVERT') && (
                 <button type="button" onClick={() => runCommand(DOCUMENT_REVERT.command)}
                   className="rounded-md border border-[#CDBCA3] px-3 py-1.5 text-sm font-semibold">
