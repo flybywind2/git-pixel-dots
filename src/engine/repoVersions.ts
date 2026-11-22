@@ -129,6 +129,35 @@ export function reachableCommits(state: PixelSimState, id: string | undefined): 
   return visited;
 }
 
+export type RemoteRelation = 'none' | 'synced' | 'ahead' | 'behind' | 'diverged';
+
+/**
+ * 로컬 브랜치와 원격 브랜치의 실제 커밋 부모 관계를 비교해요.
+ * - ahead: 내 컴퓨터에만 있는 커밋이 있어요(공유 대기).
+ * - behind: 원격에만 있는 커밋이 있어요(예: reset --soft로 내 브랜치만 뒤로 감김).
+ * - diverged: 양쪽에 서로 다른 커밋이 있어요.
+ */
+export function remoteRelation(state: PixelSimState, branch = state.headBranch): RemoteRelation {
+  const local = treeEntry(state.branches, branch);
+  const remote = treeEntry(state.remoteBranches, branch);
+  if (!remote) return 'none';
+  if (!local) return 'behind';
+  if (local === remote) return 'synced';
+  const localHistory = reachableCommits(state, local);
+  const remoteHistory = reachableCommits(state, remote);
+  if (localHistory.has(remote)) return 'ahead';
+  if (remoteHistory.has(local)) return 'behind';
+  return 'diverged';
+}
+
+/** 원격 브랜치에서 도달 가능한 되돌림(revert) 커밋이 있는지 확인해요. */
+export function remoteHasRevertCommit(state: PixelSimState, branch = state.headBranch): boolean {
+  const remote = treeEntry(state.remoteBranches, branch);
+  if (!remote) return false;
+  const remoteHistory = reachableCommits(state, remote);
+  return state.commits.some((commit) => commit.isRevert && remoteHistory.has(commit.id));
+}
+
 export function mergeBase(state: PixelSimState, first: string, second: string): PixelCommit | undefined {
   const firstHistory = reachableCommits(state, first);
   const secondHistory = reachableCommits(state, second);

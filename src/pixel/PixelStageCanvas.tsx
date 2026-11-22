@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { FileText, X } from 'lucide-react';
 import { getNextPendingStep, STAGE_MAP } from '../engine';
+import { remoteRelation } from '../engine/repoVersions';
 import { usePixelStore } from '../store/usePixelStore';
-import type { BubbleAction, PixelFileStatus, PixelSimState } from '../types/sim';
+import type { BubbleAction, PixelSimState } from '../types/sim';
 import { SPEAKER_THEMES } from './palette';
+import { buildStageFileItems, type StageFileBadge } from './stageFileItems';
 import { PIXEL_FONT, PixelParticlePool, drawDotGridBackground } from './dotMatrixRenderer';
 import {
   createSceneMotion,
@@ -29,13 +31,23 @@ const SCOPE_LABELS: Readonly<Record<string, string>> = {
   'expires:30d': '30일 뒤 만료',
 };
 
-const FILE_STATUS_BADGES: Readonly<Record<PixelFileStatus | 'stashed', { label: string; className: string }>> = {
+const FILE_STATUS_BADGES: Readonly<Record<StageFileBadge, { label: string; className: string }>> = {
   modified: { label: '수정됨', className: 'border-[#D69B61] bg-[#FFF2D7] text-[#7A4A0B]' },
   untracked: { label: '새 파일', className: 'border-[#E08A95] bg-[#FDE9E8] text-[#8C2630]' },
   staged: { label: '장바구니', className: 'border-[#4D8C6E] bg-[#E2F3E8] text-[#145439]' },
   committed: { label: '커밋됨', className: 'border-[#8BB9D9] bg-[#EEF7FD] text-[#174669]' },
   stashed: { label: '임시보관', className: 'border-[#B69AD9] bg-[#F4EEFC] text-[#5B3E9E]' },
+  'extra-edit': { label: '추가 수정', className: 'border-[#D18D20] bg-[#FFF2D7] text-[#7A4A0B]' },
+  deleted: { label: '삭제됨', className: 'border-[#CDBCA3] bg-[#F2EADD] text-[#6B5743]' },
   conflict: { label: '충돌', className: 'border-[#E05666] bg-[#FDE9E8] text-[#8C2630]' },
+};
+
+const SHARE_STATUS_TEXT: Readonly<Record<string, string>> = {
+  none: '아직 팀 저장소에 공유하지 않았어요',
+  ahead: '공유 대기 · 내 컴퓨터에만 있는 커밋이 있어요',
+  behind: '원격이 앞섬 · 팀 저장소에 내 기록에 없는 커밋이 있어요',
+  diverged: '갈라진 기록 · 내 컴퓨터와 팀 저장소에 서로 다른 커밋이 있어요',
+  synced: '동기화 완료 · 팀 저장소와 같은 기록이에요',
 };
 
 const CONFLICT_RESOLUTION_ACTIONS: readonly BubbleAction[] = [
@@ -49,6 +61,7 @@ export function PixelStageCanvas() {
   const sim = usePixelStore((s) => s.sim);
   const runCommand = usePixelStore((s) => s.runCommand);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const fileButtons = useRef<Record<string, HTMLButtonElement | null>>({});
 
   useEffect(() => {
     setSelectedFile(null);
@@ -229,57 +242,31 @@ export function PixelStageCanvas() {
   const visibleHistory = stageId === 'ch2' ? recentTimelineCommits(sim) : null;
   const showFileStatusCard = stageId === 'ch1' || stageId === 'ch2' || stageId === 'ch4';
   const hasActiveMergeConflict = Boolean(sim.conflict && sim.conflict.resolvedChoice === 'none' && !sim.conflict.revert);
-  const latestStash = sim.stashes.at(-1);
-  const stageFileItems = showFileStatusCard
-    ? (() => {
-        const items = sim.files.map((file) => {
-          const stashedContent = latestStash && latestStash.working[file.name] !== latestStash.base[file.name]
-            ? latestStash.working[file.name]
-            : undefined;
-          const badgeKey: PixelFileStatus | 'stashed' =
-            file.status === 'committed' && stashedContent !== undefined ? 'stashed' : file.status;
-          return {
-            name: file.name,
-            badgeKey,
-            content: file.content,
-            stashedContent,
-          };
-        });
-        if (latestStash) {
-          for (const [name, content] of Object.entries(latestStash.working)) {
-            if (!items.some((item) => item.name === name) && content !== latestStash.base[name]) {
-              items.push({ name, badgeKey: 'stashed', content, stashedContent: content });
-            }
-          }
-        }
-        return items;
-      })()
-    : [];
-  const activePreviewFile = selectedFile ? stageFileItems.find((item) => item.name === selectedFile) ?? null : null;
+  const stageFileItems = showFileStatusCard ? buildStageFileItems(sim, stageId) : [];
+  const activePreviewFile = selectedFile ? stageFileItems.find((item) => item.id === selectedFile) ?? null : null;
+  const shareRelation = stageId === 'ch2' ? remoteRelation(sim) : null;
+
+  function closePreview() {
+    const lastId = selectedFile;
+    setSelectedFile(null);
+    // 닫기 버튼이 사라져도 포커스가 body로 튀지 않게 원래 파일 카드로 돌려놔요.
+    window.requestAnimationFrame(() => {
+      if (lastId) fileButtons.current[lastId]?.focus();
+    });
+  }
+
+  function resolveConflict(command: string) {
+    runCommand(command);
+    // 해결 뒤 새로 나타나는 '합친 내용 기록하기' 버튼으로 포커스를 이어 줘요.
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLButtonElement>('[data-testid="guided-command"]')?.focus();
+    });
+  }
   const canvasMinHeight = stageId === 'ch2' ? 'min-h-[215px] sm:min-h-[245px]'
     : stageId === 'ch3' ? 'min-h-[192px] sm:min-h-[245px]' : 'min-h-[225px] sm:min-h-[260px]';
 
   return (
     <div className="relative flex flex-1 flex-col bg-[#F6EFE2]">
-      <div ref={containerRef} className={`relative order-3 flex-1 ${canvasMinHeight}`}>
-        <canvas
-          ref={canvasRef}
-          data-testid="pixel-stage-canvas"
-          className="absolute inset-0 block h-full w-full"
-          role="img"
-          aria-label={`${scenario.title} · ${sim.lastAnim.label}`}
-        />
-        {sim.lastAnim.kind !== 'IDLE' && (
-          <button
-            type="button"
-            onClick={() => { replayNonce.current += 1; queueDraw.current?.(); }}
-            aria-label="지난 애니메이션 다시 보기"
-            className="pixel-btn absolute right-2 top-2 z-10 cursor-pointer rounded-md border border-[#CDBCA3] bg-[#FFFDF8]/90 px-2 py-1 text-xs font-semibold text-[#59483B] hover:bg-[#F0E5CF]"
-          >
-            다시 보기
-          </button>
-        )}
-      </div>
       <div className="order-1 px-3 pt-2.5 sm:px-6 sm:pt-3" aria-live="polite">
         {sim.bubbles.map((bubble) => {
           const theme = SPEAKER_THEMES[bubble.speaker];
@@ -320,17 +307,17 @@ export function PixelStageCanvas() {
                   />
                   {bubble.speakerName}
                 </span>
-                <h2 className="min-w-0 break-keep text-sm font-bold text-[#2F241D]">
+                <h2 className="min-w-0 break-keep text-sm font-bold text-[#2F241D] [overflow-wrap:anywhere]">
                   {bubble.title}
                 </h2>
               </div>
 
               {/* Warm 1-2 line Korean explanation */}
-              <p className="break-keep text-sm leading-relaxed text-[#4E3E33]">
+              <p className="break-keep text-sm leading-relaxed text-[#4E3E33] [overflow-wrap:anywhere]">
                 {bubble.message}
               </p>
 
-              {hint && <p className="mt-1.5 break-words text-xs leading-relaxed text-[#79521D]">{hint}</p>}
+              {hint && <p className="mt-1.5 break-words text-xs leading-relaxed text-[#79521D] [overflow-wrap:anywhere]">{hint}</p>}
 
               {actions && actions.length > 0 && (
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -355,7 +342,12 @@ export function PixelStageCanvas() {
         })}
       </div>
       {hasActiveMergeConflict && sim.conflict && (
-        <div className="order-2 mx-auto mt-1.5 w-full max-w-3xl px-3 sm:px-6" data-testid="conflict-preview">
+        <div
+          id="conflict-comparison"
+          tabIndex={-1}
+          className="order-2 mx-auto mt-1.5 w-full max-w-3xl rounded-xl px-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#80613B] sm:px-6"
+          data-testid="conflict-preview"
+        >
           <div className="rounded-xl border border-[#D69B61] bg-[#FFFDF8] px-3 py-2">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
               <h2 className="break-keep text-sm font-bold text-[#2F241D]">{sim.conflict.file}에서 겹친 내용이에요</h2>
@@ -382,7 +374,7 @@ export function PixelStageCanvas() {
                   <button
                     key={act.command}
                     type="button"
-                    onClick={() => runCommand(act.command)}
+                    onClick={() => resolveConflict(act.command)}
                     className={`pixel-btn cursor-pointer rounded-md px-2.5 py-1 text-xs font-semibold ${toneCls}`}
                   >
                     {act.label}
@@ -393,6 +385,37 @@ export function PixelStageCanvas() {
           </div>
         </div>
       )}
+      {stageId === 'ch2' && shareRelation && (
+        <div className="order-2 mx-auto mt-1.5 w-full max-w-3xl px-3 sm:px-6" data-testid="stage-sync-status" role="status">
+          <p className="break-keep rounded-md border border-[#D8C9B0] bg-[#FAF4E8] px-2.5 py-1 text-xs font-semibold text-[#59483B]">
+            팀 저장소: {SHARE_STATUS_TEXT[shareRelation]}
+          </p>
+          {(sim.lastAnim.kind === 'PUSH' || sim.lastAnim.kind === 'UNSTAGE') && (
+            <p data-testid="stage-command-status" className="mt-1 break-keep text-xs text-[#715A43]">
+              {sim.lastAnim.label}{sim.lastAnim.detail ? ` · ${sim.lastAnim.detail}` : ''} 완료
+            </p>
+          )}
+        </div>
+      )}
+      <div ref={containerRef} className={`relative order-3 flex-1 ${canvasMinHeight}`}>
+        <canvas
+          ref={canvasRef}
+          data-testid="pixel-stage-canvas"
+          className="absolute inset-0 block h-full w-full"
+          role="img"
+          aria-label={`${scenario.title} · ${sim.lastAnim.label}`}
+        />
+        {sim.lastAnim.kind !== 'IDLE' && (
+          <button
+            type="button"
+            onClick={() => { replayNonce.current += 1; queueDraw.current?.(); }}
+            aria-label="지난 애니메이션 다시 보기"
+            className="pixel-btn absolute right-2 top-2 z-10 cursor-pointer rounded-md border border-[#CDBCA3] bg-[#FFFDF8]/90 px-2 py-1 text-xs font-semibold text-[#59483B] hover:bg-[#F0E5CF]"
+          >
+            다시 보기
+          </button>
+        )}
+      </div>
       {showFileStatusCard && stageFileItems.length > 0 && (
         <section
           aria-label="현재 파일 상태"
@@ -405,24 +428,32 @@ export function PixelStageCanvas() {
                 <FileText aria-hidden="true" className="h-3.5 w-3.5 text-[#886237]" />
                 현재 파일 상태
               </span>
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
                 {stageFileItems.map((file) => {
-                  const badge = FILE_STATUS_BADGES[file.badgeKey];
-                  const isSelected = selectedFile === file.name;
+                  const isSelected = selectedFile === file.id;
                   return (
                     <button
-                      key={file.name}
+                      key={file.id}
+                      ref={(node) => { fileButtons.current[file.id] = node; }}
                       type="button"
+                      data-file-name={file.name}
                       aria-expanded={isSelected}
-                      onClick={() => setSelectedFile(isSelected ? null : file.name)}
-                      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs transition-colors ${isSelected
+                      onClick={() => setSelectedFile(isSelected ? null : file.id)}
+                      className={`inline-flex max-w-full min-w-0 cursor-pointer flex-wrap items-center gap-1.5 rounded-md border px-2 py-0.5 text-left text-xs transition-colors ${isSelected
                         ? 'border-[#80613B] bg-[#F6EDDB] font-semibold'
                         : 'border-[#DFD1BA] bg-[#FAF4E8] hover:bg-[#F3E9D6]'}`}
                     >
-                      <code className="font-mono-code text-[#2F241D]">{file.name}</code>
-                      <span className={`rounded-full border px-1.5 py-0 text-[10px] font-semibold leading-4 ${badge.className}`}>
-                        {badge.label}
-                      </span>
+                      <code className="font-mono-code min-w-0 max-w-full text-[#2F241D] [overflow-wrap:anywhere]">{file.name}</code>
+                      {file.stash && (
+                        <span className="rounded-full border border-[#B69AD9] bg-[#F4EEFC] px-1.5 py-0 text-[10px] font-semibold leading-4 text-[#5B3E9E]">
+                          {file.stash.label}
+                        </span>
+                      )}
+                      {file.badges.map((badgeKey) => (
+                        <span key={badgeKey} className={`rounded-full border px-1.5 py-0 text-[10px] font-semibold leading-4 ${FILE_STATUS_BADGES[badgeKey].className}`}>
+                          {FILE_STATUS_BADGES[badgeKey].label}
+                        </span>
+                      ))}
                     </button>
                   );
                 })}
@@ -432,31 +463,68 @@ export function PixelStageCanvas() {
             {activePreviewFile && (
               <div
                 data-testid="stage-file-preview"
-                className="mt-2 rounded-md border border-[#E3D5BE] bg-[#FAF4E8] p-2.5 text-xs"
+                className="mt-2 min-w-0 max-w-full rounded-md border border-[#E3D5BE] bg-[#FAF4E8] p-2.5 text-xs"
               >
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="font-semibold text-[#2F241D]">
-                    <code className="font-mono-code">{activePreviewFile.name}</code>
-                    <span className="ml-2 text-[#715A43]">({FILE_STATUS_BADGES[activePreviewFile.badgeKey].label})</span>
+                <div className="mb-1 flex min-w-0 items-start justify-between gap-2">
+                  <span className="min-w-0 flex-1 font-semibold text-[#2F241D]">
+                    <code className="font-mono-code block min-w-0 max-w-full [overflow-wrap:anywhere]">{activePreviewFile.name}</code>
+                    <span className="mt-0.5 flex flex-wrap gap-1 text-[11px] font-normal text-[#715A43]">
+                      {activePreviewFile.badges.map((badgeKey) => (
+                        <span key={badgeKey}>({FILE_STATUS_BADGES[badgeKey].label})</span>
+                      ))}
+                    </span>
                   </span>
                   <button
                     type="button"
                     aria-label="파일 미리보기 닫기"
-                    onClick={() => setSelectedFile(null)}
-                    className="rounded border border-[#D8C9B0] bg-[#FFFDF8] p-0.5 text-[#59483B] hover:bg-white"
+                    onClick={closePreview}
+                    className="shrink-0 rounded border border-[#D8C9B0] bg-[#FFFDF8] p-0.5 text-[#59483B] hover:bg-white"
                   >
                     <X aria-hidden="true" className="h-3.5 w-3.5" />
                   </button>
                 </div>
-                <pre className="font-mono-code max-h-32 overflow-auto whitespace-pre-wrap rounded bg-[#FFFDF8] p-2 text-xs leading-relaxed text-[#2F241D]">
-                  {activePreviewFile.content}
-                </pre>
-                {activePreviewFile.stashedContent !== undefined && activePreviewFile.stashedContent !== activePreviewFile.content && (
-                  <div className="mt-1.5">
-                    <p className="text-[11px] font-semibold text-[#5B3E9E]">임시 보관함에 맡긴 수정 내용:</p>
-                    <pre className="font-mono-code mt-0.5 max-h-28 overflow-auto whitespace-pre-wrap rounded border border-[#D9C8EE] bg-[#F8F3FD] p-2 text-xs leading-relaxed text-[#2F241D]">
-                      {activePreviewFile.stashedContent}
-                    </pre>
+                {activePreviewFile.stash ? (
+                  <div className="mt-1 space-y-1.5">
+                    <p className="break-keep text-[11px] font-semibold text-[#5B3E9E]">
+                      {activePreviewFile.stash.label}에 보관된 사본이에요. 삭제된 상태는 값이 없는 것으로 표시해요.
+                    </p>
+                    {([
+                      ['보관 기준(base)', activePreviewFile.stash.base],
+                      ['장바구니 사본(index)', activePreviewFile.stash.index],
+                      ['작업 파일 사본(working)', activePreviewFile.stash.working],
+                    ] as const).map(([label, content], index) => (
+                      <div key={label}>
+                        <p className="text-[11px] font-semibold text-[#59483B]">{label}</p>
+                        {content === undefined ? (
+                          <p className="mt-0.5 rounded border border-[#D9C8EE] bg-[#F8F3FD] px-2 py-1 text-[11px] text-[#6B5743]">이 사본에는 파일이 없어요(삭제 상태).</p>
+                        ) : (
+                          <pre className={`font-mono-code mt-0.5 max-h-24 overflow-auto whitespace-pre-wrap rounded p-2 text-xs leading-relaxed text-[#2F241D] ${index === 2 ? 'border border-[#D9C8EE] bg-[#F8F3FD]' : 'bg-[#FFFDF8]'}`}>
+                            {content}
+                          </pre>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-1 space-y-1.5">
+                    <div>
+                      <p className="text-[11px] font-semibold text-[#59483B]">작업 파일(working)</p>
+                      {activePreviewFile.workingContent === undefined ? (
+                        <p className="mt-0.5 rounded bg-[#FFFDF8] px-2 py-1 text-[11px] text-[#6B5743]">작업 폴더에 파일이 없어요(삭제 상태).</p>
+                      ) : (
+                        <pre className="font-mono-code mt-0.5 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-[#FFFDF8] p-2 text-xs leading-relaxed text-[#2F241D]">
+                          {activePreviewFile.workingContent}
+                        </pre>
+                      )}
+                    </div>
+                    {activePreviewFile.stagedContent !== undefined && (
+                      <div>
+                        <p className="text-[11px] font-semibold text-[#5B3E9E]">장바구니 사본(index) · 다음 커밋에 들어갈 내용</p>
+                        <pre className="font-mono-code mt-0.5 max-h-28 overflow-auto whitespace-pre-wrap rounded border border-[#D9C8EE] bg-[#F8F3FD] p-2 text-xs leading-relaxed text-[#2F241D]">
+                          {activePreviewFile.stagedContent}
+                        </pre>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

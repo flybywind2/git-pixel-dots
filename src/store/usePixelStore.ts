@@ -3,8 +3,9 @@ import { ALL_STAGE_IDS, type PixelSimState, type StageId } from '../types/sim';
 import { createStageState, executePixelCommand, pendingHardReset, savePracticeDocument } from '../engine';
 import { EXAMPLE_DOCUMENT, getDocumentWorkingText } from '../engine/documentDiff';
 import {
-  clearLegacyPracticeSessions, flushPracticeSaves, practiceStorageAvailable, readPracticeSessions,
-  setPracticeStorageFailureListener, writePracticeSession, type PracticeSaveIssue, type PracticeSession,
+  cancelPendingPracticeSave, clearLegacyPracticeSessions, flushPracticeSaves, practiceStorageAvailable,
+  readPracticeSessions, setPracticeStorageFailureListener, writePracticeSession,
+  type PracticeSaveIssue, type PracticeSession,
 } from './practiceStorage';
 
 export function chapterHash(id: StageId): string {
@@ -28,6 +29,7 @@ export function syncChapterLocation(): StageId {
 export type PracticeConfirmation =
   | { kind: 'lesson-reset' }
   | { kind: 'replace-draft' }
+  | { kind: 'undo-draft' }
   | { kind: 'hard-reset'; command: string; target: string };
 
 export interface PixelStore extends PracticeSession {
@@ -88,18 +90,57 @@ function applyDocumentDraft(state: PixelStore, text: string, defer = false) {
   return applySession(state, state.sim, draft, defer);
 }
 
+// 비교 탭 전환이나 화면 연출만 바뀐 경우는 되돌리기 기록에 쌓지 않아요.
+// 파일·장바구니·커밋·브랜치·학습 진행처럼 실제로 달라진 상태만 기록해요.
+function practiceProgressChanged(before: PixelSimState, after: PixelSimState): boolean {
+  return after.files !== before.files
+    || after.index !== before.index
+    || after.staged !== before.staged
+    || after.commits !== before.commits
+    || after.branches !== before.branches
+    || after.headBranch !== before.headBranch
+    || after.previousBranch !== before.previousBranch
+    || after.origHead !== before.origHead
+    || after.remoteBranches !== before.remoteBranches
+    || after.stashes !== before.stashes
+    || after.stashCount !== before.stashCount
+    || after.prs !== before.prs
+    || after.issues !== before.issues
+    || after.conflict !== before.conflict
+    || after.token !== before.token
+    || after.ghes !== before.ghes
+    || after.ai !== before.ai
+    || after.completedActions !== before.completedActions;
+}
+
+function hasUnsavedDraft(state: PixelStore): boolean {
+  return state.documentDraft !== null && state.documentDraft !== getDocumentWorkingText(state.sim);
+}
+
 function execute(state: PixelStore, command: string) {
   const sim = executePixelCommand(state.sim, command);
   const last = state.history.at(-1);
-  const changed = sim.lastAnim.kind !== 'IDLE'
-    || sim.completedActions.length !== state.sim.completedActions.length
-    || sim.document?.comparison !== state.sim.document?.comparison
-    || sim.files !== state.sim.files
-    || sim.commits.length !== state.sim.commits.length;
+  const changed = practiceProgressChanged(state.sim, sim);
   return {
     ...applySession(state, sim, state.documentDraft),
     undoStacks: changed ? pushUndoSnapshot(state) : state.undoStacks,
     history: last === command ? state.history : [...state.history.slice(-49), command],
+  };
+}
+
+function applyUndo(state: PixelStore) {
+  const stack = state.undoStacks[state.stageId];
+  if (!stack || stack.length === 0) return state;
+  const previous = stack[stack.length - 1];
+  // 되돌린 결과가 예전 명령의 애니메이션으로 정방향 재재생되지 않도록
+  // 현재 애니메이션 번호를 그대로 두고 조용한 상태로 복원해요.
+  const restored: PixelSimState = {
+    ...previous.sim,
+    lastAnim: { kind: 'IDLE', seq: state.sim.lastAnim.seq, label: '한 단계 되돌림' },
+  };
+  return {
+    ...applySession(state, restored, previous.documentDraft),
+    undoStacks: { ...state.undoStacks, [state.stageId]: stack.slice(0, -1) },
   };
 }
 
@@ -150,12 +191,9 @@ export const usePixelStore = create<PixelStore>((set) => ({
   undoStep: () => set((state) => {
     const stack = state.undoStacks[state.stageId];
     if (!stack || stack.length === 0) return state;
-    const previous = stack[stack.length - 1];
-    const nextStack = stack.slice(0, -1);
-    return {
-      ...applySession(state, previous.sim, previous.documentDraft),
-      undoStacks: { ...state.undoStacks, [state.stageId]: nextStack },
-    };
+    // 아직 저장하지 않은 초안을 되돌리기가 덮어쓰려 하면 먼저 확인해요.
+    if (hasUnsavedDraft(state)) return { confirmation: { kind: 'undo-draft' } };
+    return applyUndo(state);
   }),
 
   resetStage: () => set({ confirmation: { kind: 'lesson-reset' } }),
@@ -172,6 +210,7 @@ export const usePixelStore = create<PixelStore>((set) => ({
     if (!confirmed || !state.confirmation) return { confirmation: null };
     if (state.confirmation.kind === 'hard-reset') return execute(state, state.confirmation.command);
     if (state.confirmation.kind === 'replace-draft') return applyDocumentDraft(state, EXAMPLE_DOCUMENT);
+    if (state.confirmation.kind === 'undo-draft') return applyUndo({ ...state, confirmation: null });
     clearLegacyPracticeSessions(state.stageId);
     return {
       ...applySession(state, createStageState(state.stageId), null),
@@ -202,14 +241,23 @@ export const usePixelStore = create<PixelStore>((set) => ({
 
   dismissStorageWarning: () => set({ storageWarning: false }),
 
-  adoptExternalSession: (id, session) => set((state) => {
-    const sessions = { ...state.sessions, [id]: session };
-    const saveIssues = state.saveIssues[id] ? { ...state.saveIssues, [id]: undefined } : state.saveIssues;
-    if (id !== state.stageId) return { sessions, saveIssues };
-    // 다른 탭의 진행 상태를 받더라도 이 탭에서 입력 중인 초안은 지우지 않아요.
-    const documentDraft = state.documentDraft !== null ? state.documentDraft : session.documentDraft;
-    return { ...session, documentDraft, stageId: id, sessions, saveIssues, notice: null, confirmation: null };
-  }),
+  adoptExternalSession: (id, session) => {
+    // 다른 탭의 저장본을 받아들이기 전에 이 탭에서 예약해 둔 저장을 취소해요.
+    // 그래야 늦게 도착한 예전 초안이 새 저장본을 다시 덮어쓰지 않아요.
+    cancelPendingPracticeSave(id);
+    set((state) => {
+      const sessions = { ...state.sessions, [id]: session };
+      const saveIssues = state.saveIssues[id] ? { ...state.saveIssues, [id]: undefined } : state.saveIssues;
+      // 외부 저장본을 채택하면 이 장의 예전 스냅샷은 더 이상 최신 상태가 아니에요.
+      // 현재 장과 비활성 장 모두 되돌리기 기록을 비워 다른 탭의 최신 저장본을 지키게 해요.
+      const undoStacks = state.undoStacks[id]?.length
+        ? { ...state.undoStacks, [id]: [] } : state.undoStacks;
+      if (id !== state.stageId) return { sessions, saveIssues, undoStacks };
+      // 다른 탭의 진행 상태를 받더라도 이 탭에서 입력 중인 초안은 지우지 않아요.
+      const documentDraft = state.documentDraft !== null ? state.documentDraft : session.documentDraft;
+      return { ...session, documentDraft, stageId: id, sessions, saveIssues, undoStacks, notice: null, confirmation: null };
+    });
+  },
 }));
 
 setPracticeStorageFailureListener(() => usePixelStore.setState({ storageWarning: true }));

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FileText, GitCompareArrows } from 'lucide-react';
 import {
   diffDocumentLines,
@@ -6,11 +6,12 @@ import {
   DOCUMENT_LIMIT,
   DOCUMENT_PATH,
   getDocumentComparison,
+  getDocumentComparisonLabels,
   getDocumentWorkingText,
 } from '../engine/documentDiff';
 import { usePixelStore } from '../store/usePixelStore';
 import type { DocumentComparison } from '../types/sim';
-import { headTree, treeEntry } from '../engine/repoVersions';
+import { treeEntry } from '../engine/repoVersions';
 import { SPEAKER_THEMES } from '../pixel/palette';
 
 const COMPARISON_MODES: DocumentComparison[] = ['working', 'staged', 'commits'];
@@ -37,11 +38,10 @@ export function DocumentLab() {
   }, [unsaved]);
   const mode = sim.document?.comparison ?? 'working';
   const view = DOCUMENT_COMPARISONS[mode];
-  // 담은 뒤 문서를 또 고치면 비교 기준은 원래 초안이 아니라 담아 둔 문서예요.
-  const beforeLabel = mode === 'working' && treeEntry(sim.index, DOCUMENT_PATH) !== treeEntry(headTree(sim), DOCUMENT_PATH)
-    ? '담아 둔 문서'
-    : view.before;
+  // 비교 탭이 실제로 읽는 사본을 패널과 터미널에서 같은 이름으로 보여 줘요.
+  const { before: beforeLabel } = getDocumentComparisonLabels(sim, mode);
   const comparison = getDocumentComparison(sim, mode);
+  const tabRefs = useRef<Partial<Record<DocumentComparison, HTMLButtonElement | null>>>({});
   const before = comparison?.before;
   const after = comparison?.after;
   const lines = useMemo(
@@ -72,6 +72,18 @@ export function DocumentLab() {
     saveDocument();
     runCommand(DOCUMENT_COMPARISONS[target].command);
     setPendingCompare(null);
+    // 배너 버튼이 사라져 포커스가 body로 튀지 않도록, 비교를 실행한 탭 버튼으로 옮겨요.
+    window.requestAnimationFrame(() => tabRefs.current[target]?.focus());
+  }
+
+  function showWorkingComparison() {
+    setPendingCompare(null);
+    runCommand(DOCUMENT_COMPARISONS.working.command);
+  }
+
+  function addToNextCommit() {
+    if (unsaved) saveDocument();
+    runCommand(`git add ${DOCUMENT_PATH}`);
   }
 
   // 충돌 안내 영역이 이미 제공하는 버튼은 말풍선에서 중복해서 보여 주지 않아요.
@@ -100,10 +112,10 @@ export function DocumentLab() {
                 <span style={{ backgroundColor: SPEAKER_THEMES[sim.bubbles[0].speaker].dot }} className="h-1.5 w-1.5 shrink-0 rounded-[1px]" />
                 {sim.bubbles[0].speakerName}
               </span>
-              <h2 className="min-w-0 break-keep text-sm font-bold text-[#2F241D]">{sim.bubbles[0].title}</h2>
+              <h2 className="min-w-0 break-keep text-sm font-bold text-[#2F241D] [overflow-wrap:anywhere]">{sim.bubbles[0].title}</h2>
             </div>
-            <p className="mt-1 break-keep text-sm leading-relaxed text-[#4E3E33]">{sim.bubbles[0].message}</p>
-            {sim.bubbles[0].nextHint && <p className="mt-1 break-words text-xs leading-relaxed text-[#79521D]">{sim.bubbles[0].nextHint}</p>}
+            <p className="mt-1 break-keep text-sm leading-relaxed text-[#4E3E33] [overflow-wrap:anywhere]">{sim.bubbles[0].message}</p>
+            {sim.bubbles[0].nextHint && <p className="mt-1 break-words text-xs leading-relaxed text-[#79521D] [overflow-wrap:anywhere]">{sim.bubbles[0].nextHint}</p>}
             {bubbleActions.length > 0 && (
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 {bubbleActions.map((act) => (
@@ -190,6 +202,7 @@ export function DocumentLab() {
                 <button
                   type="button"
                   key={item}
+                  ref={(node) => { tabRefs.current[item] = node; }}
                   aria-pressed={item === mode}
                   onClick={() => handleSelectComparison(item)}
                   className="min-h-9 rounded-md border border-[#CDBCA3] bg-[#FFFDF8] px-3 text-xs font-semibold text-[#59483B] hover:border-[#987855] aria-pressed:border-[#4D8C6E] aria-pressed:bg-[#E2F3E8] aria-pressed:text-[#145439]"
@@ -206,7 +219,8 @@ export function DocumentLab() {
               className="flex flex-wrap items-center justify-between gap-2 border-b border-[#DDBE8A] bg-[#FFF2D7] px-4 py-2.5 text-xs text-[#73450E]"
             >
               <p className="break-keep font-semibold">
-                편집 중인 내용을 먼저 저장해야 ‘{DOCUMENT_COMPARISONS[pendingCompare].label}’ 탭에서 비교할 수 있어요.
+                ‘{DOCUMENT_COMPARISONS[pendingCompare].label}’ 탭은 {DOCUMENT_COMPARISONS[pendingCompare].reads}를 읽어 비교해요.
+                편집 중인 내용을 먼저 저장해야 해요.
               </p>
               <button
                 type="button"
@@ -222,13 +236,31 @@ export function DocumentLab() {
             <code className="font-mono-code break-words text-xs text-[#705638]">{view.command}</code>
           </div>
           <div role="status" className="px-4 py-2.5 text-sm text-[#59483B]">
-            {!comparison
-              ? '문서를 커밋하면 이전 기록과 비교할 수 있어요.'
-              : lines.length === 0
-                ? mode === 'working' && staged
-                  ? '작업 문서와 장바구니 내용이 같아요. 방금 담은 변경은 ‘담아 둔 변경’ 탭에서 확인할 수 있어요.'
-                  : view.empty
-                : <><span className="font-semibold text-[#8C2630]">− 빠진 줄 {removals}개</span><span className="mx-2" aria-hidden="true">·</span><span className="font-semibold text-[#155C40]">+ 들어간 줄 {additions}개</span></>}
+            <p className="font-semibold text-[#715A43]">‘{view.label}’ 비교 기준: {beforeLabel} → {view.after}</p>
+            <p className="mt-0.5">
+              {!comparison
+                ? '문서를 커밋하면 이전 기록과 비교할 수 있어요.'
+                : lines.length === 0
+                  ? mode === 'working' && staged
+                    ? '작업 문서와 장바구니 내용이 같아요. 방금 담은 변경은 ‘담아 둔 변경’ 탭에서 확인할 수 있어요.'
+                    : view.empty
+                  : <><span className="font-semibold text-[#8C2630]">− 빠진 줄 {removals}개</span><span className="mx-2" aria-hidden="true">·</span><span className="font-semibold text-[#155C40]">+ 들어간 줄 {additions}개</span></>}
+            </p>
+            {comparison && lines.length === 0 && sim.staged.length === 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <button type="button" onClick={showWorkingComparison}
+                  className="min-h-8 rounded-md border border-[#CDBCA3] bg-[#FAF4E8] px-2.5 text-xs font-semibold hover:bg-[#F0E5CF]">
+                  바뀐 줄 보기
+                </button>
+                <button type="button" onClick={addToNextCommit}
+                  className="min-h-8 rounded-md border border-[#B68223] bg-[#F4B942] px-2.5 text-xs font-bold hover:bg-[#F7C55D]">
+                  다음 기록에 담기
+                </button>
+                <span className="break-keep text-xs text-[#715A43]">
+                  장바구니가 비어 있어요. 바뀐 줄을 확인한 뒤 다음 기록에 담아 보세요.
+                </span>
+              </div>
+            )}
           </div>
           {lines.length > 0 && (
             <ul tabIndex={0} aria-label={`${DOCUMENT_PATH} 변경 내용`} className="font-mono-code max-h-72 overflow-auto rounded-b-xl border-t border-[#E9DFCE] text-xs leading-6 sm:text-sm">

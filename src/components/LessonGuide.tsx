@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, Pencil, Play, Save } from 'lucide-react';
 import { getNextPendingStep, isPracticeCommand, isStepCompleted, STAGE_MAP, STAGE_TRACKS } from '../engine';
-import { diffDocumentLines, DOCUMENT_REVERT, getDocumentComparison } from '../engine/documentDiff';
+import { diffDocumentLines, DOCUMENT_COMPARISONS, DOCUMENT_REVERT, getDocumentComparison } from '../engine/documentDiff';
 import { CANONICAL_TERMS } from '../engine/terms';
 import { usePixelStore } from '../store/usePixelStore';
 
@@ -46,8 +46,11 @@ export function LessonGuide() {
   const saveDraft = draft !== null;
   const awaitingPick = quiz !== null && quiz.picked === null && quiz.stepId === nextStep?.id;
   const continuing = quiz !== null && quiz.picked !== null && quiz.stepId === nextStep?.id;
-  const ButtonIcon = saveDraft ? Save : editDocument ? Pencil : continuing ? ArrowRight : Play;
-  const label = saveDraft ? '문서 저장하기' : awaitingPick ? '먼저 예측을 골라 주세요' : continuing ? '계속하기' : nextStep?.label;
+  const compareConflict = nextStep?.doneAction === 'RESOLVE'
+    && sim.conflict !== null && sim.conflict.resolvedChoice === 'none';
+  const ButtonIcon = saveDraft ? Save : editDocument ? Pencil : continuing || compareConflict ? ArrowRight : Play;
+  const label = saveDraft ? '문서 저장하기' : awaitingPick ? '먼저 예측을 골라 주세요'
+    : compareConflict ? '남길 내용 비교하기' : continuing ? '계속하기' : nextStep?.label;
   // 지금 단계에서 쓰는 용어만 보여 줘서 첫 화면을 가볍게 해요. 단계에 명시된 용어를 우선 사용해요.
   const stepTerms = nextStep
     ? nextStep.terms
@@ -58,6 +61,7 @@ export function LessonGuide() {
   const docDiffDone = lesson.id === 'docs' && sim.completedActions.some((action) =>
     action === 'DOCUMENT_WORKING_DIFF' || action === 'DOCUMENT_STAGED_DIFF' || action === 'DOCUMENT_COMMIT_DIFF');
   const docComparison = docDiffDone && sim.document ? getDocumentComparison(sim, sim.document.comparison) : null;
+  const docModeLabel = sim.document ? DOCUMENT_COMPARISONS[sim.document.comparison].label : '';
   const docLines = docComparison ? diffDocumentLines(docComparison.before, docComparison.after) : [];
   const docRemoved = docLines.filter((line) => line.kind === 'removed').length;
   const docAdded = docLines.filter((line) => line.kind === 'added').length;
@@ -69,6 +73,11 @@ export function LessonGuide() {
       const editor = document.getElementById('practice-document-editor');
       editor?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       editor?.focus({ preventScroll: true });
+    } else if (nextStep?.doneAction === 'RESOLVE' && sim.conflict && sim.conflict.resolvedChoice === 'none') {
+      // 충돌을 바로 해결하지 않고, 아래 비교 카드에서 세 선택지를 직접 보게 안내해요.
+      const card = document.getElementById('conflict-comparison');
+      card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card?.focus({ preventScroll: true });
     } else if (nextStep) {
       runCommand(nextStep.command);
       if (lesson.id === 'docs' && nextStep.command.startsWith('git diff ') && !usePixelStore.getState().notice) {
@@ -151,12 +160,14 @@ export function LessonGuide() {
           </div>
           {label ? (
             <>
-              {nextStep && !saveDraft && <p className="mt-1 break-keep text-sm sm:mt-1.5">{nextStep.goal}</p>}
+              {nextStep && !saveDraft && <p className="mt-1 break-keep text-sm sm:mt-1.5 [overflow-wrap:anywhere]">{nextStep.goal}</p>}
               {docDiffDone && (
                 <p role="status" className="mt-1 text-xs font-semibold text-[#196446]">
                   {docRemoved + docAdded > 0
-                    ? `비교 결과: 빠진 줄 ${docRemoved}개 · 들어간 줄 ${docAdded}개`
-                    : '비교 결과: 바뀐 줄이 없어요'}
+                    ? `비교 결과 · ${docModeLabel}: 빠진 줄 ${docRemoved}개 · 들어간 줄 ${docAdded}개`
+                    : sim.staged.length > 0 && sim.document?.comparison === 'working'
+                      ? '비교 결과 · 바뀐 줄: 작업 파일과 장바구니가 같아요. 방금 담은 변경은 ‘담아 둔 변경’ 탭에서 확인하세요.'
+                      : `비교 결과 · ${docModeLabel}: 바뀐 줄이 없어요`}
                 </p>
               )}
               {nextStep?.prediction && quiz && quiz.stepId === nextStep.id && (
@@ -279,7 +290,9 @@ function GitHubWebGuide() {
           <li>저장소에서 문서를 열고 연필 버튼으로 편집해요. <strong>Preview</strong>에서 문서가 어떻게 보이는지 확인해요.</li>
           <li><strong>Commit changes</strong>에서 변경 이유를 적고 새 브랜치에 기록해요. 쓰기 권한이 없는 저장소에서는 포크(다른 사람 저장소를 내 계정으로 복사)를 만들어 <strong>Propose changes</strong>로 변경을 제안할 수 있어요.</li>
           <li><strong>Compare &amp; pull request</strong>에서 변경을 확인하고 <strong>Create pull request</strong>로 팀에 검토를 요청해요.</li>
-          <li>리뷰 화면의 <strong>Files changed → Review changes → Approve</strong>로 승인하고, 하단의 <strong>Merge pull request</strong> 버튼으로 합쳐요.</li>
+          <li><strong>Conversation</strong> 탭에서 팀원의 리뷰 의견과 승인 여부를 확인해요. PR 작성자는 자기 PR을 직접 승인할 수 없어요.</li>
+          <li><strong>Files changed → Review changes → Approve</strong>는 리뷰어(팀원)가 남기는 승인이에요. 이 실습에서는 ‘팀원 승인 확인하기’ 단계에서 팀원 승인이 자동으로 도착해요.</li>
+          <li>승인을 확인한 뒤 PR 하단의 <strong>Merge pull request</strong> 버튼으로 합쳐요.</li>
         </ol>
         <p className="mb-2 break-keep leading-relaxed text-[#715A43]">
           Preview·Commit changes·Compare &amp; pull request·Merge pull request는 실제 GitHub 웹사이트 버튼이에요. 이 실습에서는 명령으로 같은 일을 해요.

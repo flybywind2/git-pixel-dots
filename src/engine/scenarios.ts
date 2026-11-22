@@ -302,7 +302,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'gh pr view --comments',
         doneAction: 'PR_REVIEW',
         terms: ['승인'],
-        commandNote: '--comments를 붙이면 리뷰 의견까지 볼 수 있어요. GitHub 웹에서는 PR 화면의 Files changed → Review changes → Approve(승인)에 해당해요. 이 실습에서는 바로 승인돼요.',
+        commandNote: '--comments를 붙이면 리뷰 의견까지 볼 수 있어요. GitHub 웹에서는 PR의 Conversation 탭에서 팀원 리뷰·승인을 확인해요. Files changed → Review changes → Approve(승인)는 리뷰어(팀원)가 하는 일이에요. 이 실습에서는 이 명령을 실행할 때 팀원 승인이 자동으로 도착해요.',
       },
       {
         id: 'ch4-pr-merge',

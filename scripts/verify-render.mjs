@@ -49,7 +49,29 @@ function trackErrors(page, origin) {
 }
 
 async function checkViewport(page) {
-  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Page overflows horizontally');
+  const overflow = await page.evaluate(() => {
+    const main = document.querySelector('main');
+    const wide = main ? [...main.querySelectorAll('*')].filter((element) => {
+      const style = getComputedStyle(element);
+      return element.scrollWidth > element.clientWidth + 1 && style.overflowX === 'visible';
+    }).slice(0, 4).map((element) => `${element.tagName.toLowerCase()}.${String(element.className).slice(0, 60)}`) : [];
+    return {
+      page: document.documentElement.scrollWidth - innerWidth,
+      main: main ? main.scrollWidth - main.clientWidth : 0,
+      wide,
+    };
+  });
+  assert(overflow.page <= 1, `Page overflows horizontally by ${overflow.page}px (${overflow.wide.join(' | ')})`);
+  assert(overflow.main <= 1, `Main area overflows horizontally by ${overflow.main}px (${overflow.wide.join(' | ')})`);
+}
+
+async function checkCardOverflow(page) {
+  const overflow = await page.evaluate(() => {
+    const card = document.querySelector('[data-testid="stage-files-card"]');
+    const preview = document.querySelector('[data-testid="stage-file-preview"]');
+    return [card, preview].map((element) => element ? element.scrollWidth - element.clientWidth : 0);
+  });
+  assert(overflow.every((value) => value <= 1), `File card overflows horizontally: ${overflow.join(', ')}px`);
 }
 
 async function openTerminal(page) {
@@ -270,6 +292,10 @@ async function practiceTracks(page, url) {
   // GitHub 웹 안내는 장을 완료한 뒤에만 보여요.
   await page.getByText('GitHub 웹에서 이어 하기', { exact: false }).click();
   await page.getByText('Create pull request', { exact: true }).waitFor();
+  const webGuideText = await page.getByTestId('github-web-guide').innerText();
+  assert.match(webGuideText, /Conversation/);
+  assert.match(webGuideText, /리뷰어\(팀원\)/);
+  assert.match(webGuideText, /자동으로 도착/);
   const editingHelp = page.getByRole('link', { name: /GitHub 문서 편집 도움말/ });
   const prHelp = page.getByRole('link', { name: /GitHub 검토 요청 도움말/ });
   assert.equal(await editingHelp.getAttribute('target'), '_blank');
@@ -516,6 +542,13 @@ async function crossTabSync(browser, url) {
   // 탭 B는 진행 상태를 반영하되, 이 탭에서 입력 중인 초안(draftB)은 그대로 유지해요.
   await b.waitForFunction(() => document.querySelector('[data-testid="stage-step-badge"]')?.textContent === '실습 1/6 완료');
   assert.equal(await editorB.inputValue(), draftB);
+
+  // 탭 B가 자기 초안을 저장하면 탭 A의 예전 Undo 스냅샷은 최신 저장본을 덮지 못하도록 비워져요.
+  const undoA = a.getByTestId('undo-step-btn');
+  assert.equal(await undoA.isDisabled(), false);
+  await clickGuided(b);
+  await a.waitForFunction(() => document.querySelector('[data-testid="undo-step-btn"]')?.disabled === true);
+  assert.equal(await editorA.inputValue(), `${draftB}`, 'Tab A did not adopt the latest saved text');
   await context.close();
 }
 
@@ -573,6 +606,17 @@ async function mobileLessonLayout(browser, url) {
     const continueBox = await page.getByTestId('guided-command').boundingBox();
     assert(continueBox.y >= 0 && continueBox.y + continueBox.height <= height,
       `Continue button not visible without scroll at ${width}x${height}`);
+    if (width === 320) {
+      // 아주 긴 파일명도 카드와 미리보기에서 가로로 넘치지 않아요.
+      const longName = '아주긴파일이름테스트입니다정말로길어요한번더길게.md';
+      await runCommand(page, `edit ${longName}`);
+      await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
+      const filesCard = page.getByTestId('stage-files-card');
+      await filesCard.getByRole('button', { name: new RegExp('아주긴파일이름') }).click();
+      await page.getByTestId('stage-file-preview').waitFor();
+      await checkCardOverflow(page);
+      await checkViewport(page);
+    }
     await page.close();
   }
 }
@@ -582,9 +626,14 @@ async function advancedGuidedCompletion(browser, url) {
   // 심화 5~9장을 안내 버튼만으로 끝까지 완료해요(1~4장은 다른 검사에서 완료).
   for (const [chapter, total] of [[5, 4], [6, 4], [7, 4], [8, 4], [9, 6]]) {
     await openChapter(page, url, chapter);
-    const guide = page.getByTestId('guided-command');
     for (let i = 0; i < total; i++) {
-      await clickGuided(page);
+      if (chapter === 5 && i === 2) {
+        // 충돌 단계는 상단 버튼으로 바로 해결하지 않고 비교 카드에서 직접 골라요.
+        await clickGuided(page);
+        await page.getByTestId('conflict-preview').getByRole('button', { name: '두 변경 함께 남기기', exact: true }).click();
+      } else {
+        await clickGuided(page);
+      }
     }
     await expectProgress(page, total, total);
   }
@@ -660,6 +709,104 @@ async function uxImprovements(browser, url) {
   const preview = page.getByTestId('conflict-preview');
   await preview.getByRole('button', { name: '두 변경 함께 남기기', exact: true }).waitFor();
   assert.equal(await page.getByTestId('speech-bubble').getByRole('button', { name: '두 변경 함께 남기기', exact: true }).count(), 0);
+  // 상단 강조 버튼은 비교 전에 바로 해결하지 않고 비교 카드로 포커스를 옮겨요.
+  assert.equal(await page.getByTestId('guided-command').innerText(), '남길 내용 비교하기');
+  await page.getByTestId('guided-command').click();
+  await expectProgress(page, 2, 4);
+  assert(await page.evaluate(() => document.activeElement?.id === 'conflict-comparison'), 'Conflict comparison did not receive focus');
+  await preview.getByRole('button', { name: '두 변경 함께 남기기', exact: true }).click();
+  await expectProgress(page, 3, 4);
+  // 해결 뒤에는 새로 나타난 기록 버튼으로 키보드 포커스가 이어져요.
+  assert(await page.evaluate(() => document.activeElement?.getAttribute('data-testid') === 'guided-command'),
+    'Focus did not move to the merge commit button');
+  assert.equal(await page.getByTestId('guided-command').innerText(), '합친 내용 기록하기');
+  // 되돌리면 충돌 단계로 돌아가고, 다른 선택지도 3/4로 인정돼요.
+  await page.getByTestId('undo-step-btn').click();
+  await expectProgress(page, 2, 4);
+  await preview.getByRole('button', { name: '현재 브랜치 내용 유지', exact: true }).click();
+  await expectProgress(page, 3, 4);
+  await page.close();
+}
+
+async function draftUndoProtection(browser, url) {
+  const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  await openChapter(page, url, 1);
+  const editor = page.getByRole('textbox', { name: '회의록.md', exact: true });
+  const original = await editor.inputValue();
+  await clickGuided(page);
+  const first = original.replace('금요일 저녁 7시', '목요일 오후 4시');
+  await editor.fill(first);
+  await page.getByTestId('guided-command').click();
+  await expectProgress(page, 1, 6);
+
+  const draft = `${first}저장하지 않은 초안이에요.\n`;
+  await editor.fill(draft);
+  await page.getByTestId('undo-step-btn').click();
+  const dialog = page.getByRole('dialog', { name: '저장하지 않은 초안이 있어요' });
+  await dialog.waitFor();
+  await dialog.getByRole('button', { name: '취소', exact: true }).click();
+  assert.equal(await editor.inputValue(), draft, 'Cancelling undo lost the unsaved draft');
+  await page.waitForFunction((expected) => {
+    const raw = localStorage.getItem('gitdots.practice.v4.docs');
+    return raw !== null && JSON.parse(raw).documentDraft === expected;
+  }, draft);
+
+  // 확인을 누르면 조용히 이전 스냅샷으로 돌아가고 예전 애니메이션은 재생하지 않아요.
+  await page.getByTestId('undo-step-btn').click();
+  await page.getByRole('dialog', { name: '저장하지 않은 초안이 있어요' })
+    .getByRole('button', { name: '초안 버리고 되돌리기', exact: true }).click();
+  assert.equal(await editor.inputValue(), first);
+
+  await editor.fill(draft);
+  await page.reload();
+  assert.equal(await editor.inputValue(), draft, 'Unsaved draft did not survive refresh');
+  assert.equal(await page.getByTestId('undo-step-btn').isDisabled(), true, 'Undo stack should reset after refresh');
+  await page.close();
+}
+
+async function fileCardStates(browser, url) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  await openChapter(page, url, 3);
+  await runCommand(page, 'git add .');
+  await runCommand(page, 'edit 회의록.md');
+  await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
+  const card = page.getByTestId('stage-files-card');
+  const docButton = card.getByRole('button', { name: /회의록\.md/ }).first();
+  await docButton.click();
+  const preview = page.getByTestId('stage-file-preview');
+  await preview.waitFor();
+  assert.match(await preview.innerText(), /작업 파일\(working\)/);
+  assert.match(await preview.innerText(), /장바구니 사본\(index\)/);
+  assert.match(await preview.innerText(), /추가 수정/);
+  await preview.getByRole('button', { name: '파일 미리보기 닫기', exact: true }).click();
+  assert(await docButton.evaluate((node) => node === document.activeElement),
+    'Closing the preview did not return focus to the file card');
+
+  // 여러 건의 임시 보관도 보관 번호별로 모두 보여요.
+  await runCommand(page, 'git stash');
+  await runCommand(page, 'edit 회의록.md');
+  await runCommand(page, 'git stash');
+  await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
+  await card.getByText('stash@{0}', { exact: true }).first().waitFor();
+  await card.getByText('stash@{1}', { exact: true }).first().waitFor();
+  await card.getByRole('button', { name: /stash@\{0\}/ }).first().click();
+  assert.match(await preview.innerText(), /stash@\{0\}에 보관된 사본/);
+  await checkCardOverflow(page);
+
+  // 원격과의 실제 부모 관계를 상태 문구로 확인해요.
+  await openChapter(page, url, 3);
+  const sync = page.getByTestId('stage-sync-status');
+  await sync.waitFor();
+  await runCommand(page, 'git revert HEAD');
+  await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
+  assert.match(await sync.innerText(), /공유 대기/);
+  await runCommand(page, 'git push');
+  await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
+  assert.match(await sync.innerText(), /동기화 완료/);
+  assert.match(await page.getByTestId('stage-command-status').innerText(), /변경 공유/);
+  await runCommand(page, 'git reset --soft HEAD~1');
+  await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
+  assert.match(await sync.innerText(), /원격이 앞섬/);
   await page.close();
 }
 
@@ -715,6 +862,9 @@ async function main() {
     console.log('[QA] Advanced chapters 5-9 completed via guide buttons passed');
     await uxImprovements(browser, url);
     console.log('[QA] Non-dev UX improvements (inline unsaved compare, undo, file cards, pre-completion web guide, conflict button order) passed');
+    await draftUndoProtection(browser, url);
+    await fileCardStates(browser, url);
+    console.log('[QA] Draft-safe undo, staged-plus-working cards, multi-stash cards and remote share status passed');
 
     const link = await browser.newPage();
     await link.goto(url + 'docs/deeper/');

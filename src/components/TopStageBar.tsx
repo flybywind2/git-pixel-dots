@@ -140,7 +140,9 @@ export function TopStageBar() {
           data-testid="undo-step-btn"
           onClick={undoStep}
           disabled={undoCount === 0}
-          title={undoCount > 0 ? '이전 단계로 되돌리기' : '되돌릴 이전 단계가 없어요'}
+          title={undoCount > 0
+            ? '이전 단계로 되돌리기 (새로고침하면 되돌리기 기록은 사라져요)'
+            : '되돌릴 이전 단계가 없어요. 새로고침하면 되돌리기 기록이 사라져요'}
           className="flex min-h-8 items-center gap-1 rounded-md border border-[#D4C3A8] bg-[#FAF4E8] px-1.5 text-xs font-medium hover:bg-[#FFFDF8] disabled:cursor-not-allowed disabled:opacity-45 sm:px-2"
         >
           <Undo2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />

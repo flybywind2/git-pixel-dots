@@ -287,6 +287,14 @@ export function writePracticeSession(session: PracticeSession, defer = false) {
   pendingSaves.set(id, { timer, session });
 }
 
+/** 예약된 지연 저장만 취소해요. 이미 저장된 내용은 건드리지 않아요. */
+export function cancelPendingPracticeSave(id: StageId) {
+  const pending = pendingSaves.get(id);
+  if (!pending) return;
+  if (typeof window !== 'undefined') window.clearTimeout(pending.timer);
+  pendingSaves.delete(id);
+}
+
 export function flushPracticeSaves() {
   for (const { session } of pendingSaves.values()) writePracticeSession(session);
 }

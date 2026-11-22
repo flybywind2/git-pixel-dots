@@ -27,6 +27,7 @@ import {
   DOCUMENT_SAVE_LABEL,
   EXAMPLE_DOCUMENT,
   getDocumentComparison,
+  getDocumentComparisonLabels,
   getDocumentWorkingText,
   ORIGINAL_DOCUMENT,
 } from './documentDiff';
@@ -866,13 +867,16 @@ function comparePracticeDocument(state: PixelSimState, cmd: string, args: string
   }
 
   const view = DOCUMENT_COMPARISONS[mode];
+  const labels = getDocumentComparisonLabels(state, mode);
   const comparison = getDocumentComparison(state, mode);
   const changes = comparison ? diffDocumentLines(comparison.before, comparison.after) : [];
-  const lines: TerminalLine[] = [{ text: `${view.before} → ${view.after}`, tone: 'sky' }];
+  const lines: TerminalLine[] = [{ text: `${labels.before} → ${labels.after}`, tone: 'sky' }];
   const message = !comparison
     ? '문서를 커밋하면 이전 기록과 비교할 수 있어요.'
     : changes.length === 0
-      ? view.empty
+      ? mode === 'working' && state.staged.includes(DOCUMENT_PATH)
+        ? '작업 파일과 장바구니 사본이 같아요. 방금 담은 변경은 ‘담아 둔 변경’ 탭에서 확인할 수 있어요.'
+        : view.empty
       : '−는 빠진 줄, +는 들어간 줄이에요.';
 
   if (changes.length === 0) {
@@ -1041,7 +1045,10 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           );
         }
       }
-      return commandNotice(state, cmd, '문서 실습 명령어', '회의록 편집과 비교에 쓰는 명령은 명령어 사전에서 확인할 수 있어요.');
+      return commandNotice(state, cmd, '문서 실습 명령어',
+        getNextPendingStep(state)
+          ? '회의록 편집과 비교에 쓰는 명령은 명령어 사전에서 확인할 수 있어요.'
+          : '이 장은 모두 마쳤어요. help를 입력하거나 명령어 사전에서 사용 가능한 명령어를 확인해 보세요.');
     }
   }
 
@@ -3376,7 +3383,12 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
     cmd,
     [
       { text: `어라, '${cmd}' 명령어는 아직 모르는 말이에요!`, tone: 'coral' },
-      { text: '위쪽의 노란 버튼을 누르거나 help를 입력해 사용 가능한 명령어를 확인해 보세요.', tone: 'muted' },
+      {
+        text: nextStep
+          ? '위쪽의 노란 추천 버튼을 누르거나 help를 입력해 사용 가능한 명령어를 확인해 보세요.'
+          : '이 장은 모두 마쳤어요. help를 입력하거나 명령어 사전에서 사용 가능한 명령어를 확인해 보세요.',
+        tone: 'muted',
+      },
     ],
     makeBubble(
       `unknown-${seqNext}`,
@@ -3384,7 +3396,9 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       38,
       54,
       '어라, 모르는 명령어예요! 🤔',
-      '위쪽의 노란 버튼을 누르거나 help를 입력해 사용 가능한 명령을 확인해 보세요.',
+      nextStep
+        ? '위쪽의 노란 추천 버튼을 누르거나 help를 입력해 사용 가능한 명령을 확인해 보세요.'
+        : '이 장은 모두 마쳤어요. help를 입력하거나 명령어 사전에서 사용 가능한 명령을 확인해 보세요.',
       nextStepHintText(state),
       fallbackActions,
     ),

@@ -1,6 +1,6 @@
 import type { PixelAnimKind, PixelSimState } from '../types/sim';
 import { SECRET_NOTE_PATH } from '../engine/meetingExample';
-import { commitById, reachableCommits } from '../engine/repoVersions';
+import { commitById, reachableCommits, remoteHasRevertCommit, remoteRelation } from '../engine/repoVersions';
 import { PALETTE, withAlpha } from './palette';
 import {
   AI_BOT,
@@ -409,10 +409,16 @@ function drawCh2Scene(
   const remoteX = w * 0.83;
   const kind = sim.lastAnim.kind;
   const hasSecretStaged = sim.staged.includes(SECRET_NOTE_PATH);
-  const remoteHead = sim.remoteBranches[sim.headBranch];
   const headCommitId = sim.branches[sim.headBranch];
-  const synced = Boolean(remoteHead && remoteHead === headCommitId);
-  const hasRevert = sim.commits.some((commit) => commit.isRevert);
+  const relation = remoteRelation(sim);
+  const synced = relation === 'synced';
+  const remoteBehind = relation === 'behind' || relation === 'diverged';
+  // 원격 브랜치에서 실제로 도달 가능한 되돌림 커밋일 때만 민트 보석을 보여 줘요.
+  const remoteRevert = remoteHasRevertCommit(sim);
+  const shareLabel = relation === 'none' ? '공유 전'
+    : relation === 'ahead' ? '공유 대기'
+      : relation === 'behind' ? '원격이 앞섬'
+        : relation === 'diverged' ? '갈라진 기록' : '동기화 완료';
 
   // Main horizontal dotted commit timeline rail
   drawDottedTrack(
@@ -433,7 +439,7 @@ function drawCh2Scene(
     railY - dot * 3,
     remoteX,
     topY + dot * 8,
-    synced ? PALETTE.mint : PALETTE.lavender,
+    synced ? PALETTE.mint : remoteBehind ? PALETTE.coral : PALETTE.lavender,
     time,
     kind === 'PUSH' || synced,
     -12,
@@ -510,7 +516,7 @@ function drawCh2Scene(
 
   // Top-center: Staging basket zone (with secret note warning when staged)
   const unstageActive = kind === 'UNSTAGE';
-  const stageAccent = hasSecretStaged ? PALETTE.coral : sim.staged.length > 0 ? PALETTE.mint : PALETTE.mint;
+  const stageAccent = hasSecretStaged ? PALETTE.coral : PALETTE.mint;
   drawZonePad(
     ctx,
     stageX,
@@ -556,14 +562,14 @@ function drawCh2Scene(
     topY,
     padW,
     '팀 저장소',
-    synced ? '동기화 완료' : '공유 대기',
-    synced ? PALETTE.mint : PALETTE.lavender,
-    pushActive || (synced && hasRevert),
+    shareLabel,
+    synced ? PALETTE.mint : remoteBehind ? PALETTE.coral : PALETTE.lavender,
+    pushActive || remoteRevert,
     time,
   );
   const cloudY = topY - dot * 7.5 + Math.sin(time * 2.1) * 3;
   drawPixelSprite(ctx, CLOUD_CASTLE, CLOUD_CASTLE_COLORS, remoteX, cloudY, dot * 0.78, 'dot');
-  if (synced && hasRevert) {
+  if (remoteRevert) {
     drawPixelSprite(
       ctx,
       COMMIT_GEM,
@@ -1635,11 +1641,18 @@ export function getParticleCuesForAnim(
         { kind: 'parcel', x: w * 0.16, y: h * 0.66, x1: w * 0.39, y1: h * 0.66, color: PALETTE.mint },
         { kind: 'sparkles', x: w * 0.39, y: h * 0.64, color: PALETTE.mint },
       ];
-    case 'UNSTAGE':
+    case 'UNSTAGE': {
+      // 각 장의 실제 장바구니(스테이징) 좌표에서 작업 폴더 쪽으로 파일이 빠져나가요.
+      const from = stageId === 'ch2' ? { x: 0.5, y: 0.28 }
+        : stageId === 'ch1' ? { x: 0.39, y: 0.66 }
+          : stageId === 'ch4' ? { x: 0.18, y: 0.7 }
+            : { x: 0.5, y: 0.28 };
+      const to = stageId === 'ch1' ? { x: 0.16, y: 0.68 } : { x: 0.36, y: 0.45 };
       return [
-        { kind: 'parcel', x: w * 0.5, y: h * 0.28, x1: w * 0.36, y1: h * 0.45, color: PALETTE.coral },
-        { kind: 'sparkles', x: w * 0.5, y: h * 0.28, color: PALETTE.mint },
+        { kind: 'parcel', x: w * from.x, y: h * from.y, x1: w * to.x, y1: h * to.y, color: PALETTE.coral },
+        { kind: 'sparkles', x: w * from.x, y: h * from.y, color: PALETTE.mint },
       ];
+    }
     case 'COMMIT':
       return [
         { kind: 'shockwave', x: w * (stageId === 'ch1' ? 0.62 : 0.56), y: h * 0.64, color: PALETTE.cream },

@@ -877,4 +877,21 @@ describe('Utility commands, unknown commands & autocomplete', () => {
     const blockedPush = runSequence('ch8', ['git worktree add -b ai/fix wt-ai', 'ai code', 'ai push-main']);
     expect(blockedPush.terminal.at(-1)?.lines.some((line) => line.text.includes('GH006') && line.text.includes('보호된 main'))).toBe(true);
   });
+
+  it('Ch4: separates the author approval check from the reviewer approval action', () => {
+    const reviewStep = STAGE_MAP.ch4.steps.find((step) => step.doneAction === 'PR_REVIEW');
+    expect(reviewStep?.commandNote).toContain('Conversation');
+    expect(reviewStep?.commandNote).toContain('리뷰어(팀원)');
+    expect(reviewStep?.commandNote).toContain('자동');
+  });
+
+  it('does not point to a missing yellow button after the chapter is complete', () => {
+    let state = createStageState('docs');
+    for (const step of STAGE_MAP.docs.steps) state = executePixelCommand(state, step.command);
+    expect(getNextPendingStep(state)).toBeNull();
+    const unknown = executePixelCommand(state, 'git Abracadabra');
+    expect(unknown.bubbles[0]?.message).not.toContain('위쪽의 노란');
+    expect(unknown.bubbles[0]?.message).toContain('help');
+    expect(unknown.terminal.at(-1)?.lines.map(({ text }) => text).join(' ')).not.toContain('노란');
+  });
 });
