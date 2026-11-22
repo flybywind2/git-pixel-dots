@@ -10,7 +10,7 @@ import {
   isStepCompleted,
   savePracticeDocument,
 } from './index';
-import { diffDocumentLines, DOCUMENT_COMPARISONS, DOCUMENT_PATH, getDocumentComparison, ORIGINAL_DOCUMENT } from './documentDiff';
+import { diffDocumentLines, DOCUMENT_COMPARISONS, DOCUMENT_PATH, EXAMPLE_DOCUMENT, getDocumentComparison, ORIGINAL_DOCUMENT } from './documentDiff';
 import { ATTENDANCE_DOCUMENT, ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, MEETING_REVIEWER, MISTAKEN_NOTICE_PATH, SECRET_NOTE_PATH } from './meetingExample';
 
 function deepFreeze<T>(obj: T): T {
@@ -493,9 +493,9 @@ describe('Full stage walkthroughs', () => {
 
     // Calling /api/v3 before VPN login is blocked by guard
     const unauth = executePixelCommand(s, 'gh api /api/v3/user');
-    expect(unauth.lastAnim.kind).toBe('GHES_BLOCK');
+    expect(unauth.lastAnim.kind).toBe('GHES_UNAUTH');
     expect(getNextPendingStep(unauth)?.id).toBe('ch7-block');
-    expect(unauth.ghes.lastFlow).toBe('blocked');
+    expect(unauth.ghes.lastFlow).toBe('unauth');
     expect(unauth.bubbles[0]?.actions?.[0]?.command).toBe(
       'gh auth login --hostname github.corp.internal',
     );
@@ -795,6 +795,266 @@ describe('Git file snapshots', () => {
     state = executePixelCommand(state, 'git reset --hard HEAD');
     state = executePixelCommand(state, 'git checkout main');
     expect(state.files.find((file) => file.name === 'theme.js')?.content).toContain('dark-midnight');
+  });
+});
+
+describe('Review regressions: ordering guards and UX accuracy', () => {
+  it('Docs: adding before diffing does not credit the empty working diff', () => {
+    let state = savePracticeDocument(createStageState('docs'), EXAMPLE_DOCUMENT);
+    state = executePixelCommand(state, 'git add 회의록.md');
+    state = executePixelCommand(state, DOCUMENT_COMPARISONS.working.command);
+    expect(state.completedActions).not.toContain('DOCUMENT_WORKING_DIFF');
+    expect(state.bubbles[0]?.actions?.some((action) => action.command === DOCUMENT_COMPARISONS.staged.command)).toBe(true);
+
+    state = executePixelCommand(state, DOCUMENT_COMPARISONS.staged.command);
+    expect(state.completedActions).toContain('DOCUMENT_WORKING_DIFF');
+    expect(getNextPendingStep(state)?.id).toBe('docs-staged');
+  });
+
+  it('Docs: asks before replacing a hand-written document, and -m keeps every bare word', () => {
+    const custom = ORIGINAL_DOCUMENT.replace('금요일 저녁 7시', '수요일 오후 2시');
+    let state = savePracticeDocument(createStageState('docs'), custom);
+    const blocked = executePixelCommand(state, 'edit 회의록.md');
+    expect(blocked.lastAnim.kind).toBe('IDLE');
+    expect(blocked.files[0]?.content).toBe(custom);
+    expect(blocked.bubbles[0]?.actions?.[0]?.command).toBe('edit 회의록.md --force');
+
+    state = executePixelCommand(state, 'edit 회의록.md --force');
+    expect(state.files[0]?.content).toBe(EXAMPLE_DOCUMENT);
+
+    let ch1 = executePixelCommand(createStageState('ch1'), 'git add .');
+    ch1 = executePixelCommand(ch1, 'git commit -m 모임 시간 수정');
+    expect(ch1.commits.at(-1)?.message).toBe('모임 시간 수정');
+    const missing = executePixelCommand(ch1, 'git commit -m');
+    expect(missing.lastAnim.kind).toBe('IDLE');
+  });
+
+  it('Ch2: unblock restoring an already-unstaged file and warn on sharing-rewound reset', () => {
+    let state = executePixelCommand(createStageState('ch2'), 'git stash');
+    state = executePixelCommand(state, 'git revert HEAD');
+    state = executePixelCommand(state, 'git stash pop');
+    const restored = executePixelCommand(state, `git restore --staged ${SECRET_NOTE_PATH}`);
+    expect(restored.completedActions).toContain('UNSTAGE');
+
+    let shared = createStageState('ch2');
+    shared = executePixelCommand(shared, `git restore --staged ${SECRET_NOTE_PATH}`);
+    shared = executePixelCommand(shared, 'git revert HEAD');
+    shared = executePixelCommand(shared, 'git push');
+    shared = executePixelCommand(shared, 'git reset --soft HEAD~1');
+    expect(shared.bubbles[0]?.message).toContain('팀에 공유한 기록을 되감았어요');
+    expect(shared.bubbles[0]?.actions?.some((action) => action.command === 'git pull origin main')).toBe(true);
+  });
+
+  it('Ch4 H1: blocks main→main and unpushed PRs before creating anything', () => {
+    const initial = createStageState('ch4');
+    const fromMain = executePixelCommand(initial, 'gh pr create --title "빈 PR"');
+    expect(fromMain.lastAnim.kind).toBe('IDLE');
+    expect(fromMain.prs).toEqual([]);
+    expect(fromMain.bubbles[0]?.actions?.[0]?.command).toBe(`git switch -c ${MEETING_PR_BRANCH}`);
+
+    let branchOnly = runSequence('ch4', [
+      `git switch -c ${MEETING_PR_BRANCH}`,
+      'git add 회의록.md',
+      `git commit -m "${MEETING_PR_TITLE}"`,
+    ]);
+    branchOnly = executePixelCommand(branchOnly, 'gh pr create --title "아직 안 올림"');
+    expect(branchOnly.lastAnim.kind).toBe('IDLE');
+    expect(branchOnly.prs).toEqual([]);
+    expect(branchOnly.terminal.at(-1)?.lines[0]?.text).toContain(`${MEETING_PR_BRANCH} 브랜치가 아직 GitHub에 없어요`);
+
+    // branch 생성만으로는 1단계가 완료되지 않아요.
+    const branchCommand = executePixelCommand(createStageState('ch4'), `git branch ${MEETING_PR_BRANCH}`);
+    expect(branchCommand.completedActions).not.toContain('BRANCH');
+    expect(branchCommand.headBranch).toBe('main');
+    expect(branchCommand.bubbles[0]?.actions?.[0]?.command).toBe(`git switch ${MEETING_PR_BRANCH}`);
+  });
+
+  it('Ch4 M2/M3/M6: draft PRs stay locked, unpushed heads do not fall back, and body is kept', () => {
+    const prepared = runSequence('ch4', [
+      `git switch -c ${MEETING_PR_BRANCH}`,
+      'git add 회의록.md',
+      `git commit -m "${MEETING_PR_TITLE}"`,
+      `git push -u origin ${MEETING_PR_BRANCH}`,
+      `gh pr create --title "${MEETING_PR_TITLE}" --body "장소를 2층 모임방으로 바꿨어요."`,
+    ]);
+    expect(prepared.prs[0]?.body).toBe('장소를 2층 모임방으로 바꿨어요.');
+    expect(prepared.terminal.at(-1)?.lines.some((line) => line.text.includes('본문:'))).toBe(true);
+
+    const draft = executePixelCommand(prepared, 'gh pr view --comments');
+    expect(draft.prs[0]?.approved).toBe(true);
+    const withDraft = runSequence('ch4', [
+      `git switch -c ${MEETING_PR_BRANCH}`,
+      'git add 회의록.md',
+      `git commit -m "${MEETING_PR_TITLE}"`,
+      `git push -u origin ${MEETING_PR_BRANCH}`,
+      `gh pr create --title "${MEETING_PR_TITLE}" --draft`,
+    ]);
+    const locked = executePixelCommand(withDraft, 'gh pr merge');
+    expect(locked.lastAnim.kind).toBe('IDLE');
+    expect(locked.prs[0]?.status).toBe('draft');
+
+    // 제목에 -d가 들어가도 초안으로 오판하지 않아요.
+    let titleDash = runSequence('ch4', [
+      `git switch -c ${MEETING_PR_BRANCH}`,
+      'git add 회의록.md',
+      `git commit -m "${MEETING_PR_TITLE}"`,
+      `git push -u origin ${MEETING_PR_BRANCH}`,
+      'gh pr create --title "update -docs"',
+    ]);
+    expect(titleDash.prs[0]?.status).toBe('open');
+
+    // 원격 브랜치가 사라진 상태에서는 로컬 사본으로 대신 병합하지 않아요.
+    const noRemote = {
+      ...draft,
+      remoteBranches: Object.fromEntries(Object.entries(draft.remoteBranches).filter(([name]) => name !== MEETING_PR_BRANCH)),
+    };
+    titleDash = executePixelCommand(noRemote, 'gh pr merge');
+    expect(titleDash.lastAnim.kind).toBe('IDLE');
+    expect(titleDash.bubbles[0]?.message).toContain('로컬 브랜치만으로는 합칠 수 없어요');
+  });
+
+  it('Ch4 M4: fetch reports local-only commits instead of a fake teammate commit', () => {
+    let state: PixelSimState = {
+      ...createStageState('ch4'),
+      branches: { main: 'c2' },
+    };
+    state = executePixelCommand(state, 'git add 회의록.md');
+    state = executePixelCommand(state, 'git commit -m "main에서만 만든 커밋"');
+    state = executePixelCommand(state, 'git fetch');
+    const text = state.terminal.at(-1)?.lines.map((line) => line.text).join('\n') ?? '';
+    expect(text).toContain('내 컴퓨터에만 있는 커밋');
+    expect(text).not.toContain('팀원의 새 커밋');
+  });
+
+  it('Ch5: blocks staging or committing with conflict markers and rejects unknown resolve args', () => {
+    let state = runSequence('ch3', ['git switch -c feat/dark', 'git merge feat/ui']);
+    const addBlocked = executePixelCommand(state, 'git add theme.js');
+    expect(addBlocked.lastAnim.kind).toBe('IDLE');
+    expect(addBlocked.conflict?.resolvedChoice).toBe('none');
+    expect(addBlocked.staged).not.toContain('theme.js');
+
+    const unknown = executePixelCommand(state, 'resolve mine');
+    expect(unknown.lastAnim.kind).toBe('IDLE');
+    expect(unknown.conflict?.resolvedChoice).toBe('none');
+
+    state = executePixelCommand(state, 'resolve both');
+    const commitBlocked = {
+      ...state,
+      index: { ...state.index, 'theme.js': '<<<<<<< HEAD\nexport const theme = "dark-midnight";\n=======\nexport const theme = "sunset-coral";\n>>>>>>> feat/ui\n' },
+      conflict: { ...state.conflict!, resolvedChoice: 'manual' as const },
+    };
+    const blocked = executePixelCommand(commitBlocked, 'git commit');
+    expect(blocked.lastAnim.kind).toBe('IDLE');
+    expect(blocked.commits).toHaveLength(commitBlocked.commits.length);
+  });
+
+  it('Ch6: expiry is separate from scopes and leak demo blocks a real push', () => {
+    let state = executePixelCommand(createStageState('ch6'), 'token fine');
+    expect(state.token.scopes).not.toContain('expires:30d');
+    expect(state.token.expires).toBe('30일 뒤');
+
+    state = executePixelCommand(state, 'token leak-test');
+    const text = state.terminal.at(-1)?.lines.map((line) => line.text).join('\n') ?? '';
+    expect(text).toContain('토큰');
+    expect(text).not.toContain('개인키가');
+    const push = executePixelCommand(state, 'git push');
+    expect(push.lastAnim.kind).toBe('TOKEN_BLOCK');
+  });
+
+  it('Ch7 H1: reports real login state and validates hostnames before success', () => {
+    const initial = createStageState('ch7');
+    const status = executePixelCommand(initial, 'gh auth status');
+    expect(status.lastAnim.kind).toBe('IDLE');
+    expect(status.terminal.at(-1)?.lines.map((line) => line.text).join('\n')).toContain('Not logged in');
+
+    const bare = executePixelCommand(initial, 'gh auth login');
+    expect(bare.lastAnim.kind).toBe('IDLE');
+    expect(bare.ghes.connected).toBe(false);
+    expect(bare.terminal.at(-1)?.lines[0]?.text).toContain('--hostname');
+
+    const external = executePixelCommand(initial, 'gh auth login --hostname github.com');
+    expect(external.lastAnim.kind).toBe('IDLE');
+    expect(external.ghes.connected).toBe(false);
+
+    const typo = executePixelCommand(initial, 'gh auth login --hostname github.corp.internl');
+    expect(typo.lastAnim.kind).toBe('IDLE');
+    expect(typo.ghes.connected).toBe(false);
+
+    // --hostname=값 형태도 인식해요.
+    const loggedIn = executePixelCommand(initial, 'gh auth login --hostname=github.corp.internal');
+    expect(loggedIn.lastAnim.kind).toBe('GHES_LOGIN');
+    expect(loggedIn.ghes.connected).toBe(true);
+
+    const mismatch = executePixelCommand(loggedIn, 'gh api user --hostname other.corp.internal');
+    expect(mismatch.lastAnim.kind).toBe('IDLE');
+    expect(mismatch.bubbles[0]?.title).toContain('서버');
+    expect(mismatch.terminal.at(-1)?.lines[0]?.text).toContain('요청 주소');
+  });
+
+  it('Ch8 H1/H2/H3: guards ai pr, blocks direct main push, and keeps worktree subcommands safe', () => {
+    const initial = createStageState('ch8');
+    const emptyPr = executePixelCommand(initial, 'ai pr');
+    expect(emptyPr.lastAnim.kind).toBe('IDLE');
+    expect(emptyPr.prs).toEqual([]);
+    expect(emptyPr.bubbles[0]?.actions?.[0]?.command).toBe('ai code');
+
+    const directPush = executePixelCommand(initial, 'git push origin main');
+    expect(directPush.lastAnim.kind).toBe('AI_BLOCK_MAIN');
+    expect(directPush.completedActions).not.toContain('PUSH');
+
+    let state = runSequence('ch8', ['git worktree add -b ai/fix wt-ai', 'ai code']);
+    const tip = state.branches['ai/fix'];
+    const list = executePixelCommand(state, 'git worktree list');
+    expect(list.lastAnim.kind).toBe('IDLE');
+    expect(list.branches['ai/fix']).toBe(tip);
+
+    const duplicate = executePixelCommand(state, 'git worktree add -b ai/fix wt-ai');
+    expect(duplicate.lastAnim.kind).toBe('IDLE');
+    expect(duplicate.bubbles[0]?.title).toContain('이미 있는 브랜치');
+
+    const mainTree = executePixelCommand(state, 'git worktree add -b main wt-x');
+    expect(mainTree.lastAnim.kind).toBe('IDLE');
+    expect(mainTree.ai.worktreeBranch).toBe('ai/fix');
+  });
+
+  it('Ch8 M1/M2/M3/M4: merge is idempotent, gh view stays honest, and branch displays agree', () => {
+    let state = runSequence('ch8', [
+      'git worktree add -b ai/fix wt-ai',
+      'ai code',
+      'ai push-main',
+      'ai pr',
+      'ai ready',
+    ]);
+    const draftView = executePixelCommand(state, 'gh pr view --comments');
+    expect(draftView.prs[0]?.approved).toBe(false);
+    expect(draftView.bubbles[0]?.title).toContain('승인');
+
+    state = executePixelCommand(state, 'ai approve');
+    expect(state.ai.merged).toBe(true);
+    const again = executePixelCommand(state, 'ai approve');
+    expect(again.lastAnim.kind).toBe('IDLE');
+    expect(again.commits).toHaveLength(state.commits.length);
+    expect(again.bubbles[0]?.title).toContain('이미 병합');
+
+    const status = executePixelCommand(state, 'git status');
+    const statusText = status.terminal.at(-1)?.lines.map((line) => line.text).join('\n') ?? '';
+    expect(statusText).toContain('On branch main');
+    expect(statusText).toContain('작업 폴더: wt-ai');
+    const branches = executePixelCommand(state, 'git branch');
+    expect(branches.terminal.at(-1)?.lines.some((line) => line.text.startsWith('* main'))).toBe(true);
+  });
+
+  it('Ch5 M6/M7 and Ch1 M4: issue numbers share PR numbers, scopes get Korean help, and autocomplete stays in-stage', () => {
+    const ch5 = executePixelCommand(createStageState('ch5'), 'gh issue create --title "새 버그"');
+    expect(ch5.issues.at(-1)?.number).toBe(13);
+
+    const auth = executePixelCommand(createStageState('ch5'), 'gh auth status');
+    expect(auth.terminal.at(-1)?.lines.some((line) => line.text.includes('repo(저장소 읽기·쓰기)'))).toBe(true);
+
+    const suggestions = getCommandAutocomplete('git s', createStageState('ch1'));
+    expect(suggestions.some((item) => item.cmd === 'git status')).toBe(true);
+    expect(suggestions.some((item) => item.cmd.includes('stash'))).toBe(false);
+    expect(suggestions.some((item) => item.cmd.includes('switch'))).toBe(false);
   });
 });
 

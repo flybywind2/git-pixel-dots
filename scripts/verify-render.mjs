@@ -812,6 +812,44 @@ async function fileCardStates(browser, url) {
   await page.close();
 }
 
+async function reviewRegressions(browser, url) {
+  const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  page.setDefaultTimeout(9000);
+
+  // 4장: main에서는 PR을 열 수 없어요.
+  await openChapter(page, url, 4);
+  await runCommand(page, 'gh pr create --title "빈 PR"');
+  assert.match(await page.getByTestId('speech-bubble').innerText(), /작업 브랜치를 만들어 주세요/);
+
+  // 5장: 충돌 표시가 남은 파일은 add로 조용히 넘어가지 않아요.
+  await openChapter(page, url, 5);
+  await clickGuided(page);
+  await clickGuided(page);
+  await runCommand(page, 'git add theme.js');
+  assert.match(await page.getByTestId('speech-bubble').innerText(), /충돌 표시/);
+
+  // 7장: 로그인 전 상태를 정확히 알려 주고, --hostname 없는 로그인을 가짜 성공 처리하지 않아요.
+  await openChapter(page, url, 8);
+  await runCommand(page, 'gh auth status');
+  assert.match(await page.getByRole('log').innerText(), /Not logged in/);
+  await runCommand(page, 'gh auth login');
+  assert.match(await page.getByTestId('speech-bubble').innerText(), /사내 서버 주소/);
+
+  // 8장: AI 코드 수정 전에는 빈 PR을 만들지 않아요.
+  await openChapter(page, url, 9);
+  await runCommand(page, 'ai pr');
+  assert.match(await page.getByTestId('speech-bubble').innerText(), /먼저 AI가 코드를 고쳐야/);
+
+  // 2장: 커밋 후 status가 아직 공유되지 않은 커밋을 알려 줘요.
+  await openChapter(page, url, 2);
+  await runCommand(page, 'git add .');
+  await runCommand(page, 'git commit -m "공유 대기 확인"');
+  await runCommand(page, 'git status');
+  assert.match(await page.getByRole('log').innerText(), /공유 대기/);
+
+  await page.close();
+}
+
 async function main() {
   fs.mkdirSync(out, { recursive: true });
   const local = publicUrl ? undefined : await startServer();
@@ -867,6 +905,8 @@ async function main() {
     await draftUndoProtection(browser, url);
     await fileCardStates(browser, url);
     console.log('[QA] Draft-safe undo, staged-plus-working cards, multi-stash cards and remote share status passed');
+    await reviewRegressions(browser, url);
+    console.log('[QA] Ordering guards (PR/main, conflict markers, GHES login, AI PR, ahead status) passed');
 
     const link = await browser.newPage();
     await link.goto(url + 'docs/deeper/');
