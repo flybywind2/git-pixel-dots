@@ -17,10 +17,14 @@ export function LessonGuide() {
   const track = lesson.track === 'basic' ? basic : advanced;
   const nextStep = getNextPendingStep(sim);
   const [quiz, setQuiz] = useState<{ stepId: string; picked: 0 | 1 | null } | null>(null);
+  const [introExpanded, setIntroExpanded] = useState(false);
   const nextStepId = nextStep?.id;
   useEffect(() => {
     setQuiz((current) => (current && current.stepId !== nextStepId ? null : current));
   }, [nextStepId]);
+  useEffect(() => {
+    setIntroExpanded(false);
+  }, [sim.stageId]);
   const nextLesson = track.lessons.at(track.lessons.indexOf(lesson) + 1);
   const unfinishedBasic = lesson.track === 'basic' && !nextStep && !nextLesson && basic.lessons.find((item) => {
     const session = sessions[item.id];
@@ -62,7 +66,9 @@ export function LessonGuide() {
     if (saveDraft) {
       saveDocument();
     } else if (editDocument) {
-      document.getElementById('practice-document-editor')?.focus();
+      const editor = document.getElementById('practice-document-editor');
+      editor?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      editor?.focus({ preventScroll: true });
     } else if (nextStep) {
       runCommand(nextStep.command);
       if (lesson.id === 'docs' && nextStep.command.startsWith('git diff ') && !usePixelStore.getState().notice) {
@@ -84,26 +90,41 @@ export function LessonGuide() {
     runNow();
   }
 
+  const introText = nextStep ? lesson.tagline : finishedBasic
+    ? '이제 팀 저장소의 문서를 고치고 변경을 기록한 뒤, GitHub에서 검토를 요청하고 합친 내용을 내 컴퓨터로 가져올 수 있어요. 기본 1~4장만으로도 팀 협업 시작은 충분해요. 5~9장은 선택 심화예요.'
+    : lesson.takeaway;
+
   return (
     <section aria-labelledby="lesson-title" className="shrink-0 border-b border-[#D7C7AE] bg-[#FFFDF8]">
-      <div className="mx-auto grid max-w-[1440px] gap-3 px-4 py-3.5 sm:px-6 lg:grid-cols-[1.35fr_1fr] lg:items-center lg:gap-8 lg:py-5">
+      <div className="mx-auto grid max-w-[1440px] gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3.5 lg:grid-cols-[1.35fr_1fr] lg:items-center lg:gap-8 lg:py-5">
         <div>
-          <p className="mb-1 text-xs font-semibold text-[#80613B]">{track.label} · {lesson.number}장</p>
-          <h1 id="lesson-title" className="break-keep text-xl font-bold leading-tight tracking-tight sm:text-2xl">{lesson.title}</h1>
-          <p className="mt-1.5 max-w-[68ch] break-keep text-sm leading-relaxed text-[#59483B]">
-            {nextStep ? lesson.tagline : finishedBasic
-              ? '이제 팀 저장소의 문서를 고치고 변경을 기록한 뒤, GitHub에서 검토를 요청하고 합친 내용을 내 컴퓨터로 가져올 수 있어요. 기본 1~4장만으로도 팀 협업 시작은 충분해요. 5~9장은 선택 심화예요.'
-              : lesson.takeaway}
-          </p>
+          <p className="mb-0.5 text-xs font-semibold text-[#80613B] sm:mb-1">{track.label} · {lesson.number}장</p>
+          <h1 id="lesson-title" className="break-keep text-lg font-bold leading-tight tracking-tight sm:text-2xl">{lesson.title}</h1>
+          <div className="mt-1 flex items-start gap-1.5 sm:mt-1.5 sm:block">
+            <p className={`min-w-0 flex-1 max-w-[68ch] break-keep text-xs leading-relaxed text-[#59483B] sm:text-sm ${introExpanded ? '' : 'line-clamp-1 sm:line-clamp-none'}`}>
+              {introText}
+            </p>
+            <button
+              type="button"
+              onClick={() => setIntroExpanded((open) => !open)}
+              aria-expanded={introExpanded}
+              className="shrink-0 text-xs font-semibold text-[#166447] underline sm:hidden"
+            >
+              {introExpanded ? '접기' : '더 보기'}
+            </button>
+          </div>
           {!(quiz && quiz.stepId === nextStep?.id) && (
-            <p className="mt-1.5 text-xs text-[#715A43]">이 브라우저 안의 가상 실습이에요. 실제 GitHub에는 반영되지 않아요.</p>
+            <p className={`${introExpanded ? 'mt-1 block' : 'hidden sm:mt-1.5 sm:block'} text-xs text-[#715A43]`}>
+              이 브라우저 안의 가상 실습이에요. 실제 GitHub에는 반영되지 않아요.
+            </p>
           )}
           {lesson.track === 'advanced' && (
-            <p className="mt-1 text-xs text-[#715A43]">선택 심화 과정이에요. 기본 1~4장만 완주해도 팀 협업의 기본은 충분해요.</p>
+            <p className={`${introExpanded ? 'mt-1 block' : 'hidden sm:mt-1 sm:block'} text-xs text-[#715A43]`}>
+              선택 심화 과정이에요. 기본 1~4장만 완주해도 팀 협업의 기본은 충분해요.
+            </p>
           )}
-          {(lesson.id === 'docs' || lesson.id === 'ch4') && !nextStep && <GitHubWebGuide />}
         </div>
-        <div className="min-w-0 border-l-[3px] border-[#D69724] pl-3.5">
+        <div className="min-w-0 border-l-[3px] border-[#D69724] pl-3 sm:pl-3.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-[#715A43]" aria-live="polite">
             {phaseGroups ? (
               <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -130,7 +151,7 @@ export function LessonGuide() {
           </div>
           {label ? (
             <>
-              {nextStep && !saveDraft && <p className="mt-1.5 break-keep text-sm">{nextStep.goal}</p>}
+              {nextStep && !saveDraft && <p className="mt-1 break-keep text-sm sm:mt-1.5">{nextStep.goal}</p>}
               {docDiffDone && (
                 <p role="status" className="mt-1 text-xs font-semibold text-[#196446]">
                   {docRemoved + docAdded > 0
@@ -139,7 +160,7 @@ export function LessonGuide() {
                 </p>
               )}
               {nextStep?.prediction && quiz && quiz.stepId === nextStep.id && (
-                <div data-testid="prediction-quiz" className="mt-2 rounded-md border border-[#C9B8E8] bg-[#F5F0FB] px-2.5 py-1.5 text-xs leading-normal text-[#4A3670]">
+                <div data-testid="prediction-quiz" className="mt-1.5 rounded-md border border-[#C9B8E8] bg-[#F5F0FB] px-2.5 py-1.5 text-xs leading-normal text-[#4A3670] sm:mt-2">
                   <p className="font-semibold text-[#5B3E9E]">잠깐! 실행 전에 예측해 봐요</p>
                   <p className="mt-0.5 break-keep">{nextStep.prediction.question}</p>
                   {quiz.picked === null ? (
@@ -174,22 +195,29 @@ export function LessonGuide() {
                 data-testid="guided-command"
                 onClick={runGuidedStep}
                 disabled={awaitingPick}
-                className="pixel-btn mt-2 inline-flex max-w-full items-center gap-2 rounded-md border-[#C78B1E] bg-[#F4B942] px-3 py-1.5 text-left text-sm font-bold text-[#362711] hover:bg-[#F7C55D]"
+                className="pixel-btn mt-1.5 inline-flex max-w-full items-center gap-2 rounded-md border-[#C78B1E] bg-[#F4B942] px-3 py-1.5 text-left text-sm font-bold text-[#362711] hover:bg-[#F7C55D] sm:mt-2"
               >
                 <ButtonIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
                 <span className="break-keep">{label}</span>
               </button>
               {nextStep && !editDocument && !saveDraft && (
-                <div className="mt-2 text-xs text-[#715A43]">
-                  <p>
+                <div className="mt-1.5 text-xs text-[#715A43] sm:mt-2">
+                  <p className="flex flex-wrap items-center gap-1.5">
                     <code className="font-mono-code break-words">{nextStep.command}</code>
-                    {isPracticeCommand(nextStep.command) && <span className="ml-2">실습 전용</span>}
+                    {isPracticeCommand(nextStep.command) && (
+                      <span
+                        title="이 실습 앱에서만 동작하는 체험용 명령어예요"
+                        className="inline-flex items-center rounded-full border border-[#D4B47C] bg-[#F7E7C4] px-2 py-0.5 text-[10px] font-semibold leading-none text-[#79521D]"
+                      >
+                        실습 체험용 명령
+                      </span>
+                    )}
                   </p>
                   {nextStep.commandNote && <p className="mt-1 break-keep leading-relaxed">{nextStep.commandNote}</p>}
                 </div>
               )}
               {stepTerms.length > 0 && (
-                <dl data-testid="step-terms" className="mt-2 space-y-1 rounded-md border border-[#E3D5BE] bg-[#F9F3E8] px-2.5 py-1.5 text-xs leading-relaxed text-[#59483B]">
+                <dl data-testid="step-terms" className="mt-1.5 space-y-1 rounded-md border border-[#E3D5BE] bg-[#F9F3E8] px-2.5 py-1.5 text-xs leading-relaxed text-[#59483B] sm:mt-2">
                   {stepTerms.map(({ name, meaning }) => (
                     <div key={name} className="break-keep">
                       <dt className="inline font-semibold text-[#14694F]">{name}</dt>
@@ -220,18 +248,23 @@ export function LessonGuide() {
           )}
         </div>
       </div>
-      {lesson.terms.length > 0 && (
-        <details data-testid="all-terms" className="mx-auto max-w-[1440px] px-4 pb-3 sm:px-6">
-          <summary className="cursor-pointer text-xs font-semibold text-[#166447]">이 장에서 쓰는 용어 전체 보기</summary>
-          <dl className="mt-1.5 max-w-[68ch] space-y-1 rounded-md border border-[#DED1B8] bg-[#F9F3E8] px-2.5 py-2 text-xs leading-relaxed text-[#59483B]">
-            {lesson.terms.map(({ name, meaning }) => (
-              <div key={name} className="break-keep">
-                <dt className="inline font-semibold text-[#14694F]">{name}</dt>
-                <dd className="inline"> — {meaning}</dd>
-              </div>
-            ))}
-          </dl>
-        </details>
+      {(lesson.terms.length > 0 || lesson.id === 'docs' || lesson.id === 'ch4') && (
+        <div className="mx-auto flex max-w-[1440px] flex-wrap items-start gap-x-5 gap-y-1.5 px-3 pb-2 sm:px-6 sm:pb-3">
+          {lesson.terms.length > 0 && (
+            <details data-testid="all-terms">
+              <summary className="cursor-pointer text-xs font-semibold text-[#166447]">이 장에서 쓰는 용어 전체 보기</summary>
+              <dl className="mt-1.5 max-w-[68ch] space-y-1 rounded-md border border-[#DED1B8] bg-[#F9F3E8] px-2.5 py-2 text-xs leading-relaxed text-[#59483B]">
+                {lesson.terms.map(({ name, meaning }) => (
+                  <div key={name} className="break-keep">
+                    <dt className="inline font-semibold text-[#14694F]">{name}</dt>
+                    <dd className="inline"> — {meaning}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          )}
+          {(lesson.id === 'docs' || lesson.id === 'ch4') && <GitHubWebGuide />}
+        </div>
       )}
     </section>
   );
@@ -239,25 +272,28 @@ export function LessonGuide() {
 
 function GitHubWebGuide() {
   return (
-    <details className="mt-2 max-w-[68ch] rounded-md border border-[#DED1B8] bg-[#F9F3E8] px-2.5 text-xs">
-      <summary className="cursor-pointer py-1.5 font-semibold text-[#166447]">GitHub 웹에서 이어 하기 (실제 GitHub에서 써보기)</summary>
-      <ol className="mb-2 ml-4 list-decimal space-y-1.5 break-keep leading-relaxed text-[#59483B]">
-        <li>저장소에서 문서를 열고 연필 버튼으로 편집해요. <strong>Preview</strong>에서 문서가 어떻게 보이는지 확인해요.</li>
-        <li><strong>Commit changes</strong>에서 변경 이유를 적고 새 브랜치에 기록해요. 쓰기 권한이 없는 저장소에서는 포크(다른 사람 저장소를 내 계정으로 복사)를 만들어 <strong>Propose changes</strong>로 변경을 제안할 수 있어요.</li>
-        <li><strong>Compare &amp; pull request</strong>에서 변경을 확인하고 <strong>Create pull request</strong>로 팀에 검토를 요청해요.</li>
-      </ol>
-      <p className="mb-2 break-keep leading-relaxed text-[#715A43]">
-        Preview·Commit changes·Compare &amp; pull request는 실제 GitHub 화면의 버튼이에요. 이 실습에서는 명령으로 같은 일을 해요.
-      </p>
-      <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 font-medium text-[#166447]">
-        <a className="underline" target="_blank" rel="noopener noreferrer"
-          href="https://docs.github.com/ko/repositories/working-with-files/managing-files/editing-files">
-          GitHub 문서 편집 도움말<span className="sr-only"> (새 탭)</span>
-        </a>
-        <a className="underline" target="_blank" rel="noopener noreferrer"
-          href="https://docs.github.com/ko/pull-requests/how-tos/create-pull-requests/creating-a-pull-request">
-          GitHub 검토 요청 도움말<span className="sr-only"> (새 탭)</span>
-        </a>
+    <details data-testid="github-web-guide" className="max-w-[68ch] text-xs">
+      <summary className="cursor-pointer font-semibold text-[#166447]">GitHub 웹에서 이어 하기 (실제 GitHub 화면 대응)</summary>
+      <div className="mt-1.5 rounded-md border border-[#DED1B8] bg-[#F9F3E8] px-2.5 py-2">
+        <ol className="mb-2 ml-4 list-decimal space-y-1.5 break-keep leading-relaxed text-[#59483B]">
+          <li>저장소에서 문서를 열고 연필 버튼으로 편집해요. <strong>Preview</strong>에서 문서가 어떻게 보이는지 확인해요.</li>
+          <li><strong>Commit changes</strong>에서 변경 이유를 적고 새 브랜치에 기록해요. 쓰기 권한이 없는 저장소에서는 포크(다른 사람 저장소를 내 계정으로 복사)를 만들어 <strong>Propose changes</strong>로 변경을 제안할 수 있어요.</li>
+          <li><strong>Compare &amp; pull request</strong>에서 변경을 확인하고 <strong>Create pull request</strong>로 팀에 검토를 요청해요.</li>
+          <li>리뷰 화면의 <strong>Files changed → Review changes → Approve</strong>로 승인하고, 하단의 <strong>Merge pull request</strong> 버튼으로 합쳐요.</li>
+        </ol>
+        <p className="mb-2 break-keep leading-relaxed text-[#715A43]">
+          Preview·Commit changes·Compare &amp; pull request·Merge pull request는 실제 GitHub 웹사이트 버튼이에요. 이 실습에서는 명령으로 같은 일을 해요.
+        </p>
+        <div className="flex flex-wrap gap-x-3 gap-y-1 font-medium text-[#166447]">
+          <a className="underline" target="_blank" rel="noopener noreferrer"
+            href="https://docs.github.com/ko/repositories/working-with-files/managing-files/editing-files">
+            GitHub 문서 편집 도움말<span className="sr-only"> (새 탭)</span>
+          </a>
+          <a className="underline" target="_blank" rel="noopener noreferrer"
+            href="https://docs.github.com/ko/pull-requests/how-tos/create-pull-requests/creating-a-pull-request">
+            GitHub 검토 요청 도움말<span className="sr-only"> (새 탭)</span>
+          </a>
+        </div>
       </div>
     </details>
   );

@@ -79,7 +79,11 @@ export function HelpDrawer() {
                   <li key={cmd} className="flex items-center gap-3 rounded-lg border border-[#D8C9B0] bg-[#FFFDF8] p-3">
                     <div className="min-w-0 flex-1">
                       <code className="font-mono-code break-all text-sm font-semibold text-[#14694F]">{cmd}</code>
-                      {isPracticeCommand(cmd) && <span className="ml-2 inline-block text-xs text-[#79521D]">실습 전용</span>}
+                      {isPracticeCommand(cmd) && (
+                        <span className="ml-2 inline-flex items-center rounded-full border border-[#D4B47C] bg-[#F7E7C4] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-[#79521D]">
+                          실습 전용
+                        </span>
+                      )}
                       <p className="mt-1 break-keep text-sm leading-relaxed text-[#59483B]">{desc}</p>
                     </div>
                     {group.id === stageId ? (

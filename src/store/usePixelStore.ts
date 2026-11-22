@@ -33,6 +33,7 @@ export type PracticeConfirmation =
 export interface PixelStore extends PracticeSession {
   stageId: StageId;
   sessions: Partial<Record<StageId, PracticeSession>>;
+  undoStacks: Partial<Record<StageId, PracticeSession[]>>;
   saveIssues: Partial<Record<StageId, PracticeSaveIssue>>;
   history: string[];
   helpOpen: boolean;
@@ -42,6 +43,7 @@ export interface PixelStore extends PracticeSession {
 
   setStage: (id: StageId) => void;
   runCommand: (cmd: string) => void;
+  undoStep: () => void;
   resetStage: () => void;
   resetStageImmediately: () => void;
   setDocumentDraft: (text: string) => void;
@@ -53,8 +55,24 @@ export interface PixelStore extends PracticeSession {
   adoptExternalSession: (id: StageId, session: PracticeSession) => void;
 }
 
+const MAX_UNDO_STEPS = 20;
+
 function freshSession(id: StageId): PracticeSession {
   return { sim: createStageState(id), documentDraft: null };
+}
+
+function pushUndoSnapshot(state: PixelStore) {
+  const stack = state.undoStacks[state.stageId] ?? [];
+  const snapshot: PracticeSession = { sim: state.sim, documentDraft: state.documentDraft };
+  return {
+    ...state.undoStacks,
+    [state.stageId]: [...stack.slice(-(MAX_UNDO_STEPS - 1)), snapshot],
+  };
+}
+
+function clearUndoStack(state: PixelStore) {
+  if (!state.undoStacks[state.stageId]?.length) return state.undoStacks;
+  return { ...state.undoStacks, [state.stageId]: [] };
 }
 
 function applySession(state: PixelStore, sim: PixelSimState, documentDraft: string | null, defer = false) {
@@ -73,8 +91,14 @@ function applyDocumentDraft(state: PixelStore, text: string, defer = false) {
 function execute(state: PixelStore, command: string) {
   const sim = executePixelCommand(state.sim, command);
   const last = state.history.at(-1);
+  const changed = sim.lastAnim.kind !== 'IDLE'
+    || sim.completedActions.length !== state.sim.completedActions.length
+    || sim.document?.comparison !== state.sim.document?.comparison
+    || sim.files !== state.sim.files
+    || sim.commits.length !== state.sim.commits.length;
   return {
     ...applySession(state, sim, state.documentDraft),
+    undoStacks: changed ? pushUndoSnapshot(state) : state.undoStacks,
     history: last === command ? state.history : [...state.history.slice(-49), command],
   };
 }
@@ -86,6 +110,7 @@ export const usePixelStore = create<PixelStore>((set) => ({
   ...(sessions[initialStage] ?? freshSession(initialStage)),
   stageId: initialStage,
   sessions,
+  undoStacks: {},
   saveIssues,
   history: [],
   helpOpen: false,
@@ -122,11 +147,25 @@ export const usePixelStore = create<PixelStore>((set) => ({
     return execute(state, command);
   }),
 
+  undoStep: () => set((state) => {
+    const stack = state.undoStacks[state.stageId];
+    if (!stack || stack.length === 0) return state;
+    const previous = stack[stack.length - 1];
+    const nextStack = stack.slice(0, -1);
+    return {
+      ...applySession(state, previous.sim, previous.documentDraft),
+      undoStacks: { ...state.undoStacks, [state.stageId]: nextStack },
+    };
+  }),
+
   resetStage: () => set({ confirmation: { kind: 'lesson-reset' } }),
 
   resetStageImmediately: () => set((state) => {
     clearLegacyPracticeSessions(state.stageId);
-    return applySession(state, createStageState(state.stageId), null);
+    return {
+      ...applySession(state, createStageState(state.stageId), null),
+      undoStacks: clearUndoStack(state),
+    };
   }),
 
   resolveConfirmation: (confirmed) => set((state) => {
@@ -134,7 +173,10 @@ export const usePixelStore = create<PixelStore>((set) => ({
     if (state.confirmation.kind === 'hard-reset') return execute(state, state.confirmation.command);
     if (state.confirmation.kind === 'replace-draft') return applyDocumentDraft(state, EXAMPLE_DOCUMENT);
     clearLegacyPracticeSessions(state.stageId);
-    return applySession(state, createStageState(state.stageId), null);
+    return {
+      ...applySession(state, createStageState(state.stageId), null),
+      undoStacks: clearUndoStack(state),
+    };
   }),
 
   setDocumentDraft: (text) => set((state) => applyDocumentDraft(state, text, true)),
@@ -150,7 +192,10 @@ export const usePixelStore = create<PixelStore>((set) => ({
     if (state.documentDraft === null) return state;
     const sim = savePracticeDocument(state.sim, state.documentDraft);
     const saved = sim.lastAnim.kind === 'EDIT' || getDocumentWorkingText(sim) === state.documentDraft;
-    return applySession(state, sim, saved ? null : state.documentDraft);
+    return {
+      ...applySession(state, sim, saved ? null : state.documentDraft),
+      undoStacks: saved ? pushUndoSnapshot(state) : state.undoStacks,
+    };
   }),
 
   setHelpOpen: (open) => set({ helpOpen: open }),

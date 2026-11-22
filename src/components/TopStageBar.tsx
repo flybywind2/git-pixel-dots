@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, RotateCcw } from 'lucide-react';
+import { BookOpen, RotateCcw, Undo2 } from 'lucide-react';
 import { getNextPendingStep, isStepCompleted, STAGE_MAP, STAGE_SCENARIOS, STAGE_TRACKS } from '../engine';
 import { CertificateModal } from './CertificateModal';
 import { readCertificateMeta, writeCertificateMeta } from '../store/certificateMeta';
@@ -12,7 +12,9 @@ const [basic, advanced] = STAGE_TRACKS;
 export function TopStageBar() {
   const stageId = usePixelStore((state) => state.stageId);
   const sessions = usePixelStore((state) => state.sessions);
+  const undoCount = usePixelStore((state) => state.undoStacks[state.stageId]?.length ?? 0);
   const setStage = usePixelStore((state) => state.setStage);
+  const undoStep = usePixelStore((state) => state.undoStep);
   const resetStage = usePixelStore((state) => state.resetStage);
   const setHelpOpen = usePixelStore((state) => state.setHelpOpen);
   const inAdvanced = STAGE_MAP[stageId].track === 'advanced';
@@ -56,8 +58,8 @@ export function TopStageBar() {
   }
 
   return (
-    <header className="grid shrink-0 grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 border-b-2 border-[#D7C7AE] bg-[#EFE6D5] px-3 py-2 sm:px-4 lg:grid-cols-[auto_minmax(0,1fr)_auto]">
-      <a href={chapterHash('docs')} className="col-start-1 row-start-1 inline-flex w-fit items-center gap-2 rounded-sm font-pixel text-sm">
+    <header className="grid shrink-0 grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1.5 border-b-2 border-[#D7C7AE] bg-[#EFE6D5] px-3 py-1.5 sm:gap-x-3 sm:gap-y-2 sm:px-4 sm:py-2 lg:grid-cols-[auto_minmax(0,1fr)_auto]">
+      <a href={chapterHash('docs')} className="col-start-1 row-start-1 inline-flex w-fit items-center gap-1.5 rounded-sm font-pixel text-sm sm:gap-2">
         <span aria-hidden="true" className="grid h-5 w-5 grid-cols-2 gap-0.5 rounded-[4px] border border-[#C7B497] bg-[#FFFDF8] p-[3px]">
           <span className="rounded-[1px] bg-[#22A882]" />
           <span className="rounded-[1px] bg-[#F2A93B]" />
@@ -90,12 +92,12 @@ export function TopStageBar() {
           value={stageId}
           aria-label="학습할 장 선택"
           onChange={(event) => changeStage(event.target.value)}
-          className="w-full min-w-0 rounded-md border border-[#C7B497] bg-[#FFFDF8] px-2 py-1.5 text-sm font-semibold lg:hidden"
+          className="w-full min-w-0 rounded-md border border-[#C7B497] bg-[#FFFDF8] px-2 py-1 text-sm font-semibold sm:py-1.5 lg:hidden"
         >
           {STAGE_TRACKS.map((track) => <optgroup key={track.id} label={track.label}>{track.lessons.map(lessonOption)}</optgroup>)}
         </select>
-        <div className="hidden items-center justify-center gap-1.5 whitespace-nowrap lg:flex">
-          <span className="mr-1 text-xs font-semibold text-[#715A43]">{basic.label}</span>
+        <div className="hidden items-center justify-center gap-1 whitespace-nowrap lg:flex xl:gap-1.5">
+          <span className="mr-0.5 hidden text-xs font-semibold text-[#715A43] xl:inline">{basic.label}</span>
           {basic.lessons.map((lesson) => {
             const active = lesson.id === stageId;
             return (
@@ -104,7 +106,7 @@ export function TopStageBar() {
                 href={chapterHash(lesson.id)}
                 data-testid={`stage-pill-${lesson.id}`}
                 aria-current={active ? 'page' : undefined}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs ${active
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs ${active
                   ? 'border-[#C98A1B] bg-[#F4B942] font-bold'
                   : 'border-[#D8C9B0] bg-[#FAF4E8] text-[#5D4C3E] hover:bg-[#FFFDF8]'}`}
               >
@@ -123,7 +125,7 @@ export function TopStageBar() {
             value={inAdvanced ? stageId : ''}
             aria-label="심화 실습 선택"
             onChange={(event) => changeStage(event.target.value)}
-            className={`ml-1 w-41 rounded-md border px-2 py-1 text-xs font-semibold ${inAdvanced
+            className={`ml-0.5 w-36 rounded-md border px-1.5 py-1 text-xs font-semibold xl:ml-1 xl:w-41 xl:px-2 ${inAdvanced
               ? 'border-[#C98A1B] bg-[#F4B942]' : 'border-[#D8C9B0] bg-[#FFFDF8]'}`}
           >
             <option value="" disabled>{advanced.label}</option>
@@ -132,16 +134,28 @@ export function TopStageBar() {
         </div>
       </nav>
 
-      <div className="col-start-2 row-start-1 flex justify-end gap-1.5 lg:col-start-3">
+      <div className="col-start-2 row-start-1 flex justify-end gap-1 sm:gap-1.5 lg:col-start-3">
+        <button
+          type="button"
+          data-testid="undo-step-btn"
+          onClick={undoStep}
+          disabled={undoCount === 0}
+          title={undoCount > 0 ? '이전 단계로 되돌리기' : '되돌릴 이전 단계가 없어요'}
+          className="flex min-h-8 items-center gap-1 rounded-md border border-[#D4C3A8] bg-[#FAF4E8] px-1.5 text-xs font-medium hover:bg-[#FFFDF8] disabled:cursor-not-allowed disabled:opacity-45 sm:px-2"
+        >
+          <Undo2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+          <span className="hidden sm:inline">이전 단계로</span>
+          <span className="sm:hidden">되돌리기</span>
+        </button>
         <button type="button" onClick={resetStage} title="현재 장 초기화"
-          className="flex min-h-8 items-center gap-1 rounded-md border border-[#D4C3A8] bg-[#FAF4E8] px-2 text-xs font-medium">
-          <RotateCcw aria-hidden="true" className="h-3.5 w-3.5" />
-          현재 장 초기화
+          className="flex min-h-8 items-center gap-1 rounded-md border border-[#D4C3A8] bg-[#FAF4E8] px-1.5 text-xs font-medium hover:bg-[#FFFDF8] sm:px-2">
+          <RotateCcw aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+          <span className="sr-only min-[460px]:not-sr-only">현재 장 </span>초기화
         </button>
         <button type="button" onClick={() => setHelpOpen(true)} title="명령어 사전 열기"
-          className="flex min-h-8 items-center gap-1 rounded-md border border-[#D4C3A8] bg-[#FAF4E8] px-2 text-xs font-medium">
-          <BookOpen aria-hidden="true" className="h-3.5 w-3.5 text-[#965B0D]" />
-          <span className="hidden min-[360px]:inline">명령어 </span>사전
+          className="flex min-h-8 items-center gap-1 rounded-md border border-[#D4C3A8] bg-[#FAF4E8] px-1.5 text-xs font-medium hover:bg-[#FFFDF8] sm:px-2">
+          <BookOpen aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-[#965B0D]" />
+          <span className="sr-only min-[460px]:not-sr-only">명령어 </span>사전
         </button>
       </div>
       <CertificateModal open={certificateOpen} onClose={() => setCertificateOpen(false)} completed={grass.map((cell) => cell.complete)} allComplete={allComplete} />

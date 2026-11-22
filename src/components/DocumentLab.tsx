@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FileText, GitCompareArrows } from 'lucide-react';
 import {
   diffDocumentLines,
@@ -27,10 +27,14 @@ export function DocumentLab() {
   const loadExample = usePixelStore((s) => s.loadExampleDocument);
   const saveDocument = usePixelStore((s) => s.saveDocument);
   const runCommand = usePixelStore((s) => s.runCommand);
+  const [pendingCompare, setPendingCompare] = useState<DocumentComparison | null>(null);
   const conflict = sim.conflict;
   const working = getDocumentWorkingText(sim);
   const text = draft ?? working;
   const unsaved = text !== working;
+  useEffect(() => {
+    if (!unsaved) setPendingCompare(null);
+  }, [unsaved]);
   const mode = sim.document?.comparison ?? 'working';
   const view = DOCUMENT_COMPARISONS[mode];
   // 담은 뒤 문서를 또 고치면 비교 기준은 원래 초안이 아니라 담아 둔 문서예요.
@@ -48,11 +52,27 @@ export function DocumentLab() {
   const removals = lines.filter((line) => line.kind === 'removed').length;
 
   const staged = sim.staged.includes(DOCUMENT_PATH);
-  let fileStatus = staged ? '다음 커밋에 담김' : '최근 커밋과 같음';
+  let fileStatus = staged ? '장바구니에 담김' : '최근 커밋과 같음';
   if (working !== treeEntry(sim.index, DOCUMENT_PATH)) {
-    fileStatus = staged ? '스테이징한 뒤 추가로 수정됨' : '작업 문서에 저장됨';
+    fileStatus = staged ? '장바구니에 담은 뒤 추가 수정됨' : '작업 문서에 저장됨';
   }
   if (unsaved) fileStatus = '저장할 수정이 있어요';
+
+  function handleSelectComparison(item: DocumentComparison) {
+    if (unsaved) {
+      setPendingCompare(item);
+      return;
+    }
+    setPendingCompare(null);
+    runCommand(DOCUMENT_COMPARISONS[item].command);
+  }
+
+  function handleSaveAndCompare() {
+    const target = pendingCompare ?? mode;
+    saveDocument();
+    runCommand(DOCUMENT_COMPARISONS[target].command);
+    setPendingCompare(null);
+  }
 
   // 충돌 안내 영역이 이미 제공하는 버튼은 말풍선에서 중복해서 보여 주지 않아요.
   const conflictCommands = new Set(conflict?.revert ? ['resolve ours', 'resolve theirs', 'git revert --continue', 'git revert --abort'] : []);
@@ -149,7 +169,7 @@ export function DocumentLab() {
               disabled={!unsaved}
               className="min-h-9 rounded-md border border-[#B68223] bg-[#F4B942] px-3 py-1.5 text-sm font-bold hover:bg-[#F7C55D] disabled:border-[#DDD0BB] disabled:bg-[#EEE5D5] disabled:text-[#746453]"
             >
-              문서 저장
+              문서 저장하기
             </button>
           </footer>
         </form>
@@ -171,7 +191,7 @@ export function DocumentLab() {
                   type="button"
                   key={item}
                   aria-pressed={item === mode}
-                  onClick={() => runCommand(DOCUMENT_COMPARISONS[item].command)}
+                  onClick={() => handleSelectComparison(item)}
                   className="min-h-9 rounded-md border border-[#CDBCA3] bg-[#FFFDF8] px-3 text-xs font-semibold text-[#59483B] hover:border-[#987855] aria-pressed:border-[#4D8C6E] aria-pressed:bg-[#E2F3E8] aria-pressed:text-[#145439]"
                 >
                   {DOCUMENT_COMPARISONS[item].label}
@@ -179,6 +199,24 @@ export function DocumentLab() {
               ))}
             </div>
           </header>
+          {unsaved && pendingCompare !== null && (
+            <div
+              role="status"
+              data-testid="unsaved-compare-banner"
+              className="flex flex-wrap items-center justify-between gap-2 border-b border-[#DDBE8A] bg-[#FFF2D7] px-4 py-2.5 text-xs text-[#73450E]"
+            >
+              <p className="break-keep font-semibold">
+                편집 중인 내용을 먼저 저장해야 ‘{DOCUMENT_COMPARISONS[pendingCompare].label}’ 탭에서 비교할 수 있어요.
+              </p>
+              <button
+                type="button"
+                onClick={handleSaveAndCompare}
+                className="pixel-btn shrink-0 rounded-md border-[#C78B1E] bg-[#F4B942] px-2.5 py-1 text-xs font-bold text-[#362711] hover:bg-[#F7C55D]"
+              >
+                지금 저장하고 비교하기
+              </button>
+            </div>
+          )}
           <div className="border-b border-[#E9DFCE] px-4 py-3">
             <p className="text-sm font-semibold">{beforeLabel} 기준으로 {view.after} 비교</p>
             <code className="font-mono-code break-words text-xs text-[#705638]">{view.command}</code>
@@ -187,7 +225,9 @@ export function DocumentLab() {
             {!comparison
               ? '문서를 커밋하면 이전 기록과 비교할 수 있어요.'
               : lines.length === 0
-                ? view.empty
+                ? mode === 'working' && staged
+                  ? '작업 문서와 장바구니 내용이 같아요. 방금 담은 변경은 ‘담아 둔 변경’ 탭에서 확인할 수 있어요.'
+                  : view.empty
                 : <><span className="font-semibold text-[#8C2630]">− 빠진 줄 {removals}개</span><span className="mx-2" aria-hidden="true">·</span><span className="font-semibold text-[#155C40]">+ 들어간 줄 {additions}개</span></>}
           </div>
           {lines.length > 0 && (

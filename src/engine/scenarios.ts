@@ -38,7 +38,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
           answer: 0,
           explain: 'add는 내 컴퓨터 안의 장바구니에 담기만 해요. 팀에게 공유하려면 push가 필요해요. push는 2장에서 배워요.',
         } },
-      { id: 'docs-staged', label: '담아 둔 변경 확인하기', goal: '다음 커밋에 들어갈 줄 확인하기', command: staged.command, doneAction: staged.action, terms: ['스테이징 영역', '커밋'], commandNote: '--staged는 장바구니(스테이징)에 담은 변경 기준이에요.' },
+      { id: 'docs-staged', label: '담아 둔 변경 확인하기', goal: '장바구니에 잘 담겼는지 최근 커밋과 비교해 최종 점검하기', command: staged.command, doneAction: staged.action, terms: ['스테이징 영역', '커밋'], commandNote: 'git add 뒤에는 바뀐 줄 탭이 비어 보여요. --staged 옵션으로 장바구니(스테이징)에 담긴 줄을 확인해요.' },
       { id: 'docs-commit', label: '기록 남기기', goal: '스테이징 영역의 문서를 새 커밋에 기록하기', command: 'git commit -m "모임 안내 수정"', doneAction: 'COMMIT', terms: ['커밋'], commandNote: '-m 뒤에 기록 설명 메시지를 적어요.',
         prediction: {
           question: '기록 남기기(git commit) 뒤, 팀이 GitHub에서 볼 수 있을까요?',
@@ -293,7 +293,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: `gh pr create --title "${MEETING_PR_TITLE}" --body "장소를 2층 모임방으로 바꿨어요. 검토 부탁해요!"`,
         doneAction: 'PR_CREATE',
         terms: ['gh', '풀 리퀘스트(PR)'],
-        commandNote: '--title은 제목, --body는 변경 이유를 적는 본문이에요.',
+        commandNote: '--title은 제목, --body는 변경 이유를 적는 본문이에요. GitHub 웹에서는 Compare & pull request → Create pull request 버튼과 같아요.',
       },
       {
         id: 'ch4-review',
@@ -302,7 +302,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'gh pr view --comments',
         doneAction: 'PR_REVIEW',
         terms: ['승인'],
-        commandNote: '--comments를 붙이면 리뷰 의견까지 볼 수 있어요. 실제로는 팀원이 확인할 때까지 기다리지만, 이 실습에서는 바로 승인돼요.',
+        commandNote: '--comments를 붙이면 리뷰 의견까지 볼 수 있어요. GitHub 웹에서는 PR 화면의 Files changed → Review changes → Approve(승인)에 해당해요. 이 실습에서는 바로 승인돼요.',
       },
       {
         id: 'ch4-pr-merge',
@@ -311,7 +311,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'gh pr merge',
         doneAction: 'PR_MERGE',
         terms: ['풀 리퀘스트(PR)'],
-        commandNote: '실제 gh는 합치는 방식과 브랜치 삭제 여부를 물어봐요. 이 실습에서는 바로 합쳐요.',
+        commandNote: 'GitHub 웹에서는 PR 하단의 초록색 Merge pull request 버튼과 같아요. 실제 gh는 합치는 방식과 브랜치 삭제 여부를 물어보지만, 이 실습에서는 바로 합쳐요.',
         prediction: {
           question: '검토한 변경 합치기(gh pr merge)는 어디의 main에 합치나요?',
           choices: ['GitHub의 main', '내 컴퓨터의 main'],
@@ -529,6 +529,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'token classic',
         doneAction: 'TOKEN_CLASSIC',
         terms: ['개인 액세스 토큰(PAT)'],
+        commandNote: 'token classic은 GitDots 체험용 명령이에요. 실제로는 GitHub 웹(Settings → Developer settings)에서 토큰 권한을 확인해요.',
       },
       {
         id: 'ch6-fine',
@@ -537,6 +538,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'token fine',
         doneAction: 'TOKEN_FINE',
         terms: ['개인 액세스 토큰(PAT)'],
+        commandNote: 'token fine은 체험용 명령이에요. 실제로는 GitHub 웹에서 Fine-grained 토큰을 발급해요.',
         prediction: {
           question: '필요한 권한만 주기(fine-grained 토큰)가 classic 토큰보다 안전한 이유는?',
           choices: ['모든 권한을 줘서', '필요한 저장소·권한만 줘서'],
@@ -551,7 +553,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'token sso',
         doneAction: 'TOKEN_SSO',
         terms: ['SSO(통합 로그인)'],
-        commandNote: 'SSO는 회사 통합 로그인이에요.',
+        commandNote: 'token sso는 체험용 명령이에요. SSO(회사 통합 로그인)는 실제 GitHub 조직 설정에서 인증해요.',
       },
       {
         id: 'ch6-ssh',
@@ -560,6 +562,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'token ssh',
         doneAction: 'TOKEN_SSH',
         terms: ['SSH 키'],
+        commandNote: 'token ssh는 체험용 명령이에요. 실제로는 ssh-keygen으로 키를 만들고 GitHub 웹(SSH keys)에 등록해요.',
       },
     ],
     chips: [
@@ -670,6 +673,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'ai code',
         doneAction: 'AI_CODE',
         terms: ['worktree'],
+        commandNote: 'ai code는 GitDots 체험용 명령이에요. 실제로는 AI 도구가 작업 폴더에서 파일을 수정하고 테스트를 실행해요.',
       },
       {
         id: 'ch8-block',
@@ -678,6 +682,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'ai push-main',
         doneAction: 'AI_BLOCK_MAIN',
         terms: ['브랜치 보호 규칙'],
+        commandNote: 'ai push-main은 체험용 명령이에요. 실제로는 보호된 main에 git push할 때 차단돼요.',
         prediction: {
           question: '직접 공유 제한 확인하기(ai push-main) 때 AI의 push는 어떻게 될까요?',
           choices: ['보호 규칙에 걸려 차단돼요', '항상 허용돼요'],
@@ -692,7 +697,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'ai pr',
         doneAction: 'AI_PR',
         terms: ['브랜치 보호 규칙'],
-        commandNote: '초안 PR은 사람이 검토하기 전엔 실수로 합쳐지지 않는 임시 제안이에요.',
+        commandNote: 'ai pr은 체험용 명령이에요(실제로는 gh pr create --draft). 초안 PR은 사람이 검토하기 전엔 실수로 합쳐지지 않는 임시 제안이에요.',
       },
       {
         id: 'ch8-ready',
@@ -701,7 +706,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'ai ready',
         doneAction: 'AI_READY',
         terms: ['브랜치 보호 규칙'],
-        commandNote: '초안 PR은 바로 합칠 수 없어요. 검토 준비로 전환해야 승인·병합할 수 있어요(실제로는 gh pr ready).',
+        commandNote: 'ai ready는 체험용 명령이에요(실제로는 gh pr ready). 초안 PR은 검토 준비로 전환해야 승인·병합할 수 있어요.',
       },
       {
         id: 'ch8-approve',
@@ -710,7 +715,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'ai approve',
         doneAction: 'AI_APPROVE',
         terms: ['브랜치 보호 규칙'],
-        commandNote: '리뷰어로서 a - b → a + b 변경과 테스트 통과를 확인해요.',
+        commandNote: 'ai approve는 체험용 명령이에요(실제로는 GitHub 웹 승인 또는 gh pr review --approve 후 병합). a - b → a + b 변경과 테스트 통과를 확인해요.',
       },
     ],
     chips: [

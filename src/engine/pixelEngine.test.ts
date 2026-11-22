@@ -852,4 +852,29 @@ describe('Utility commands, unknown commands & autocomplete', () => {
     const aiReadyState = deepFreeze(executePixelCommand(aiPrState, 'ai ready'));
     expect(getCommandAutocomplete('ai', aiReadyState)[0]?.cmd).toBe('ai approve');
   });
+
+  it('keeps non-developer UX copy accurate across bubbles, tabs, and terminal output', () => {
+    for (const id of ALL_STAGE_IDS) {
+      const initial = createStageState(id);
+      expect(initial.bubbles[0]?.nextHint ?? '').not.toContain('아래 추천 버튼');
+    }
+
+    let docs = executePixelCommand(createStageState('docs'), 'edit 회의록.md');
+    docs = executePixelCommand(docs, 'git add 회의록.md');
+    expect(docs.document?.comparison).toBe('working');
+    expect(docs.bubbles[0]?.message).toContain('담아 둔 변경 탭');
+    expect(docs.bubbles[0]?.message).not.toContain('스테이징 탭');
+
+    const status = executePixelCommand(createStageState('ch1'), 'git status');
+    expect(status.terminal.at(-1)?.lines[0]?.text).toContain('현재 main 브랜치');
+
+    const switched = executePixelCommand(createStageState('ch4'), `git switch -c ${MEETING_PR_BRANCH}`);
+    expect(switched.terminal.at(-1)?.lines[0]?.text).toContain('새 브랜치');
+
+    const unauth = executePixelCommand(createStageState('ch7'), 'gh api /api/v3/user');
+    expect(unauth.terminal.at(-1)?.lines[0]?.text).toContain('인증 필요');
+
+    const blockedPush = runSequence('ch8', ['git worktree add -b ai/fix wt-ai', 'ai code', 'ai push-main']);
+    expect(blockedPush.terminal.at(-1)?.lines.some((line) => line.text.includes('GH006') && line.text.includes('보호된 main'))).toBe(true);
+  });
 });

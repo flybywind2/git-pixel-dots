@@ -1,4 +1,5 @@
 import type { PixelAnimKind, PixelSimState } from '../types/sim';
+import { SECRET_NOTE_PATH } from '../engine/meetingExample';
 import { commitById, reachableCommits } from '../engine/repoVersions';
 import { PALETTE, withAlpha } from './palette';
 import {
@@ -231,7 +232,7 @@ function drawCh1Scene(
     padY,
     padW,
     '팀 저장소',
-    shared ? '같은 커밋' : remoteHead ? '푸시 대기' : '원격 브랜치 없음',
+    shared ? '같은 커밋' : remoteHead ? '공유 대기' : '원격 브랜치 없음',
     PALETTE.lavender,
     activeIdx === 3,
     time,
@@ -398,10 +399,20 @@ function drawCh2Scene(
   motion: SceneMotionState,
 ): void {
   const dot = computeDotSize(w, h);
-  const railY = h * 0.7;
-  const railLeft = w * 0.16;
-  const railRight = w * 0.86;
+  const railY = h * 0.76;
+  const railLeft = w * 0.12;
+  const railRight = w * 0.88;
+  const topY = h * 0.31;
+  const padW = clamp(w * 0.21, 108, 154);
+  const stashX = w * 0.18;
+  const stageX = w * 0.5;
+  const remoteX = w * 0.83;
   const kind = sim.lastAnim.kind;
+  const hasSecretStaged = sim.staged.includes(SECRET_NOTE_PATH);
+  const remoteHead = sim.remoteBranches[sim.headBranch];
+  const headCommitId = sim.branches[sim.headBranch];
+  const synced = Boolean(remoteHead && remoteHead === headCommitId);
+  const hasRevert = sim.commits.some((commit) => commit.isRevert);
 
   // Main horizontal dotted commit timeline rail
   drawDottedTrack(
@@ -415,9 +426,21 @@ function drawCh2Scene(
     kind === 'COMMIT' || kind === 'REVERT' || kind === 'RESET',
   );
 
+  // Dotted track from timeline up to remote repo
+  drawDottedTrack(
+    ctx,
+    railRight - 14,
+    railY - dot * 3,
+    remoteX,
+    topY + dot * 8,
+    synced ? PALETTE.mint : PALETTE.lavender,
+    time,
+    kind === 'PUSH' || synced,
+    -12,
+  );
+
   // Draw commit gems along the rail
   const commits = recentTimelineCommits(sim);
-  const headCommitId = sim.branches[sim.headBranch];
   let headX = railLeft + (railRight - railLeft) * 0.35;
 
   commits.forEach(({ commit: c, rewound }, idx) => {
@@ -449,7 +472,7 @@ function drawCh2Scene(
       ctx.fill();
     }
 
-    drawPixelSprite(ctx, COMMIT_GEM, gemColors, gx, gy, dot * 0.95, 'dot');
+    drawPixelSprite(ctx, COMMIT_GEM, gemColors, gx, gy, dot * 0.92, 'dot');
 
     if (c.isRevert) {
       drawPixelSprite(ctx, SHIELD_ICON, makeShieldColors(PALETTE.mint, PALETTE.mintDark), gx + dot * 5.2, gy - dot * 5.2, dot * 0.45, 'dot');
@@ -460,16 +483,15 @@ function drawCh2Scene(
   });
 
   // 현재 HEAD 위치를 캔버스에도 이름표로 표시해요.
-  drawPixelBadge(ctx, headX, railY - dot * 6 - 16, 'HEAD', PALETTE.cream, PALETTE.skyDark, PALETTE.sky, 11, true);
+  drawPixelBadge(ctx, headX, railY - dot * 6 - 14, 'HEAD', PALETTE.cream, PALETTE.skyDark, PALETTE.sky, 11, true);
 
-  const stashX = w * 0.2;
-  const stashY = h * 0.32;
+  // Top-left: Stash zone
   const stashActive = kind === 'STASH' || kind === 'STASH_POP';
   drawZonePad(
     ctx,
     stashX,
-    stashY,
-    clamp(w * 0.2, 118, 165),
+    topY,
+    padW,
     '임시 보관',
     sim.stashCount > 0 ? `보관 중 ${sim.stashCount}개` : '비어 있음',
     PALETTE.butter,
@@ -481,31 +503,120 @@ function drawCh2Scene(
     BASKET_SPRITE,
     makeBasketColors(sim.stashCount > 0 ? PALETTE.butter : PALETTE.woodBorder, PALETTE.woodDark),
     stashX,
-    stashY - dot * 6.5,
-    dot * 0.9,
+    topY - dot * 6,
+    dot * 0.85,
     'dot',
   );
+
+  // Top-center: Staging basket zone (with secret note warning when staged)
+  const unstageActive = kind === 'UNSTAGE';
+  const stageAccent = hasSecretStaged ? PALETTE.coral : sim.staged.length > 0 ? PALETTE.mint : PALETTE.mint;
+  drawZonePad(
+    ctx,
+    stageX,
+    topY,
+    padW,
+    '장바구니',
+    hasSecretStaged ? '비밀 메모 담김' : sim.staged.length > 0 ? `선택 ${sim.staged.length}개` : '비어 있음',
+    stageAccent,
+    hasSecretStaged || unstageActive || sim.staged.length > 0,
+    time,
+  );
+  drawPixelSprite(
+    ctx,
+    BASKET_SPRITE,
+    makeBasketColors(hasSecretStaged ? PALETTE.coral : sim.staged.length > 0 ? PALETTE.mint : PALETTE.woodBorder, PALETTE.woodDark),
+    stageX,
+    topY - dot * 6,
+    dot * 0.85,
+    'dot',
+  );
+  if (sim.staged.length > 0) {
+    const fileColor = hasSecretStaged ? PALETTE.coral : PALETTE.mint;
+    const fileLight = hasSecretStaged ? PALETTE.coralLight : PALETTE.mintLight;
+    drawPixelSprite(
+      ctx,
+      FILE_SPRITE,
+      makeFileColors(fileColor, fileLight),
+      stageX,
+      topY - dot * 11 + Math.sin(time * 4) * 1.5,
+      dot * 0.68,
+      'dot',
+    );
+    if (hasSecretStaged) {
+      drawPixelBadge(ctx, stageX, topY - dot * 16.5, '비밀 메모', PALETTE.coral, PALETTE.cream, PALETTE.coralDark, 11);
+    }
+  }
+
+  // Top-right: Remote GitHub repo zone
+  const pushActive = kind === 'PUSH';
+  drawZonePad(
+    ctx,
+    remoteX,
+    topY,
+    padW,
+    '팀 저장소',
+    synced ? '동기화 완료' : '공유 대기',
+    synced ? PALETTE.mint : PALETTE.lavender,
+    pushActive || (synced && hasRevert),
+    time,
+  );
+  const cloudY = topY - dot * 7.5 + Math.sin(time * 2.1) * 3;
+  drawPixelSprite(ctx, CLOUD_CASTLE, CLOUD_CASTLE_COLORS, remoteX, cloudY, dot * 0.78, 'dot');
+  if (synced && hasRevert) {
+    drawPixelSprite(
+      ctx,
+      COMMIT_GEM,
+      makeGemColors(PALETTE.mint, PALETTE.cream, PALETTE.mintDark),
+      remoteX + dot * 7.5,
+      cloudY + dot * 1.5,
+      dot * 0.62,
+      'dot',
+    );
+  }
+
+  // Flying file arc for UNSTAGE (secret note pulled out of staging basket)
+  if (unstageActive && animProgress < 0.92) {
+    const t = easeOutCubic(animProgress);
+    const fx = stageX - w * 0.13 * t;
+    const fy = topY - dot * 9 + dot * 11 * t - Math.sin(animProgress * Math.PI) * 36;
+    drawPixelSprite(ctx, FILE_SPRITE, makeFileColors(PALETTE.coral, PALETTE.cream), fx, fy, dot * 0.88, 'dot');
+  }
 
   // Flying file arc for STASH / STASH_POP
   if (stashActive && animProgress < 0.92) {
     const t = easeOutCubic(animProgress);
     const fromX = kind === 'STASH' ? headX : stashX;
-    const fromY = kind === 'STASH' ? railY - dot * 4 : stashY - dot * 8;
+    const fromY = kind === 'STASH' ? railY - dot * 4 : topY - dot * 7;
     const toX = kind === 'STASH' ? stashX : headX;
-    const toY = kind === 'STASH' ? stashY - dot * 8 : railY - dot * 4;
+    const toY = kind === 'STASH' ? topY - dot * 7 : railY - dot * 4;
     const fx = fromX + (toX - fromX) * t;
-    const fy = fromY + (toY - fromY) * t - Math.sin(animProgress * Math.PI) * 48;
-    drawPixelSprite(ctx, FILE_SPRITE, makeFileColors(PALETTE.butter, PALETTE.cream), fx, fy, dot * 0.9, 'dot');
+    const fy = fromY + (toY - fromY) * t - Math.sin(animProgress * Math.PI) * 44;
+    drawPixelSprite(ctx, FILE_SPRITE, makeFileColors(PALETTE.butter, PALETTE.cream), fx, fy, dot * 0.88, 'dot');
   }
 
-  // Buddy stands near Stash during stash ops, otherwise alongside HEAD
-  const targetNormX = stashActive ? 0.39 : clamp(headX / w, 0.44, 0.85);
-  const targetNormY = 0.32;
+  // Flying rocket arc for PUSH (syncing revert commit to team repo)
+  if (pushActive && animProgress < 0.95) {
+    const t = easeOutCubic(animProgress);
+    const rx = headX + (remoteX - headX) * t;
+    const ry = railY - dot * 5 + (cloudY - (railY - dot * 5)) * t - Math.sin(animProgress * Math.PI) * 38;
+    drawPixelSprite(ctx, ROCKET_PR, makeRocketColors(PALETTE.sky), rx, ry, dot * 0.95, 'dot');
+  }
+
+  // Buddy moves smoothly to the active station
+  const targetNormX = unstageActive
+    ? 0.36
+    : stashActive
+      ? 0.33
+      : pushActive
+        ? 0.68
+        : clamp(headX / w, 0.32, 0.68);
+  const targetNormY = unstageActive || stashActive || pushActive ? 0.42 : 0.55;
   const b = moveBuddySmooth(motion, 'ch2', targetNormX, targetNormY);
   const pose: BuddyPose =
     kind === 'RESET' && animProgress < 0.8
       ? 'shocked'
-      : (kind === 'REVERT' || kind === 'STASH_POP' || kind === 'COMMIT') && animProgress < 0.85
+      : (kind === 'UNSTAGE' || kind === 'REVERT' || kind === 'STASH_POP' || kind === 'COMMIT' || kind === 'PUSH') && animProgress < 0.85
         ? 'happy'
         : kind === 'STASH' && animProgress < 0.75
           ? 'carry'
@@ -764,9 +875,9 @@ function drawCh4Scene(
     12,
     true,
   );
-  // 팀원 승인이 확인되면 게이트 위에 LGTM 배지를 띄워 검사 통과와 구분해요.
+  // 팀원 승인이 확인되면 게이트 위에 승인(LGTM) 배지를 띄워 검사 통과와 구분해요.
   if (approved) {
-    drawPixelBadge(ctx, xCi, gateY - ringR - 13, 'LGTM', PALETTE.mint, PALETTE.cream, PALETTE.mintDark, 12, true);
+    drawPixelBadge(ctx, xCi, gateY - ringR - Math.max(18, dot * 4.5), '승인(LGTM)', PALETTE.mint, PALETTE.cream, PALETTE.mintDark, 12, false);
   }
 
   // Floating GitHub Cloud Castle on the right
@@ -811,23 +922,24 @@ function drawCh4Scene(
 
   // Animated PR Rocket flight
   const t = easeOutCubic(animProgress);
+  const rocketRestX = Math.min(xCloud - padW * 0.46, xCi + Math.max(dot * 16.5, padW * 0.52));
   if (kind === 'PR_CREATE') {
-    const rx = xLocal + (xCi + w * 0.08 - xLocal) * t;
+    const rx = xLocal + (rocketRestX - xLocal) * t;
     const ry = gateY - Math.sin(animProgress * Math.PI) * 28;
-    drawPixelSprite(ctx, ROCKET_PR, makeRocketColors(PALETTE.lavender), rx, ry, dot * 1.05, 'dot');
+    drawPixelSprite(ctx, ROCKET_PR, makeRocketColors(PALETTE.lavender), rx, ry, dot * 1.0, 'dot');
   } else if (kind === 'PR_MERGE' && animProgress < 0.95) {
-    const rx = xCi + (xCloud - xCi) * t;
+    const rx = rocketRestX + (xCloud - rocketRestX) * t;
     const ry = gateY + (cloudY - gateY) * t - Math.sin(animProgress * Math.PI) * 24;
-    drawPixelSprite(ctx, ROCKET_PR, makeRocketColors(PALETTE.mint), rx, ry, dot * 1.08, 'dot');
+    drawPixelSprite(ctx, ROCKET_PR, makeRocketColors(PALETTE.mint), rx, ry, dot * 1.05, 'dot');
   } else if (latestPr && !prMerged) {
-    // Rocket hovering neatly beside CI Gate waiting to merge
+    // Rocket hovering neatly beside CI Gate without overlapping the status badge
     drawPixelSprite(
       ctx,
       ROCKET_PR,
       makeRocketColors(PALETTE.lavender),
-      xCi + dot * 12,
-      gateY - dot * 3 + Math.sin(time * 4) * 3,
-      dot * 0.95,
+      rocketRestX,
+      gateY - dot * 3.5 + Math.sin(time * 4) * 3,
+      dot * 0.9,
       'dot',
     );
   }
@@ -989,7 +1101,7 @@ function drawCh6Scene(
 
   // Right: 3 Pixel Repo Vault Doors
   const doors = [
-    { x: w * 0.46, name: '내 앱', sub: 'my-app', open: true, danger: false },
+    { x: w * 0.46, name: 'gitdots/app', sub: 'gitdots/app', open: true, danger: false },
     { x: w * 0.65, name: '회사 결제', sub: 'billing-api', open: isClassic, danger: isClassic },
     { x: w * 0.84, name: '비밀 설정', sub: 'infra-secrets', open: isClassic, danger: isClassic },
   ] as const;
@@ -1523,12 +1635,23 @@ export function getParticleCuesForAnim(
         { kind: 'parcel', x: w * 0.16, y: h * 0.66, x1: w * 0.39, y1: h * 0.66, color: PALETTE.mint },
         { kind: 'sparkles', x: w * 0.39, y: h * 0.64, color: PALETTE.mint },
       ];
+    case 'UNSTAGE':
+      return [
+        { kind: 'parcel', x: w * 0.5, y: h * 0.28, x1: w * 0.36, y1: h * 0.45, color: PALETTE.coral },
+        { kind: 'sparkles', x: w * 0.5, y: h * 0.28, color: PALETTE.mint },
+      ];
     case 'COMMIT':
       return [
         { kind: 'shockwave', x: w * (stageId === 'ch1' ? 0.62 : 0.56), y: h * 0.64, color: PALETTE.cream },
         { kind: 'sparkles', x: w * (stageId === 'ch1' ? 0.62 : 0.56), y: h * 0.64, color: PALETTE.sky },
       ];
     case 'PUSH':
+      if (stageId === 'ch2') {
+        return [
+          { kind: 'parcel', x: w * 0.66, y: h * 0.74, x1: w * 0.83, y1: h * 0.28, color: PALETTE.sky },
+          { kind: 'confetti', x: w * 0.83, y: h * 0.28, color: PALETTE.mint },
+        ];
+      }
       return [
         { kind: 'parcel', x: w * (stageId === 'ch1' ? 0.62 : 0.18), y: h * 0.64, x1: w * 0.84, y1: h * 0.56, color: PALETTE.sky },
         { kind: 'confetti', x: w * 0.84, y: h * 0.56, color: PALETTE.butter },

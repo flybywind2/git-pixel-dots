@@ -330,7 +330,7 @@ function stageSeed(id: StageId): StageSeed {
             54,
             '공유할 문서 두 개가 있어요',
             `회의록.md의 모임 시간을 바꿨고 ${ATTENDANCE_PATH}를 새로 썼어요. 두 문서를 다음 커밋에 담아서 팀에 보낼 수 있어요.`,
-            '아래 추천 버튼을 눌러 두 문서를 다음 기록에 담아 보세요.',
+            '위쪽의 노란 버튼을 눌러 두 문서를 다음 기록에 담아 보세요.',
             [{ label: '다음 기록에 담기', command: 'git add .', tone: 'mint' }],
           ),
         ],
@@ -421,7 +421,7 @@ function stageSeed(id: StageId): StageSeed {
             54,
             '작업 중에 급한 수정이 생겼어요',
             `마지막 커밋에 ${MISTAKEN_NOTICE_PATH}를 실수로 넣었고, ${SECRET_NOTE_PATH}까지 장바구니에 담겨 있어요. 비밀 메모부터 빼고, 준비물 수정을 임시 보관한 뒤 잘못 올린 안내를 취소해 보세요.`,
-            '아래 추천 버튼을 눌러 비밀번호 메모를 장바구니에서 빼 보세요.',
+            '위쪽의 노란 버튼을 눌러 비밀번호 메모를 장바구니에서 빼 보세요.',
             [{ label: '장바구니에서 비밀 메모 빼기', command: `git restore --staged ${SECRET_NOTE_PATH}`, tone: 'amber' }],
           ),
         ],
@@ -471,7 +471,7 @@ function stageSeed(id: StageId): StageSeed {
             54,
             'theme.js의 두 버전을 합쳐 봐요',
             'main과 feat/ui가 같은 줄에 서로 다른 색을 골랐어요. main에서 새 브랜치를 만들어 합치기를 연습해요.',
-            '아래 추천 버튼을 눌러 새 브랜치를 만들어 보세요.',
+            '위쪽의 노란 버튼을 눌러 새 브랜치를 만들어 보세요.',
             [{ label: '새 브랜치 만들기', command: 'git switch -c feat/dark', tone: 'primary' }],
           ),
         ],
@@ -517,7 +517,7 @@ function stageSeed(id: StageId): StageSeed {
             54,
             '회의록 장소를 바꿨어요',
             '작업 폴더의 회의록에 바꾼 장소가 아직 기록되지 않았어요. 팀원은 GitHub에 참석 안내를 올려 두었어요(마지막에 함께 가져올 거예요). 새 브랜치를 만들어 내 변경을 기록해 보세요.',
-            '아래 추천 버튼을 눌러 새 브랜치를 만들어 보세요.',
+            '위쪽의 노란 버튼을 눌러 새 브랜치를 만들어 보세요.',
             [{ label: '새 브랜치 만들기', command: `git switch -c ${MEETING_PR_BRANCH}`, tone: 'primary' }],
           ),
         ],
@@ -574,7 +574,7 @@ function stageSeed(id: StageId): StageSeed {
             54,
             '다크 모드 변경이 준비됐어요',
             'feat/darkmode 브랜치가 GitHub 연습 저장소에 올라가 있어요. 먼저 gh가 어느 계정으로 작업하는지 확인해요.',
-            '아래 추천 버튼을 눌러 로그인 상태를 확인해 보세요.',
+            '위쪽의 노란 버튼을 눌러 로그인 상태를 확인해 보세요.',
             [{ label: '로그인 상태 확인하기', command: 'gh auth status', tone: 'primary' }],
           ),
         ],
@@ -618,7 +618,7 @@ function stageSeed(id: StageId): StageSeed {
             48,
             '토큰 보안 관문에 오신 걸 환영해요! 🛡️',
             '예제에서는 gitdots/app 한 곳에만 쓸 수 있으면 돼요. 두 토큰으로 각각 어느 저장소를 열 수 있는지 확인해 보세요.',
-            '아래 추천 버튼을 눌러 예제 토큰의 권한을 확인해 보세요.',
+            '위쪽의 노란 버튼을 눌러 예제 토큰의 권한을 확인해 보세요.',
             [{ label: '넓은 권한 살펴보기', command: 'token classic', tone: 'coral' }],
           ),
         ],
@@ -662,7 +662,7 @@ function stageSeed(id: StageId): StageSeed {
             48,
             '이 회사는 사내 GitHub를 써요',
             '이 예제 회사의 방화벽은 github.com 전송을 막아요. 사내 GitHub의 주소는 github.corp.internal이에요.',
-            '아래 추천 버튼을 눌러 외부 차단부터 확인해 보세요.',
+            '위쪽의 노란 버튼을 눌러 외부 차단부터 확인해 보세요.',
             [{ label: '외부 전송 차단 확인하기', command: 'ghes test-public', tone: 'coral' }],
           ),
         ],
@@ -714,7 +714,7 @@ function stageSeed(id: StageId): StageSeed {
             52,
             '삐빅! AI 에이전트 준비 완료 🤖',
             'buggy.ts의 덧셈 버그를 고쳐드릴게요! 다만 main 폴더를 바로 건드리면 위험하니 별도 작업 폴더(worktree)를 먼저 열어 주세요.',
-            '아래 추천 버튼을 눌러 AI 작업 폴더를 만들어 보세요.',
+            '위쪽의 노란 버튼을 눌러 AI 작업 폴더를 만들어 보세요.',
             [{ label: 'AI 작업 폴더 만들기', command: 'git worktree add -b ai/fix wt-ai', tone: 'mint' }],
           ),
         ],
@@ -1034,7 +1034,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             [{ text: `어라, 'git ${sub}'는 아직 모르는 말이에요. git ${suggestion}를 찾으셨나요?`, tone: 'amber' }],
             makeBubble(
               `docs-typo-${seqNext}`, 'buddy', 38, 54, '어라, 모르는 명령어예요! 🤔',
-              `git ${sub}는 아직 모르는 말이에요. git ${suggestion}를 찾으셨나요? 아래 추천 버튼을 누르거나 help를 입력해 보세요.`,
+              `git ${sub}는 아직 모르는 말이에요. git ${suggestion}를 찾으셨나요? 위쪽의 노란 버튼을 누르거나 help를 입력해 보세요.`,
               undefined,
               [{ label: `git ${suggestion}`, command: `git ${suggestion}`, tone: 'primary' }],
             ),
@@ -1292,7 +1292,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         cmd,
         [
           { text: '🔐 ssh-ed25519 키 쌍 생성 & GitHub 공개키 등록 완료!', tone: 'mint' },
-          { text: 'Hi dot-dev! You have successfully authenticated via SSH.', tone: 'sky' },
+          { text: 'Hi dot-dev! You have successfully authenticated via SSH. (SSH 키 인증 성공)', tone: 'sky' },
         ],
         makeBubble(
           `token-ssh-${seqNext}`,
@@ -1320,7 +1320,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         'SECRET_BLOCKED',
         cmd,
         [
-          { text: 'remote: error: GH013: Repository rule violations found!', tone: 'coral' },
+          { text: 'remote: error: GH013: Repository rule violations found! (저장소 보안 규칙 위반으로 전송 차단)', tone: 'coral' },
           { text: 'remote: - GITHUB PUSH PROTECTION: GitHub Personal Access Token 감지됨', tone: 'coral' },
           { text: '🛡️ 개인키가 외부에 올라가기 직전에 자동으로 막았어요!', tone: 'mint' },
         ],
@@ -1364,7 +1364,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         'FIREWALL',
         cmd,
         [
-          { text: 'curl https://github.com/corp/secret → 403 BLOCKED BY CORP FIREWALL', tone: 'coral' },
+          { text: 'curl https://github.com/corp/secret → 403 BLOCKED BY CORP FIREWALL (사내 방화벽이 외부 접속 차단)', tone: 'coral' },
           { text: '🧱 사내 보안 정책에 따라 외부 github.com으로의 코드 전송이 차단됐어요.', tone: 'amber' },
         ],
         makeBubble(
@@ -1405,7 +1405,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         'corp-runner-01',
         cmd,
         [
-          { text: '⚙️ Job assigned to [self-hosted, linux, corp-private-01]', tone: 'sky' },
+          { text: '⚙️ Job assigned to [self-hosted, linux, corp-private-01] (사내 전용 실행기에 빌드 배정)', tone: 'sky' },
           { text: '✓ Build & Security Scan passed inside corporate intranet (0 bytes external)', tone: 'mint' },
         ],
         makeBubble(
@@ -1522,7 +1522,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         cmd,
         [
           { text: `🤖 [wt-ai @ ${aiBranch}] buggy.ts 수정: a - b → a + b`, tone: 'mint' },
-          { text: `✓ unit test: sum(2, 3) === 5 PASS`, tone: 'mint' },
+          { text: `✓ unit test: sum(2, 3) === 5 PASS (단위 테스트 통과)`, tone: 'mint' },
           { text: `[${aiBranch} ${newCommit.hash}] ${newCommit.message}`, tone: 'sky' },
         ],
         makeBubble(
@@ -1552,7 +1552,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         cmd,
         [
           { text: 'git push origin main (by ai-bot)', tone: 'muted' },
-          { text: 'remote: error: GH006: Protected branch update failed for refs/heads/main.', tone: 'coral' },
+          { text: 'remote: error: GH006: Protected branch update failed for refs/heads/main. (보호된 main 브랜치 직접 수정 거부)', tone: 'coral' },
           { text: '브랜치 보호 규칙으로 기본 브랜치(main)에 직접 올리는 변경을 막았어요.', tone: 'amber' },
         ],
         makeBubble(
@@ -1768,7 +1768,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       // worktree 폴더에서 작업 중이면 프롬프트와 맞게 그 브랜치를 보여 줘요.
       const statusBranch = state.stageId === 'ch8' && state.ai.worktreeActive ? state.ai.worktreeBranch : state.headBranch;
       const lines: TerminalLine[] = [
-        { text: `On branch ${statusBranch}`, tone: 'sky' },
+        { text: `On branch ${statusBranch} (현재 ${statusBranch} 브랜치에 있어요)`, tone: 'sky' },
       ];
       if (conflictFiles.length > 0) {
         lines.push({
@@ -1800,7 +1800,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         modifiedFiles.length === 0 &&
         untrackedFiles.length === 0
       ) {
-        lines.push({ text: '커밋할 변경이 없어요 (nothing to commit, working tree clean)', tone: 'mint' });
+        lines.push({ text: '커밋할 변경이 없어요 (nothing to commit, working tree clean — 작업 폴더가 깨끗해요)', tone: 'mint' });
       }
 
       const statusSummary =
@@ -1878,10 +1878,9 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         );
       }
 
-      // 담은 직후에는 스테이징 비교를 바로 보여 줘서 "고친 게 사라졌나?" 하는 오해를 줄여요.
-      if (state.document) draft.document = { comparison: 'staged' };
+      // 바뀐 줄 탭을 유지해 git add 뒤 작업 폴더와 장바구니가 같아졌음을 보여 주고, 다음 단계에서 담아 둔 변경 탭을 직접 확인하게 해요.
       const addMessage = state.document
-        ? '고친 내용을 다음 기록의 장바구니(스테이징 영역)에 담았어요. 작업 문서와 스테이징 영역이 같아진 건 사라져서가 아니라 같은 내용이 장바구니에 담겨서예요. 아래 비교에서 스테이징 탭으로 확인할 수 있어요.'
+        ? '고친 내용을 다음 기록의 장바구니(스테이징 영역)에 담았어요. 작업 문서와 장바구니가 같아져서 바뀐 줄 탭은 비어 보이지만, 사라진 게 아니라 장바구니에 담겨 있어요. 아래 비교에서 담아 둔 변경 탭으로 확인할 수 있어요.'
         : `수정한 파일(${draft.staged.join(', ')})을 다음 기록의 장바구니(스테이징 영역)에 담았어요. 이제 기록 남기기로 커밋할 수 있어요.`;
       return finalizeTransition(
         state, draft, 'ADD', '다음 기록에 담기', draft.staged.join(', '), cmd,
@@ -1900,7 +1899,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           '충돌 해결 필요',
           undefined,
           cmd,
-          [{ text: 'error: Committing is not possible because you have unmerged files.', tone: 'coral' }],
+          [{ text: 'error: Committing is not possible because you have unmerged files. (충돌이 남아 있어 커밋할 수 없어요)', tone: 'coral' }],
           makeBubble(
             `commit-conflict-${seqNext}`,
             'buddy',
@@ -2021,7 +2020,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         'origin',
         cmd,
         [
-          { text: `From https://${state.ghHost}/gitdots/app`, tone: 'sky' },
+          { text: `From https://${state.ghHost}/gitdots/app (원격 저장소에서 최신 정보 확인)`, tone: 'sky' },
           {
             text: hasNewRemote
               ? ' * [updated] origin/main — 팀원의 새 커밋 1건이 있어요!'
@@ -2566,7 +2565,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       return finalizeTransition(
         state, draft, isCreate ? 'BRANCH' : 'SWITCH', '브랜치 전환', targetBranch, cmd,
         [
-          { text: isCreate ? `Switched to a new branch '${targetBranch}'` : `Switched to branch '${targetBranch}'`, tone: 'mint' },
+          { text: isCreate ? `Switched to a new branch '${targetBranch}' (새 브랜치 '${targetBranch}'로 이동)` : `Switched to branch '${targetBranch}' ('${targetBranch}' 브랜치로 이동)`, tone: 'mint' },
           { text: message, tone: 'sky' },
         ],
         makeBubble(`switch-${seqNext}`, 'buddy', 42, 54, `${targetBranch} 브랜치를 열었어요`, message),
@@ -2626,7 +2625,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         return finalizeTransition(
           state, draft, 'CONFLICT', '병합 충돌 발생', file, cmd,
           [
-            { text: `CONFLICT (content): ${file}`, tone: 'coral' },
+            { text: `CONFLICT (content): ${file} (같은 줄 충돌 발생)`, tone: 'coral' },
             { text: '화면의 충돌 안내에서 남길 버전을 선택해 주세요.', tone: 'amber' },
           ],
           mergeConflictBubble(file, seqNext),
@@ -2730,7 +2729,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         branchName,
         cmd,
         [
-          { text: `Preparing worktree (new branch '${branchName}')`, tone: 'sky' },
+          { text: `Preparing worktree (new branch '${branchName}') (새 작업 폴더와 브랜치 준비 중)`, tone: 'sky' },
           { text: `🏗️ 새 작업 폴더 './${dirName}'에서 ${branchName} 브랜치를 사용해요.`, tone: 'mint' },
         ],
         makeBubble(
@@ -2761,9 +2760,9 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         };
         const lines: TerminalLine[] = [
           { text: `${state.ghHost}`, tone: 'sky' },
-          { text: `  ✓ Logged in to ${state.ghHost} account ${state.ghUser}`, tone: 'mint' },
-          { text: `  ✓ Git operations protocol: ${state.token.sshReady ? 'ssh' : 'https'}`, tone: 'default' },
-          { text: `  ✓ Token scopes: ${state.token.scopes.join(', ')}`, tone: 'muted' },
+          { text: `  ✓ Logged in to ${state.ghHost} account ${state.ghUser} (로그인 완료)`, tone: 'mint' },
+          { text: `  ✓ Git operations protocol: ${state.token.sshReady ? 'ssh' : 'https'} (연결 방식)`, tone: 'default' },
+          { text: `  ✓ Token scopes: ${state.token.scopes.join(', ')} (부여된 권한)`, tone: 'muted' },
         ];
         const nextStep = getNextPendingStep(draft);
 
@@ -2821,7 +2820,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             cmd,
             [
               { text: `예제 회사 VPN 연결 상태에서 ${host} 인증 중`, tone: 'sky' },
-              { text: `✓ Logged in as ${state.ghUser} on ${host}`, tone: 'mint' },
+              { text: `✓ Logged in as ${state.ghUser} on ${host} (사내 서버 로그인 완료)`, tone: 'mint' },
             ],
             makeBubble(
               `ghes-login-${seqNext}`,
@@ -3252,7 +3251,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             '401',
             cmd,
             [
-              { text: `HTTP 401 Unauthorized — ${state.ghes.host} 에 먼저 로그인해야 해요!`, tone: 'coral' },
+              { text: `HTTP 401 Unauthorized (인증 필요) — ${state.ghes.host} 에 먼저 로그인해야 해요!`, tone: 'coral' },
             ],
             makeBubble(
               `ghes-api-unauth-${seqNext}`,
@@ -3377,7 +3376,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
     cmd,
     [
       { text: `어라, '${cmd}' 명령어는 아직 모르는 말이에요!`, tone: 'coral' },
-      { text: '아래 추천 버튼을 누르거나 help를 입력해 사용 가능한 명령어를 확인해 보세요.', tone: 'muted' },
+      { text: '위쪽의 노란 버튼을 누르거나 help를 입력해 사용 가능한 명령어를 확인해 보세요.', tone: 'muted' },
     ],
     makeBubble(
       `unknown-${seqNext}`,
@@ -3385,7 +3384,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       38,
       54,
       '어라, 모르는 명령어예요! 🤔',
-      '아래 추천 버튼을 누르거나 help를 입력해 사용 가능한 명령을 확인해 보세요.',
+      '위쪽의 노란 버튼을 누르거나 help를 입력해 사용 가능한 명령을 확인해 보세요.',
       nextStepHintText(state),
       fallbackActions,
     ),

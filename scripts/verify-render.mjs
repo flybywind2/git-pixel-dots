@@ -617,6 +617,52 @@ async function basicCertificate(browser, url) {
   await page.close();
 }
 
+async function uxImprovements(browser, url) {
+  const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  // P0-2: 1장 미저장 상태에서 비교 탭 클릭 시 인라인 경고 배너와 원클릭 저장+비교 버튼이 동작해요.
+  await openChapter(page, url, 1);
+  const editor = page.getByRole('textbox', { name: '회의록.md', exact: true });
+  const original = await editor.inputValue();
+  await editor.fill(original.replace('금요일 저녁 7시', '화요일 오후 3시'));
+  const comparison = page.getByRole('region', { name: '변경 비교', exact: true });
+  await comparison.getByRole('button', { name: '바뀐 줄', exact: true }).click();
+  const banner = page.getByTestId('unsaved-compare-banner');
+  await banner.waitFor();
+  await banner.getByRole('button', { name: '지금 저장하고 비교하기', exact: true }).click();
+  await expectProgress(page, 2, 6);
+  assert.equal(await banner.count(), 0);
+
+  // P1-1: 상단 '이전 단계로' 버튼으로 한 단계 되돌릴 수 있어요.
+  const undoBtn = page.getByTestId('undo-step-btn');
+  assert.equal(await undoBtn.isDisabled(), false);
+  await undoBtn.click();
+  await expectProgress(page, 1, 6);
+
+  // P0-1 & P1-2: 2~4장 초기 말풍선에 '아래 추천 버튼' 오안내가 없고, 파일 상태 미니 카드 미리보기가 동작해요.
+  for (const chapter of [2, 3, 4]) {
+    await openChapter(page, url, chapter);
+    const bubbleText = await page.getByTestId('speech-bubble').innerText();
+    assert.doesNotMatch(bubbleText, /아래 추천 버튼/);
+    const filesCard = page.getByTestId('stage-files-card');
+    await filesCard.waitFor();
+    await filesCard.getByRole('button', { name: /회의록\.md/ }).click();
+    await page.getByTestId('stage-file-preview').waitFor();
+  }
+
+  // P1-3: 4장 완료 전에도 GitHub 웹 안내를 접이식으로 열 수 있어요.
+  const webGuide = page.getByTestId('github-web-guide');
+  await webGuide.waitFor();
+
+  // P1-4: 5장 충돌 해결 버튼은 말풍선이 아니라 코드 비교 카드 하단에 놓여요.
+  await openChapter(page, url, 5);
+  await clickGuided(page);
+  await clickGuided(page);
+  const preview = page.getByTestId('conflict-preview');
+  await preview.getByRole('button', { name: '두 변경 함께 남기기', exact: true }).waitFor();
+  assert.equal(await page.getByTestId('speech-bubble').getByRole('button', { name: '두 변경 함께 남기기', exact: true }).count(), 0);
+  await page.close();
+}
+
 async function main() {
   fs.mkdirSync(out, { recursive: true });
   const local = publicUrl ? undefined : await startServer();
@@ -667,6 +713,8 @@ async function main() {
     console.log('[QA] Mobile lesson layout (contextual terms, button visible without scroll) passed');
     await advancedGuidedCompletion(browser, url);
     console.log('[QA] Advanced chapters 5-9 completed via guide buttons passed');
+    await uxImprovements(browser, url);
+    console.log('[QA] Non-dev UX improvements (inline unsaved compare, undo, file cards, pre-completion web guide, conflict button order) passed');
 
     const link = await browser.newPage();
     await link.goto(url + 'docs/deeper/');

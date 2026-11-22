@@ -1,7 +1,8 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { FileText, X } from 'lucide-react';
 import { getNextPendingStep, STAGE_MAP } from '../engine';
 import { usePixelStore } from '../store/usePixelStore';
-import type { BubbleAction, PixelSimState } from '../types/sim';
+import type { BubbleAction, PixelFileStatus, PixelSimState } from '../types/sim';
 import { SPEAKER_THEMES } from './palette';
 import { PIXEL_FONT, PixelParticlePool, drawDotGridBackground } from './dotMatrixRenderer';
 import {
@@ -28,10 +29,30 @@ const SCOPE_LABELS: Readonly<Record<string, string>> = {
   'expires:30d': '30일 뒤 만료',
 };
 
+const FILE_STATUS_BADGES: Readonly<Record<PixelFileStatus | 'stashed', { label: string; className: string }>> = {
+  modified: { label: '수정됨', className: 'border-[#D69B61] bg-[#FFF2D7] text-[#7A4A0B]' },
+  untracked: { label: '새 파일', className: 'border-[#E08A95] bg-[#FDE9E8] text-[#8C2630]' },
+  staged: { label: '장바구니', className: 'border-[#4D8C6E] bg-[#E2F3E8] text-[#145439]' },
+  committed: { label: '커밋됨', className: 'border-[#8BB9D9] bg-[#EEF7FD] text-[#174669]' },
+  stashed: { label: '임시보관', className: 'border-[#B69AD9] bg-[#F4EEFC] text-[#5B3E9E]' },
+  conflict: { label: '충돌', className: 'border-[#E05666] bg-[#FDE9E8] text-[#8C2630]' },
+};
+
+const CONFLICT_RESOLUTION_ACTIONS: readonly BubbleAction[] = [
+  { label: '현재 브랜치 내용 유지', command: 'resolve ours', tone: 'primary' },
+  { label: '상대 브랜치 내용 사용', command: 'resolve theirs', tone: 'amber' },
+  { label: '두 변경 함께 남기기', command: 'resolve both', tone: 'mint' },
+];
+
 export function PixelStageCanvas() {
   const stageId = usePixelStore((s) => s.stageId);
   const sim = usePixelStore((s) => s.sim);
   const runCommand = usePixelStore((s) => s.runCommand);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedFile(null);
+  }, [stageId]);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -206,7 +227,36 @@ export function PixelStageCanvas() {
   const nextStep = getNextPendingStep(sim);
   const head = sim.branches[sim.headBranch];
   const visibleHistory = stageId === 'ch2' ? recentTimelineCommits(sim) : null;
-  const canvasMinHeight = stageId === 'ch2' ? 'min-h-[186px]'
+  const showFileStatusCard = stageId === 'ch1' || stageId === 'ch2' || stageId === 'ch4';
+  const hasActiveMergeConflict = Boolean(sim.conflict && sim.conflict.resolvedChoice === 'none' && !sim.conflict.revert);
+  const latestStash = sim.stashes.at(-1);
+  const stageFileItems = showFileStatusCard
+    ? (() => {
+        const items = sim.files.map((file) => {
+          const stashedContent = latestStash && latestStash.working[file.name] !== latestStash.base[file.name]
+            ? latestStash.working[file.name]
+            : undefined;
+          const badgeKey: PixelFileStatus | 'stashed' =
+            file.status === 'committed' && stashedContent !== undefined ? 'stashed' : file.status;
+          return {
+            name: file.name,
+            badgeKey,
+            content: file.content,
+            stashedContent,
+          };
+        });
+        if (latestStash) {
+          for (const [name, content] of Object.entries(latestStash.working)) {
+            if (!items.some((item) => item.name === name) && content !== latestStash.base[name]) {
+              items.push({ name, badgeKey: 'stashed', content, stashedContent: content });
+            }
+          }
+        }
+        return items;
+      })()
+    : [];
+  const activePreviewFile = selectedFile ? stageFileItems.find((item) => item.name === selectedFile) ?? null : null;
+  const canvasMinHeight = stageId === 'ch2' ? 'min-h-[215px] sm:min-h-[245px]'
     : stageId === 'ch3' ? 'min-h-[192px] sm:min-h-[245px]' : 'min-h-[225px] sm:min-h-[260px]';
 
   return (
@@ -230,15 +280,22 @@ export function PixelStageCanvas() {
           </button>
         )}
       </div>
-      <div className="order-1 px-3 pt-3 sm:px-6" aria-live="polite">
+      <div className="order-1 px-3 pt-2.5 sm:px-6 sm:pt-3" aria-live="polite">
         {sim.bubbles.map((bubble) => {
           const theme = SPEAKER_THEMES[bubble.speaker];
-          const actions = bubble.actions?.filter((action) =>
-            (bubble.actions?.length ?? 0) > 1 || (action.command !== nextStep?.command && action.command !== 'reset')
-          );
-          const hint = nextStep && bubble.nextHint && !bubble.nextHint.includes(nextStep.command)
+          const actions = bubble.actions?.filter((action) => {
+            if (hasActiveMergeConflict && action.command.startsWith('resolve ')) return false;
+            return (bubble.actions?.length ?? 0) > 1 || (action.command !== nextStep?.command && action.command !== 'reset');
+          });
+          const actionHiddenAsDuplicate = (bubble.actions?.length ?? 0) > 0 && (!actions || actions.length === 0) && !hasActiveMergeConflict;
+          const rawHint = nextStep && bubble.nextHint && !bubble.nextHint.includes(nextStep.command)
             && !bubble.actions?.some((action) => bubble.nextHint?.includes(action.command))
             ? bubble.nextHint : null;
+          const hint = rawHint
+            ? actionHiddenAsDuplicate && /아래\s*(추천\s*)?버튼/.test(rawHint)
+              ? rawHint.replace(/아래\s*(추천\s*)?버튼/g, '위쪽의 노란 버튼')
+              : rawHint
+            : null;
 
           return (
             <div
@@ -297,32 +354,115 @@ export function PixelStageCanvas() {
           );
         })}
       </div>
-      {sim.conflict && sim.conflict.resolvedChoice === 'none' && !sim.conflict.revert && (
-        <div className="order-2 mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="conflict-preview">
-          <div className="rounded-xl border border-[#D69B61] bg-[#FFFDF8] p-3">
-            <h2 className="break-keep text-sm font-bold text-[#2F241D]">{sim.conflict.file}에서 겹친 내용이에요</h2>
-            <p className="mt-1 break-keep text-xs leading-relaxed text-[#59483B]">두 브랜치가 같은 줄을 다르게 고쳤어요. 아래 내용을 보고 남길 것을 골라 주세요.</p>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              <div className="rounded-md border border-[#3292CE] bg-[#F0F8FE] p-2">
+      {hasActiveMergeConflict && sim.conflict && (
+        <div className="order-2 mx-auto mt-1.5 w-full max-w-3xl px-3 sm:px-6" data-testid="conflict-preview">
+          <div className="rounded-xl border border-[#D69B61] bg-[#FFFDF8] px-3 py-2">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+              <h2 className="break-keep text-sm font-bold text-[#2F241D]">{sim.conflict.file}에서 겹친 내용이에요</h2>
+              <p className="break-keep text-xs text-[#59483B]">내용을 비교한 뒤 아래 버튼에서 남길 것을 골라 주세요.</p>
+            </div>
+            <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+              <div className="rounded-md border border-[#3292CE] bg-[#F0F8FE] px-2 py-1.5">
                 <p className="text-xs font-semibold text-[#174669]">내 브랜치 ({sim.conflict.oursLabel})</p>
-                <code className="font-mono-code mt-1 block whitespace-pre-wrap text-xs text-[#2F241D]">{sim.conflict.oursCode}</code>
+                <code className="font-mono-code mt-0.5 block whitespace-pre-wrap text-xs text-[#2F241D]">{sim.conflict.oursCode}</code>
               </div>
-              <div className="rounded-md border border-[#9B72CF] bg-[#F6F0FC] p-2">
+              <div className="rounded-md border border-[#9B72CF] bg-[#F6F0FC] px-2 py-1.5">
                 <p className="text-xs font-semibold text-[#623AA8]">상대 브랜치 ({sim.conflict.theirsLabel})</p>
-                <code className="font-mono-code mt-1 block whitespace-pre-wrap text-xs text-[#2F241D]">{sim.conflict.theirsCode}</code>
+                <code className="font-mono-code mt-0.5 block whitespace-pre-wrap text-xs text-[#2F241D]">{sim.conflict.theirsCode}</code>
               </div>
             </div>
-            <div className="mt-2 rounded-md border border-[#22A882] bg-[#E0F4E9] p-2">
-              <p className="text-xs font-semibold text-[#115843]">두 변경 함께 남기기 결과 미리보기</p>
-              <code className="font-mono-code mt-1 block whitespace-pre-wrap text-xs text-[#2F241D]">{sim.conflict.bothCode}</code>
+            <div className="mt-1.5 rounded-md border border-[#22A882] bg-[#E0F4E9] px-2 py-1">
+              <p className="text-xs font-semibold text-[#115843]">두 변경 함께 남기기 미리보기 <span className="font-normal text-[#2D5E4A]">(항상 정답은 아니니 결과를 확인하세요)</span></p>
+              <code className="font-mono-code mt-0.5 block whitespace-pre-wrap text-xs text-[#2F241D]">{sim.conflict.bothCode}</code>
             </div>
-            <ul className="mt-2 space-y-1 break-keep text-xs leading-relaxed text-[#59483B]">
-              <li>· 현재 브랜치 내용 유지 → 내 브랜치 줄만 남아요.</li>
-              <li>· 상대 브랜치 내용 사용 → 상대 브랜치 줄만 남아요.</li>
-              <li>· 두 변경 함께 남기기 → 위 미리보기처럼 두 내용을 절충해 남아요. 항상 정답은 아니니 결과를 확인하세요.</li>
-            </ul>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-[#E9DFCE] pt-1.5">
+              {CONFLICT_RESOLUTION_ACTIONS.map((act) => {
+                const toneCls = ACTION_TONE_CLASSES[act.tone ?? 'amber'];
+                return (
+                  <button
+                    key={act.command}
+                    type="button"
+                    onClick={() => runCommand(act.command)}
+                    className={`pixel-btn cursor-pointer rounded-md px-2.5 py-1 text-xs font-semibold ${toneCls}`}
+                  >
+                    {act.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
+      )}
+      {showFileStatusCard && stageFileItems.length > 0 && (
+        <section
+          aria-label="현재 파일 상태"
+          data-testid="stage-files-card"
+          className="order-4 mx-auto w-full max-w-5xl px-3 pb-2.5 pt-1 sm:px-6"
+        >
+          <div className="rounded-lg border border-[#D8C9B0] bg-[#FFFDF8] px-3 py-2">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+              <span className="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-[#59483B]">
+                <FileText aria-hidden="true" className="h-3.5 w-3.5 text-[#886237]" />
+                현재 파일 상태
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {stageFileItems.map((file) => {
+                  const badge = FILE_STATUS_BADGES[file.badgeKey];
+                  const isSelected = selectedFile === file.name;
+                  return (
+                    <button
+                      key={file.name}
+                      type="button"
+                      aria-expanded={isSelected}
+                      onClick={() => setSelectedFile(isSelected ? null : file.name)}
+                      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs transition-colors ${isSelected
+                        ? 'border-[#80613B] bg-[#F6EDDB] font-semibold'
+                        : 'border-[#DFD1BA] bg-[#FAF4E8] hover:bg-[#F3E9D6]'}`}
+                    >
+                      <code className="font-mono-code text-[#2F241D]">{file.name}</code>
+                      <span className={`rounded-full border px-1.5 py-0 text-[10px] font-semibold leading-4 ${badge.className}`}>
+                        {badge.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="ml-auto hidden text-[11px] text-[#715A43] sm:inline">파일을 눌러 내용 미리보기</span>
+            </div>
+            {activePreviewFile && (
+              <div
+                data-testid="stage-file-preview"
+                className="mt-2 rounded-md border border-[#E3D5BE] bg-[#FAF4E8] p-2.5 text-xs"
+              >
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="font-semibold text-[#2F241D]">
+                    <code className="font-mono-code">{activePreviewFile.name}</code>
+                    <span className="ml-2 text-[#715A43]">({FILE_STATUS_BADGES[activePreviewFile.badgeKey].label})</span>
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="파일 미리보기 닫기"
+                    onClick={() => setSelectedFile(null)}
+                    className="rounded border border-[#D8C9B0] bg-[#FFFDF8] p-0.5 text-[#59483B] hover:bg-white"
+                  >
+                    <X aria-hidden="true" className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <pre className="font-mono-code max-h-32 overflow-auto whitespace-pre-wrap rounded bg-[#FFFDF8] p-2 text-xs leading-relaxed text-[#2F241D]">
+                  {activePreviewFile.content}
+                </pre>
+                {activePreviewFile.stashedContent !== undefined && activePreviewFile.stashedContent !== activePreviewFile.content && (
+                  <div className="mt-1.5">
+                    <p className="text-[11px] font-semibold text-[#5B3E9E]">임시 보관함에 맡긴 수정 내용:</p>
+                    <pre className="font-mono-code mt-0.5 max-h-28 overflow-auto whitespace-pre-wrap rounded border border-[#D9C8EE] bg-[#F8F3FD] p-2 text-xs leading-relaxed text-[#2F241D]">
+                      {activePreviewFile.stashedContent}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
       )}
       {stageId === 'ch6' && (
         <div className="order-2 mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="token-scopes">
