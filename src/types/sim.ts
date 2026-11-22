@@ -61,6 +61,8 @@ export interface PixelCommit {
 export interface PixelPr {
   number: number;
   title: string;
+  /** --body로 적은 변경 이유. 실제 PR 본문처럼 다시 확인할 수 있게 보관해요. */
+  body?: string;
   headBranch: string;
   baseBranch: string;
   status: 'open' | 'draft' | 'merged';
@@ -98,19 +100,23 @@ export interface TokenWorldState {
   sshReady: boolean;
   riskScore: number; // 0..100
   pushBlockedDemo: boolean;
+  /** 만료는 권한(scopes)이 아니라 토큰 속성이에요. 별도 필드로 보관해요. */
+  expires?: string;
 }
 
 export interface GhesWorldState {
   host: string;
   connected: boolean;
   mode: 'cloud' | 'ghes';
-  lastFlow: 'idle' | 'blocked' | 'vpn-ok' | 'api-v3' | 'runner';
+  lastFlow: 'idle' | 'blocked' | 'unauth' | 'vpn-ok' | 'api-v3' | 'runner';
   auditLogs: string[];
 }
 
 export interface AiWorldState {
   worktreeActive: boolean;
   worktreeBranch: string;
+  /** worktree 폴더 이름. 브랜치 이름과 구분해서 보여 줘요. */
+  worktreeDir?: string;
   codeWritten: boolean;
   tokenSafe: boolean;
   mainPushBlocked: boolean;
@@ -148,6 +154,7 @@ const PIXEL_ANIMATION_KINDS = [
   'TOKEN_BLOCK',
   'GHES_LOGIN',
   'GHES_BLOCK',
+  'GHES_UNAUTH',
   'GHES_API',
   'GHES_RUNNER',
   'AI_WORKTREE',

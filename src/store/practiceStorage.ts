@@ -86,6 +86,7 @@ const savedProgress = hasFields<SavedProgress>({
   prs: arrayOf(hasFields<PixelPr>({
     number: isCount, title: isString, headBranch: isString, baseBranch: isString, approved: isBoolean,
     status: oneOf('open', 'draft', 'merged'), ci: oneOf('pending', 'running', 'pass'),
+    body: isOptionalString,
   })),
   issues: arrayOf(hasFields<PixelIssue>({ number: isCount, title: isString, status: oneOf('open', 'closed') })),
   conflict: nullable(hasFields<PixelConflict>({
@@ -100,13 +101,15 @@ const savedProgress = hasFields<SavedProgress>({
   token: hasFields<TokenWorldState>({
     mode: oneOf('classic', 'fine-grained'), scopes: strings,
     ssoAuthorized: isBoolean, sshReady: isBoolean, riskScore: isNumber, pushBlockedDemo: isBoolean,
+    expires: isOptionalString,
   }),
   ghes: hasFields<GhesWorldState>({
     host: isString, connected: isBoolean, mode: oneOf('cloud', 'ghes'),
-    lastFlow: oneOf('idle', 'blocked', 'vpn-ok', 'api-v3', 'runner'), auditLogs: strings,
+    lastFlow: oneOf('idle', 'blocked', 'unauth', 'vpn-ok', 'api-v3', 'runner'), auditLogs: strings,
   }),
   ai: hasFields<AiWorldState>({
-    worktreeActive: isBoolean, worktreeBranch: isString, codeWritten: isBoolean, tokenSafe: isBoolean,
+    worktreeActive: isBoolean, worktreeBranch: isString, worktreeDir: isOptionalString,
+    codeWritten: isBoolean, tokenSafe: isBoolean,
     mainPushBlocked: isBoolean, prNumber: nullable(isCount), humanApproved: isBoolean, merged: isBoolean,
   }),
   completedActions: arrayOf(oneOf(...LESSON_ACTIONS)),

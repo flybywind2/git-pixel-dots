@@ -27,6 +27,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       term('커밋'),
       term('diff'),
       term('HEAD'),
+      term('브랜치'),
     ],
     steps: [
       { id: 'docs-edit', label: '문서 편집하기', goal: '회의록.md의 "금요일 저녁 7시"를 다른 시간으로 바꾸고 저장하기', command: 'edit 회의록.md', doneAction: 'EDIT', terms: ['회의록.md'] },
@@ -58,7 +59,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       DOCUMENT_REVERT,
     ],
     cheatSheet: [
-      { cmd: 'edit 회의록.md', desc: '스터디 시간이 바뀐 예시를 작업 문서에 바로 저장해요. 원하는 글은 편집기에 직접 쓸 수 있어요.' },
+      { cmd: 'edit 회의록.md', desc: '이미 직접 쓴 내용이 있으면 먼저 확인을 거쳐요. 편집기의 "예시 수정 넣기" 버튼도 같은 확인을 거친 뒤 초안으로만 채워요.' },
       { cmd: working.command, desc: '스테이징 영역과 현재 작업 문서를 비교해요. --는 "이 다음부터는 파일 이름"이라는 구분자예요. 스테이징 이후에 문서를 더 고쳤을 때 어떤 내용이 추가로 바뀌었는지 알 수 있어요.' },
       { cmd: 'git add 회의록.md', desc: '지금 저장한 문서의 복사본을 다음 커밋에 담아요.' },
       { cmd: staged.command, desc: '최근 커밋과 스테이징 영역을 비교해 다음 커밋에 들어갈 변경을 확인해요.' },
@@ -78,6 +79,8 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       term('스테이징 영역'),
       term('커밋'),
       term('원격 저장소'),
+      term('브랜치'),
+      term('origin'),
     ],
     steps: [
       {
@@ -96,6 +99,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'git commit -m "모임 시간 수정, 참석 안내 추가"',
         doneAction: 'COMMIT',
         terms: ['커밋'],
+        commandNote: '-m 뒤에 기록 설명 메시지를 적어요. 여러 단어는 따옴표로 감싸 주세요.',
       },
       {
         id: 'ch1-push',
@@ -115,16 +119,18 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     ],
     chips: [
       { command: 'git status', label: '상태 보기' },
+      { command: 'git log', label: '기록 보기' },
       { command: 'edit 회의록.md', label: '회의록 예시 수정' },
       { stepIndex: 0 },
       { stepIndex: 1 },
       { stepIndex: 2 },
     ],
     cheatSheet: [
-      { cmd: 'git status', desc: '지금 수정·추가된 파일 상태를 한눈에 확인해요.' },
+      { cmd: 'git status', desc: '지금 수정·추가된 파일 상태와 아직 팀에 공유하지 않은 커밋 수를 함께 확인해요.' },
+      { cmd: 'git log', desc: '최근 커밋 메시지와 7자리 커밋 ID를 다시 확인해요.' },
       { cmd: 'edit 회의록.md', desc: '스터디 준비 사항을 회의록에 한 줄 추가해요.' },
       { cmd: 'git add .', desc: '.은 이 폴더 안의 모든 변경을 뜻해요. 파일 이름을 하나씩 적지 않아도 현재 폴더와 하위 폴더의 변경을 스테이징 영역(다음 커밋에 담을 장바구니)에 담아요.' },
-      { cmd: 'git commit -m "모임 시간 수정, 참석 안내 추가"', desc: '고른 변경을 내 저장소에 기록해요. -m 뒤의 글이 커밋 메시지가 돼요. 무엇을 바꿨는지 알 수 있게 적어요.' },
+      { cmd: 'git commit -m "모임 시간 수정, 참석 안내 추가"', desc: '고른 변경을 내 저장소에 기록해요. -m 뒤의 글이 커밋 메시지가 돼요. 메시지를 적지 않으면 실습에서는 파일 이름으로 기본 메시지를 만들어요(실제 Git은 편집기를 열어요).' },
       { cmd: 'git push', desc: '내 브랜치의 새 커밋을 연결된 원격 저장소로 보내요.' },
     ],
   },
@@ -164,7 +170,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'git stash',
         doneAction: 'STASH',
         terms: ['stash'],
-        commandNote: '되돌리기 작업과 섞이지 않게 작업 폴더를 비워요.',
+        commandNote: '되돌리기 작업과 섞이지 않게 작업 폴더를 비워요. 추적하지 않는 새 파일(비밀 메모)은 보관함에 들어가지 않고 작업 폴더에 그대로 남아요.',
         prediction: {
           question: '작업 임시 보관하기(git stash)를 실행하면 고치던 변경은 어디로 갈까요?',
           choices: ['임시 보관함에 들어가 작업 폴더가 깨끗해져요', '영구 삭제돼요'],
@@ -194,6 +200,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'git stash pop',
         doneAction: 'STASH_POP',
         terms: ['stash'],
+        commandNote: '보관함에서 꺼내 작업 폴더에 다시 적용해요. 꺼낸 항목은 보관함에서 사라져요.',
       },
       {
         id: 'ch2-push',
@@ -217,13 +224,15 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     ],
     cheatSheet: [
       { cmd: `git restore --staged ${SECRET_NOTE_PATH}`, desc: '장바구니(스테이징 영역)에서만 변경을 빼요. 작업 폴더의 파일은 그대로 남아요.' },
-      { cmd: 'git log', desc: '현재 브랜치의 커밋을 최신순으로 확인해요.' },
+      { cmd: 'git log', desc: '현재 브랜치의 커밋을 최신순으로 확인해요. 커밋 해시를 git show에 붙여 과거 파일도 볼 수 있어요.' },
+      { cmd: 'git show HEAD:회의록.md', desc: '최근 커밋에 기록된 파일 내용을 열어 봐요.' },
       { cmd: 'git diff', desc: '수정 전과 후가 어떻게 달라졌는지 비교해요.' },
-      { cmd: 'git stash', desc: '아직 커밋하지 않은 변경을 임시 보관해요.' },
-      { cmd: 'git stash pop', desc: '임시 보관한 변경을 작업 폴더에 다시 적용해요.' },
+      { cmd: 'git stash', desc: '아직 커밋하지 않은 변경을 임시 보관해요. stash@{0}이 가장 최근 보관 항목이에요.' },
+      { cmd: 'git stash list', desc: '보관함에 남은 항목과 번호(stash@{0}이 가장 최근)를 확인해요.' },
+      { cmd: 'git stash pop', desc: '임시 보관한 변경을 작업 폴더에 다시 적용해요. 꺼낸 항목은 보관함에서 사라져요.' },
       { cmd: 'git revert HEAD', desc: 'HEAD는 현재 커밋이에요. 그 변경을 취소하는 새 커밋을 만들어요.' },
       { cmd: 'git push', desc: '취소 커밋을 원격 저장소에 올려 팀의 GitHub에서도 임시 안내가 사라지게 해요.' },
-      { cmd: 'git reset --soft HEAD~1', desc: 'HEAD~1은 바로 이전 커밋이에요. 작업 파일과 스테이징 영역을 유지하면서 현재 브랜치를 그 커밋으로 옮겨요. 이미 팀에 공유한 기록에는 쓰지 않아요(공유한 기록은 revert로 취소해요).' },
+      { cmd: 'git reset --soft HEAD~1', desc: 'HEAD~1은 바로 이전 커밋이에요. 작업 파일과 스테이징 영역을 유지하면서 현재 브랜치를 그 커밋으로 옮겨요. 이미 팀에 공유한 기록을 되감으면 push가 거절되니, 그때는 git pull로 원격 기록을 먼저 확인해요.' },
     ],
   },
   ch4: {
@@ -240,6 +249,8 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       term('origin'),
       term('풀 리퀘스트(PR)'),
       term('승인'),
+      term('자동 검사(CI)'),
+      term('HEAD'),
     ],
     steps: [
       {
@@ -263,6 +274,8 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         goal: '장소를 바꾼 회의록.md를 다음 커밋에 담기',
         command: 'git add 회의록.md',
         doneAction: 'ADD',
+        terms: ['스테이징 영역'],
+        commandNote: '고친 회의록을 다음 커밋에 담아요. 담기만 하고 아직 기록(커밋)은 아니에요.',
       },
       {
         id: 'ch4-commit',
@@ -270,6 +283,8 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         goal: '담아 둔 회의록 변경을 새 커밋으로 기록하기',
         command: `git commit -m "${MEETING_PR_TITLE}"`,
         doneAction: 'COMMIT',
+        terms: ['커밋'],
+        commandNote: '-m 뒤의 글이 커밋 메시지가 돼요.',
       },
       {
         id: 'ch4-push',
@@ -278,7 +293,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: `git push -u origin ${MEETING_PR_BRANCH}`,
         doneAction: 'PUSH',
         terms: ['원격 저장소', 'origin'],
-        commandNote: '-u는 원격 브랜치와 연결해 다음부터 git push만으로 보내게 해요.',
+        commandNote: '-u는 원격 브랜치와 연결해 다음부터 git push만으로 보내게 해요. GitHub에 올라가면 자동 검사(CI)가 PR의 변경을 확인해요.',
         prediction: {
           question: '팀에 공유하기(git push -u origin docs/meeting) 뒤 새 브랜치는 어디에 보일까요?',
           choices: ['내 컴퓨터에만', 'GitHub에도'],
@@ -326,6 +341,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'git switch main',
         doneAction: 'RETURN_MAIN',
         terms: ['브랜치'],
+        commandNote: '브랜치를 바꾸면 작업 파일도 그 브랜치의 최신 커밋 버전으로 바뀌어요. 내 변경은 작업 브랜치와 GitHub에 안전하게 남아 있어요.',
       },
       {
         id: 'ch4-pull',
@@ -363,9 +379,10 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       { cmd: `gh pr create --title "${MEETING_PR_TITLE}" --body "장소를 2층 모임방으로 바꿨어요. 검토 부탁해요!"`, desc: '팀원에게 회의록 변경을 검토해 달라는 PR을 열어요. --title은 제목, --body는 변경 이유를 적는 본문이에요.' },
       { cmd: 'gh pr view --comments', desc: 'PR의 상태와 팀원의 검토 의견·승인을 확인해요. --comments를 붙이면 리뷰 의견까지 볼 수 있어요.' },
       { cmd: 'gh pr merge', desc: '팀원 승인을 확인한 PR을 기본 브랜치(main)에 합쳐요.' },
-      { cmd: 'git switch main', desc: '팀의 기본 브랜치로 이동해요. 합친 내용을 내 컴퓨터에 가져오려면 먼저 main으로 이동해요.' },
+      { cmd: 'git switch main', desc: '팀의 기본 브랜치로 이동해요. 합친 내용을 내 컴퓨터에 가져오려면 먼저 main으로 이동해요. 이동하면 작업 파일이 main의 커밋 버전으로 바뀌어요.' },
       { cmd: 'git pull origin main', desc: '원격 최신 커밋을 가져와 내 브랜치에 바로 합쳐요. PR을 합친 뒤 main에서 실행하면 내 컴퓨터에도 반영돼요.' },
       { cmd: 'git fetch', desc: '원격의 새 커밋과 브랜치 정보를 받아 와요. 현재 작업 파일은 그대로예요.' },
+      { cmd: 'git branch -d docs/meeting', desc: 'main에 합친 뒤 다 쓴 작업 브랜치를 정리해요(병합된 브랜치만 삭제).' },
     ],
     phases: [
       { label: '내 컴퓨터에서', steps: 3 },
@@ -383,6 +400,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     terms: [
       term('브랜치'),
       term('병합 충돌'),
+      term('HEAD'),
     ],
     steps: [
       {
@@ -414,6 +432,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'resolve both',
         doneAction: 'RESOLVE',
         terms: ['병합 충돌'],
+        commandNote: '같은 이름이 두 번 선언되지 않도록, 둘 다 남길 때는 상대 줄의 이름만 alternateTheme으로 바꿔 함께 담아요. 앱은 첫 번째 theme 색을 계속 쓰고, 실제 Git은 이렇게 이름을 자동으로 바꿔 주지 않아요.',
       },
       {
         id: 'ch3-commit',
@@ -432,16 +451,16 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       { stepIndex: 2 },
       { stepIndex: 3 },
       { command: 'git switch main', label: '기본 브랜치로 이동' },
-      { command: 'git rebase main', label: '기본 기록 위로 옮기기' },
+      { command: 'git diff HEAD', label: '최종 내용 확인' },
     ],
     cheatSheet: [
       { cmd: 'git branch', desc: '현재 존재하는 브랜치 목록을 확인해요.' },
       { cmd: 'git switch -c feat/dark', desc: '현재 커밋에서 feat/dark 브랜치를 만들고 그곳으로 이동해요.' },
-      { cmd: 'git switch main', desc: '다른 브랜치로 이동해요.' },
+      { cmd: 'git switch main', desc: '다른 브랜치로 이동해요. main은 같은 커밋을 가리키며 그대로 남아 있어요.' },
       { cmd: 'git merge feat/ui', desc: '다른 브랜치의 작업을 현재 브랜치로 합쳐요.' },
       { cmd: 'resolve both', desc: '실습에서 두 변경을 함께 반영해요. 실제 Git에서는 충돌한 파일을 편집하고 git add로 해결을 표시해요.' },
       { cmd: 'git commit', desc: '충돌을 해결한 뒤 합친 결과를 커밋으로 남겨요.' },
-      { cmd: 'git rebase main', desc: '내 커밋을 main 위로 옮겨 한 줄로 깔끔히 정리해요.' },
+      { cmd: 'git diff HEAD', desc: '최근 커밋과 작업 파일을 비교해, 충돌을 해결한 최종 내용을 확인해요.' },
     ],
   },
   ch5: {
@@ -455,6 +474,8 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       term('이슈'),
       term('자동 검사(CI)'),
       term('API'),
+      term('풀 리퀘스트(PR)'),
+      term('JSON'),
     ],
     steps: [
       {
@@ -464,6 +485,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'gh auth status',
         doneAction: 'AUTH_STATUS',
         terms: ['gh'],
+        commandNote: '어느 서버에 어떤 계정으로 로그인했는지, 토큰에 어떤 권한이 붙었는지 확인해요.',
       },
       {
         id: 'ch5-issue',
@@ -472,6 +494,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'gh issue create --title "다크 모드에서 글자가 안 보여요"',
         doneAction: 'ISSUE_CREATE',
         terms: ['이슈'],
+        commandNote: '--title 뒤에 버그 증상을 적어요. 이슈는 할 일 기록일 뿐, 코드를 고치지는 않아요.',
       },
       {
         id: 'ch5-run',
@@ -480,7 +503,13 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'gh run watch',
         doneAction: 'RUN_WATCH',
         terms: ['자동 검사(CI)'],
-        commandNote: '이슈와는 별개로, 이미 올라간 코드 변경의 검사예요.',
+        commandNote: '이슈와는 별개로, 이미 올라간 feat/darkmode 브랜치의 코드 변경 검사예요.',
+        prediction: {
+          question: '자동 검사(CI)는 언제 돌까요?',
+          choices: ['이슈를 등록하면 바로', '코드 변경이 GitHub에 올라간 뒤'],
+          answer: 1,
+          explain: 'CI는 올라간 코드 변경을 빌드·테스트해요. 이슈 등록만으로는 코드가 바뀌지 않아 검사가 돌지 않아요.',
+        },
       },
       {
         id: 'ch5-api',
@@ -488,7 +517,14 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         goal: 'API 응답에서 저장소 이름과 기본 브랜치 확인하기',
         command: 'gh api repos/gitdots/app',
         doneAction: 'REPO_API',
-        terms: ['API'],
+        terms: ['API', 'JSON'],
+        commandNote: 'gh api는 GitHub에 데이터를 요청하는 명령이에요. repos/gitdots/app은 "소유자/저장소" 주소이고, 응답은 JSON(프로그램이 읽기 쉬운 데이터 형식)으로 와요.',
+        prediction: {
+          question: 'gh api repos/gitdots/app 응답에서 저장소의 기본 브랜치를 알려 주는 필드는?',
+          choices: ['full_name', 'default_branch'],
+          answer: 1,
+          explain: 'default_branch가 기본 브랜치(main)를 알려 줘요. full_name은 저장소 전체 이름이에요.',
+        },
       },
     ],
     chips: [
@@ -496,17 +532,19 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       { stepIndex: 1 },
       { stepIndex: 2 },
       { stepIndex: 3 },
+      { command: 'gh issue list', label: '이슈 목록 보기' },
       { command: 'gh pr create --title "다크 모드 색상 추가" --body "다크 모드 색상을 추가했어요. 검토 부탁해요!"', label: '검토 요청하기' },
       { command: 'gh pr list', label: 'PR 목록 보기' },
     ],
     cheatSheet: [
-      { cmd: 'gh auth status', desc: '현재 로그인된 계정과 권한을 확인해요.' },
+      { cmd: 'gh auth status', desc: '현재 로그인된 서버·계정과 권한 이름을 한글 풀이와 함께 확인해요.' },
       { cmd: 'gh issue create --title "다크 모드에서 글자가 안 보여요"', desc: '버그 증상을 제목으로 적어 새 이슈를 바로 등록해요.' },
-      { cmd: 'gh run watch', desc: '자동 검사(빌드·테스트) 진행을 실시간으로 지켜봐요.' },
+      { cmd: 'gh issue list', desc: '등록한 이슈 목록을 확인해요.' },
+      { cmd: 'gh run watch', desc: '올라간 코드 변경의 자동 검사(빌드·테스트) 진행을 지켜봐요.' },
       { cmd: 'gh pr create --title "다크 모드 색상 추가" --body "다크 모드 색상을 추가했어요. 검토 부탁해요!"', desc: '브라우저 없이 제목과 본문을 적어 PR을 바로 열어요.' },
-      { cmd: 'gh pr list', desc: '열려 있는 PR 목록과 자동 검사 상태를 조회해요.' },
+      { cmd: 'gh pr list', desc: 'PR 목록과 자동 검사 상태를 조회해요. 병합된 PR도 함께 보여 줘요.' },
       { cmd: 'gh repo view', desc: '현재 저장소의 설명과 상태를 요약해 봐요.' },
-      { cmd: 'gh api repos/gitdots/app', desc: '연습 저장소 gitdots/app의 정보를 JSON 형식으로 받아요.' },
+      { cmd: 'gh api repos/gitdots/app', desc: '연습 저장소 정보를 JSON 형식으로 받아요. open_issues_count는 이슈와 PR을 합친 수예요.' },
     ],
   },
   ch6: {
@@ -520,6 +558,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       term('개인 액세스 토큰(PAT)'),
       term('SSH 키'),
       term('SSO(통합 로그인)'),
+      term('SAML'),
     ],
     steps: [
       {
@@ -578,7 +617,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       { cmd: 'token fine', desc: '저장소·권한을 딱 필요한 만큼만 주는 github_pat_ 토큰이에요.' },
       { cmd: 'token sso', desc: 'SSO(통합 로그인)를 사용하는 예제 조직에서 회사 계정의 신원을 확인해요.' },
       { cmd: 'token ssh', desc: '공개키·개인키 쌍으로 안전하게 Git 인증을 설정해요.' },
-      { cmd: 'token leak-test', desc: '토큰이 담긴 변경을 올릴 때 비밀 정보 유출 방지 기능이 전송을 차단하는 과정을 확인해요.' },
+      { cmd: 'token leak-test', desc: '토큰이 담긴 .env.example을 올리려 할 때 비밀 정보 유출 방지 기능이 전송을 차단하는 과정을 확인해요.' },
       { cmd: 'gh auth login --with-token', desc: '토큰을 표준 입력으로 읽는 로그인 예제예요. 실습은 가상 인증으로 끝나요.' },
     ],
   },
@@ -587,13 +626,16 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     shortTitle: '사내 GitHub',
     title: '회사에서 운영하는 GitHub에 접속하기',
     tagline: 'GitHub Enterprise Server(GHES)는 조직이 직접 운영하는 GitHub예요. VPN(회사 내부망에 안전하게 접속하는 연결)이 이미 연결됐다고 가정하고, 사내 주소로 로그인하는 과정을 실습해요.',
-    takeaway: '사내 호스트에 로그인해 내 계정 정보를 조회했어요. 이 회사의 자동 빌드는 사내 실행기(runner)가 맡아요.',
+    takeaway: '사내 방화벽이 외부 github.com 전송을 차단하는 것을 확인하고, 사내 호스트에 로그인해 내 계정 정보를 조회했어요. 이 회사의 자동 빌드는 사내 실행기(runner)가 맡아요.',
     accent: '#60a5fa',
     terms: [
       term('방화벽'),
       term('VPN'),
       term('호스트'),
       term('실행기(runner)'),
+      term('API'),
+      term('자동 검사(CI)'),
+      term('SAML'),
     ],
     steps: [
       {
@@ -619,7 +661,14 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         goal: '사내 서버에 로그인한 계정 정보 조회하기',
         command: 'gh api user --hostname github.corp.internal',
         doneAction: 'GHES_API',
-        terms: ['호스트'],
+        terms: ['호스트', 'API', 'SAML'],
+        commandNote: '--hostname으로 사내 서버를 지정하고, gh api user로 내 계정 정보를 요청해요. 사내 서버는 API 주소 앞에 /api/v3가 붙어요.',
+        prediction: {
+          question: '사내 서버에 로그인하기 전에 내 계정 정보를 요청하면 어떻게 될까요?',
+          choices: ['바로 보여줘요', '인증이 필요해서 401로 거절돼요'],
+          answer: 1,
+          explain: 'VPN이 연결돼 있어도 사내 GitHub 로그인(SSO/SAML)을 마치지 않으면 401 Unauthorized로 거절돼요.',
+        },
       },
       {
         id: 'ch7-runner',
@@ -639,9 +688,9 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     ],
     cheatSheet: [
       { cmd: 'ghes test-public', desc: '사내 방화벽이 외부 github.com 전송을 차단하는 걸 확인해요.' },
-      { cmd: 'gh auth login --hostname github.corp.internal', desc: '접속할 GitHub 호스트를 사내 주소로 지정해요.' },
+      { cmd: 'gh auth login --hostname github.corp.internal', desc: '접속할 GitHub 호스트를 사내 주소로 지정해요. --hostname을 빼면 사내 서버에는 로그인할 수 없어요.' },
       { cmd: 'gh api user --hostname github.corp.internal', desc: 'gh가 사내 서버의 /api/v3/user에 요청해 로그인한 계정을 보여줘요. /api/v3은 사내 GitHub가 데이터를 주고받는 API 주소예요.' },
-      { cmd: 'ghes runner', desc: '사내 컴퓨터에 설치된 실행기가 자동 빌드를 처리해요.' },
+      { cmd: 'ghes runner', desc: '사내 컴퓨터에 설치된 실행기가 자동 빌드(CI)를 처리해요.' },
       { cmd: 'ghes cloud', desc: 'GitHub.com 클라우드와 사내 GHES의 차이를 비교해요.' },
     ],
   },
@@ -650,11 +699,14 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     shortTitle: 'AI와 협업',
     title: 'AI가 고친 코드를 검토하고 합치기',
     tagline: '덧셈 함수가 빼기를 하고 있어요. AI가 별도 폴더에서 고치는 과정을 버튼으로 진행하고, 테스트 결과와 코드 변경을 사람이 확인하는 과정을 따라가 보세요.',
-    takeaway: 'worktree로 작업 폴더를 나누고, 브랜치 보호 규칙으로 main에 들어갈 변경을 관리했어요. 사람이 검토한 수정이 PR을 통해 합쳐졌어요.',
+    takeaway: 'worktree로 작업 폴더를 나누고, 브랜치 보호 규칙으로 main에 들어갈 변경을 관리했어요. 사람이 검토한 수정이 PR을 통해 합쳐졌어요. GitHub의 main에 합쳐졌을 뿐, 내 컴퓨터의 main은 git pull로 따로 가져와야 해요.',
     accent: '#34d399',
     terms: [
       term('worktree'),
       term('브랜치 보호 규칙'),
+      term('풀 리퀘스트(PR)'),
+      term('승인'),
+      term('자동 검사(CI)'),
     ],
     steps: [
       {
@@ -663,8 +715,8 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         goal: 'ai/fix 브랜치를 별도 작업 폴더 wt-ai에 열기',
         command: 'git worktree add -b ai/fix wt-ai',
         doneAction: 'AI_WORKTREE',
-        terms: ['worktree'],
-        commandNote: '-b 뒤에 새 브랜치 이름, 마지막에 새 폴더 이름을 적어요.',
+        terms: ['worktree', '브랜치'],
+        commandNote: '-b 뒤에는 새 브랜치 이름(ai/fix), 마지막에는 새 폴더 이름(wt-ai)을 적어요. 폴더 이름과 브랜치 이름은 서로 달라요.',
       },
       {
         id: 'ch8-code',
@@ -678,16 +730,16 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       {
         id: 'ch8-block',
         label: '직접 공유 제한 확인하기',
-        goal: 'main 직접 푸시가 보호 규칙에 걸리는지 확인하기',
+        goal: 'main에 바로 올려 보기',
         command: 'ai push-main',
         doneAction: 'AI_BLOCK_MAIN',
         terms: ['브랜치 보호 규칙'],
         commandNote: 'ai push-main은 체험용 명령이에요. 실제로는 보호된 main에 git push할 때 차단돼요.',
         prediction: {
-          question: '직접 공유 제한 확인하기(ai push-main) 때 AI의 push는 어떻게 될까요?',
+          question: '보호된 main에 AI가 바로 push하면 어떻게 될까요?',
           choices: ['보호 규칙에 걸려 차단돼요', '항상 허용돼요'],
           answer: 0,
-          explain: '브랜치 보호 규칙은 main에 들어갈 변경이 검토(PR)를 거치게 해요.',
+          explain: '브랜치 보호 규칙은 main에 들어갈 변경이 PR과 사람의 승인을 거치게 해요.',
         },
       },
       {
@@ -725,14 +777,16 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       { stepIndex: 3 },
       { stepIndex: 4 },
       { stepIndex: 5 },
+      { command: 'git diff main ai/fix', label: 'AI 변경 비교' },
     ],
     cheatSheet: [
-      { cmd: 'git worktree add -b ai/fix wt-ai', desc: 'AI가 쓸 별도 작업 폴더(worktree)를 열어요.' },
+      { cmd: 'git worktree add -b ai/fix wt-ai', desc: 'AI가 쓸 별도 작업 폴더(wt-ai)와 브랜치(ai/fix)를 함께 만들어요.' },
       { cmd: 'ai code', desc: 'AI가 독립 브랜치에서 버그를 고치고 테스트를 돌려요.' },
       { cmd: 'ai push-main', desc: '브랜치 보호 규칙이 AI가 기본 브랜치(main)에 직접 올리는 변경을 막아요.' },
       { cmd: 'ai pr', desc: 'AI가 초안 PR을 열고 자동 테스트를 통과해요.' },
       { cmd: 'ai ready', desc: '초안 PR을 검토 준비 상태로 전환해요. 초안 PR은 바로 합칠 수 없어요(실제로는 gh pr ready).' },
       { cmd: 'ai approve', desc: '사람이 변경을 확인하고 승인한 뒤 합쳐요.' },
+      { cmd: 'git diff main ai/fix', desc: '사람이 검토할 실제 코드 변경을 최근 main과 AI 브랜치 사이에서 비교해요.' },
     ],
   },
 };

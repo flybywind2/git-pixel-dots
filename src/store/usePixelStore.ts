@@ -39,6 +39,7 @@ export interface PixelStore extends PracticeSession {
   saveIssues: Partial<Record<StageId, PracticeSaveIssue>>;
   history: string[];
   helpOpen: boolean;
+  certificateOpen: boolean;
   confirmation: PracticeConfirmation | null;
   notice: string | null;
   storageWarning: boolean;
@@ -52,6 +53,7 @@ export interface PixelStore extends PracticeSession {
   loadExampleDocument: () => void;
   saveDocument: () => void;
   setHelpOpen: (open: boolean) => void;
+  setCertificateOpen: (open: boolean) => void;
   resolveConfirmation: (confirmed: boolean) => void;
   dismissStorageWarning: () => void;
   adoptExternalSession: (id: StageId, session: PracticeSession) => void;
@@ -155,6 +157,7 @@ export const usePixelStore = create<PixelStore>((set) => ({
   saveIssues,
   history: [],
   helpOpen: false,
+  certificateOpen: false,
   confirmation: null,
   notice: null,
   storageWarning: !practiceStorageAvailable(),
@@ -238,6 +241,8 @@ export const usePixelStore = create<PixelStore>((set) => ({
   }),
 
   setHelpOpen: (open) => set({ helpOpen: open }),
+
+  setCertificateOpen: (open) => set({ certificateOpen: open }),
 
   dismissStorageWarning: () => set({ storageWarning: false }),
 
