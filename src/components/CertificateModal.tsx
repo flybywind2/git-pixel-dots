@@ -1,28 +1,44 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { STAGE_SCENARIOS } from '../engine';
+import { readCertificateMeta, writeCertificateMeta } from '../store/certificateMeta';
 
-export function CertificateModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+interface CertificateModalProps {
+  open: boolean;
+  onClose: () => void;
+  completed: boolean[];
+  allComplete: boolean;
+}
+
+export function CertificateModal({ open, onClose, completed, allComplete }: CertificateModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const [name, setName] = useState('');
+  const [dateLabel, setDateLabel] = useState('');
 
   useEffect(() => {
     if (!open) return;
+    const meta = readCertificateMeta();
+    setName(meta.name);
+    const at = (allComplete ? meta.allAt : meta.basicAt) ?? new Date().toISOString();
+    setDateLabel(new Date(at).toLocaleDateString('ko-KR'));
+    dialogRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, allComplete, onClose]);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     document.fonts.ready.then(() => {
-      if (!cancelled) drawCertificate(canvasRef.current);
+      if (!cancelled) drawCertificate(canvasRef.current, { name, dateLabel, completed, allComplete });
     });
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, name, dateLabel, completed, allComplete]);
 
   if (!open) return null;
 
@@ -38,15 +54,39 @@ export function CertificateModal({ open, onClose }: { open: boolean; onClose: ()
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2F241D]/50 p-4" onClick={onClose}>
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="certificate-title"
-        className="w-full max-w-[600px] rounded-xl border-2 border-[#CDBCA3] bg-[#FFFDF8] p-4"
+        className="w-full max-w-[600px] rounded-xl border-2 border-[#CDBCA3] bg-[#FFFDF8] p-4 outline-none"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 id="certificate-title" className="text-lg font-bold">수료증</h2>
-        <p className="mt-1 break-keep text-sm text-[#59483B]">9장 실습을 모두 마쳤어요. 축하해요! 🎉</p>
-        <canvas ref={canvasRef} width={720} height={480} className="mt-3 w-full rounded-md border border-[#D7C7AE]" />
+        <h2 id="certificate-title" className="text-lg font-bold">{allComplete ? '수료증' : '기본 과정 수료증'}</h2>
+        <p className="mt-1 break-keep text-sm text-[#59483B]">
+          {allComplete ? '9장 실습을 모두 마쳤어요. 축하해요! 🎉' : '기본 과정 4장을 마쳤어요. 축하해요! 🎉 심화 5~9장은 선택이에요.'}
+        </p>
+        <label className="mt-2 block text-xs font-semibold text-[#715A43]">
+          이름 (선택)
+          <input
+            value={name}
+            maxLength={20}
+            placeholder="수료증에 넣을 이름"
+            onChange={(event) => {
+              setName(event.target.value);
+              writeCertificateMeta({ name: event.target.value });
+            }}
+            className="mt-1 w-full rounded-md border border-[#CDBCA3] bg-white px-2 py-1 text-sm font-normal text-[#2F241D]"
+          />
+        </label>
+        <canvas
+          ref={canvasRef}
+          width={720}
+          height={480}
+          role="img"
+          aria-label={`수료증 그림: ${allComplete ? '기본 4장과 심화 5장 완주' : '기본 과정 4장 완주'}, ${dateLabel}${name ? `, ${name}` : ''}`}
+          className="mt-3 w-full rounded-md border border-[#D7C7AE]"
+        />
         <div className="mt-3 flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-md border border-[#CDBCA3] px-3 py-1.5 text-sm font-semibold">
             닫기
@@ -62,7 +102,10 @@ export function CertificateModal({ open, onClose }: { open: boolean; onClose: ()
 }
 
 // 수료증 PNG는 시스템 글꼴로 그려요(픽셀 서브셋 폰트는 캔버스 라벨 전용).
-function drawCertificate(canvas: HTMLCanvasElement | null) {
+function drawCertificate(
+  canvas: HTMLCanvasElement | null,
+  { name, dateLabel, completed, allComplete }: { name: string; dateLabel: string; completed: boolean[]; allComplete: boolean },
+) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -90,18 +133,24 @@ function drawCertificate(canvas: HTMLCanvasElement | null) {
   ctx.fillStyle = '#59483B';
   ctx.font = '20px system-ui, "Noto Sans KR", sans-serif';
   ctx.fillText('비개발자를 위한 브라우저 Git 실습', w / 2, 205);
-  ctx.fillText('기본 4장 + 심화 5장 · 총 9장 완주', w / 2, 235);
+  ctx.fillText(allComplete ? '기본 4장 + 심화 5장 · 총 9장 완주' : '기본 과정 4장 완주 · 심화 5~9장은 선택이에요', w / 2, 235);
   const cell = 26;
   const gap = 10;
   let x = (w - (STAGE_SCENARIOS.length * cell + (STAGE_SCENARIOS.length - 1) * gap)) / 2;
   STAGE_SCENARIOS.forEach((_, index) => {
-    ctx.fillStyle = index % 2 === 0 ? '#198361' : '#22A882';
+    ctx.fillStyle = completed[index] ? (index % 2 === 0 ? '#198361' : '#22A882') : '#DED1B8';
     ctx.fillRect(x, 280, cell, cell);
     x += cell + gap;
   });
+  const trimmed = name.trim();
+  if (trimmed) {
+    ctx.fillStyle = '#2F241D';
+    ctx.font = 'bold 22px system-ui, "Noto Sans KR", sans-serif';
+    ctx.fillText(`${trimmed} 님`, w / 2, 340);
+  }
   ctx.fillStyle = '#715A43';
   ctx.font = '16px system-ui, "Noto Sans KR", sans-serif';
-  ctx.fillText(new Date().toLocaleDateString('ko-KR'), w / 2, 350);
+  ctx.fillText(dateLabel, w / 2, trimmed ? 372 : 350);
   ctx.font = '14px ui-monospace, Menlo, monospace';
   ctx.fillText('flybywind2.github.io/git-pixel-dots', w / 2, 420);
 }

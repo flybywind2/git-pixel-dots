@@ -561,6 +561,18 @@ async function mobileLessonLayout(browser, url) {
     assert.doesNotMatch(await stepTerms.innerText(), /HEAD/);
     // 비교를 실행하기 전에는 결과 한 줄이 보이지 않아요.
     assert.equal(await page.getByText('비교 결과:', { exact: false }).count(), 0);
+    // 퀴즈가 열린 동안에도 버튼이 스크롤 없이 보여요(자동 스크롤 없이 측정).
+    await openChapter(page, url, 3);
+    await page.getByTestId('guided-command').click();
+    await page.evaluate(() => document.querySelector('main').scrollTo(0, 0));
+    const pendingBox = await page.getByTestId('guided-command').boundingBox();
+    assert(pendingBox.y >= 0 && pendingBox.y + pendingBox.height <= height,
+      `Quiz pending button not visible without scroll at ${width}x${height}`);
+    await page.getByTestId('prediction-choice-0').click();
+    await page.evaluate(() => document.querySelector('main').scrollTo(0, 0));
+    const continueBox = await page.getByTestId('guided-command').boundingBox();
+    assert(continueBox.y >= 0 && continueBox.y + continueBox.height <= height,
+      `Continue button not visible without scroll at ${width}x${height}`);
     await page.close();
   }
 }
@@ -576,6 +588,32 @@ async function advancedGuidedCompletion(browser, url) {
     }
     await expectProgress(page, total, total);
   }
+  // 심화만 완료한 상태에서는 수료증 버튼이 없어요.
+  assert.equal(await page.getByRole('button', { name: '수료증 보기', exact: true }).count(), 0);
+  await page.close();
+}
+
+async function basicCertificate(browser, url) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  // 기본 1~4장만 완주해도 기본 과정 수료증이 열려요.
+  await openChapter(page, url, 1);
+  await runCommand(page, 'edit 회의록.md');
+  for (let i = 0; i < 5; i++) await clickGuided(page);
+  await expectProgress(page, 6, 6);
+  await page.getByText('1/9장 완료', { exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: '수료증 보기', exact: true }).count(), 0);
+  await openChapter(page, url, 2);
+  for (let i = 0; i < 3; i++) await clickGuided(page);
+  await openChapter(page, url, 3);
+  for (let i = 0; i < 5; i++) await clickGuided(page);
+  assert.equal(await page.getByRole('button', { name: '수료증 보기', exact: true }).count(), 0);
+  await openChapter(page, url, 4);
+  for (let i = 0; i < 9; i++) await clickGuided(page);
+  await page.getByRole('button', { name: '수료증 보기', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.waitFor();
+  assert.match(await dialog.innerText(), /기본 과정 4장을 마쳤어요/);
+  await dialog.getByRole('button', { name: '닫기', exact: true }).click();
   await page.close();
 }
 
@@ -606,6 +644,8 @@ async function main() {
     const trackPage = await browser.newPage({ viewport: { width: 1024, height: 768 } });
     await practiceTracks(trackPage, url);
     await trackPage.close();
+    await basicCertificate(browser, url);
+    console.log('[QA] Basic-course certificate unlocks after chapters 1-4 passed');
     const savedPage = await browser.newPage();
     const storageErrors = trackErrors(savedPage, origin);
     await storageRecovery(savedPage, url);

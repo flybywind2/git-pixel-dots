@@ -40,9 +40,10 @@ export function LessonGuide() {
   });
   const editDocument = lesson.id === 'docs' && nextStep?.doneAction === 'EDIT';
   const saveDraft = draft !== null;
+  const awaitingPick = quiz !== null && quiz.picked === null && quiz.stepId === nextStep?.id;
   const continuing = quiz !== null && quiz.picked !== null && quiz.stepId === nextStep?.id;
   const ButtonIcon = saveDraft ? Save : editDocument ? Pencil : continuing ? ArrowRight : Play;
-  const label = saveDraft ? '문서 저장하기' : continuing ? '계속하기' : nextStep?.label;
+  const label = saveDraft ? '문서 저장하기' : awaitingPick ? '먼저 예측을 골라 주세요' : continuing ? '계속하기' : nextStep?.label;
   // 지금 단계에서 쓰는 용어만 보여 줘서 첫 화면을 가볍게 해요. 단계에 명시된 용어를 우선 사용해요.
   const stepTerms = nextStep
     ? nextStep.terms
@@ -94,7 +95,9 @@ export function LessonGuide() {
               ? '이제 팀 저장소의 문서를 고치고 변경을 기록한 뒤, GitHub에서 검토를 요청하고 합친 내용을 내 컴퓨터로 가져올 수 있어요. 기본 1~4장만으로도 팀 협업 시작은 충분해요. 5~9장은 선택 심화예요.'
               : lesson.takeaway}
           </p>
-          <p className="mt-1.5 text-xs text-[#715A43]">이 브라우저 안의 가상 실습이에요. 실제 GitHub에는 반영되지 않아요.</p>
+          {!(quiz && quiz.stepId === nextStep?.id) && (
+            <p className="mt-1.5 text-xs text-[#715A43]">이 브라우저 안의 가상 실습이에요. 실제 GitHub에는 반영되지 않아요.</p>
+          )}
           {lesson.track === 'advanced' && (
             <p className="mt-1 text-xs text-[#715A43]">선택 심화 과정이에요. 기본 1~4장만 완주해도 팀 협업의 기본은 충분해요.</p>
           )}
@@ -136,18 +139,18 @@ export function LessonGuide() {
                 </p>
               )}
               {nextStep?.prediction && quiz && quiz.stepId === nextStep.id && (
-                <div data-testid="prediction-quiz" className="mt-2 rounded-md border border-[#C9B8E8] bg-[#F5F0FB] px-2.5 py-2 text-xs leading-relaxed text-[#4A3670]">
+                <div data-testid="prediction-quiz" className="mt-2 rounded-md border border-[#C9B8E8] bg-[#F5F0FB] px-2.5 py-1.5 text-xs leading-normal text-[#4A3670]">
                   <p className="font-semibold text-[#5B3E9E]">잠깐! 실행 전에 예측해 봐요</p>
-                  <p className="mt-1 break-keep">{nextStep.prediction.question}</p>
+                  <p className="mt-0.5 break-keep">{nextStep.prediction.question}</p>
                   {quiz.picked === null ? (
-                    <div className="mt-1.5 flex flex-col items-start gap-1.5">
+                    <div className="mt-1 flex flex-col items-start gap-1">
                       {nextStep.prediction.choices.map((choice, index) => (
                         <button
                           key={choice}
                           type="button"
                           data-testid={`prediction-choice-${index}`}
                           onClick={() => setQuiz({ stepId: nextStep.id, picked: index as 0 | 1 })}
-                          className="pixel-btn max-w-full rounded-md border-[#B9A6E8] bg-[#FFFDF8] px-2.5 py-1 text-left font-semibold hover:bg-[#F1EAF9]"
+                          className="pixel-btn max-w-full rounded-md border-[#B9A6E8] bg-[#FFFDF8] px-2.5 py-0.5 text-left font-semibold hover:bg-[#F1EAF9]"
                         >
                           {index === 0 ? '①' : '②'} {choice}
                         </button>
@@ -157,7 +160,7 @@ export function LessonGuide() {
                       </button>
                     </div>
                   ) : (
-                    <p role="status" className="mt-1.5 break-keep font-semibold">
+                    <p role="status" className="mt-1 break-keep font-semibold">
                       {quiz.picked === nextStep.prediction.answer
                         ? '정답! 🎉 '
                         : `아쉬워요. 정답은 ${nextStep.prediction.answer === 0 ? '①' : '②'}번. `}
@@ -170,6 +173,7 @@ export function LessonGuide() {
                 type="button"
                 data-testid="guided-command"
                 onClick={runGuidedStep}
+                disabled={awaitingPick}
                 className="pixel-btn mt-2 inline-flex max-w-full items-center gap-2 rounded-md border-[#C78B1E] bg-[#F4B942] px-3 py-1.5 text-left text-sm font-bold text-[#362711] hover:bg-[#F7C55D]"
               >
                 <ButtonIcon aria-hidden="true" className="h-4 w-4 shrink-0" />

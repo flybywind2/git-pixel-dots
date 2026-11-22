@@ -70,6 +70,17 @@
   box-shadow: 0 1px 0 rgba(112, 86, 58, 0.35);
 }
 
+.pixel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pixel-btn:disabled:hover,
+.pixel-btn:disabled:active {
+  transform: none;
+  box-shadow: 0 3px 0 rgba(112, 86, 58, 0.35);
+}
+
 .dot-bg {
   background-image: radial-gradient(rgba(168, 146, 118, 0.25) 1.5px, transparent 1.5px);
   background-size: 16px 16px;
