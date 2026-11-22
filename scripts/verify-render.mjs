@@ -680,6 +680,8 @@ async function uxImprovements(browser, url) {
   await banner.getByRole('button', { name: '지금 저장하고 비교하기', exact: true }).click();
   await expectProgress(page, 2, 6);
   assert.equal(await banner.count(), 0);
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-pressed')), 'true',
+    'Focus did not move to the selected comparison tab');
 
   // P1-1: 상단 '이전 단계로' 버튼으로 한 단계 되돌릴 수 있어요.
   const undoBtn = page.getByTestId('undo-step-btn');

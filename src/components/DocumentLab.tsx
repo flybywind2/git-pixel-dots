@@ -42,6 +42,13 @@ export function DocumentLab() {
   const { before: beforeLabel } = getDocumentComparisonLabels(sim, mode);
   const comparison = getDocumentComparison(sim, mode);
   const tabRefs = useRef<Partial<Record<DocumentComparison, HTMLButtonElement | null>>>({});
+  const focusTabAfterCompare = useRef<DocumentComparison | null>(null);
+  useEffect(() => {
+    const target = focusTabAfterCompare.current;
+    if (!target || unsaved) return;
+    focusTabAfterCompare.current = null;
+    tabRefs.current[target]?.focus();
+  }, [unsaved, mode]);
   const before = comparison?.before;
   const after = comparison?.after;
   const lines = useMemo(
@@ -69,11 +76,11 @@ export function DocumentLab() {
 
   function handleSaveAndCompare() {
     const target = pendingCompare ?? mode;
+    // 배너 버튼이 사라져 포커스가 body로 튀지 않도록, 저장이 끝난 뒤 비교를 실행한 탭 버튼으로 옮겨요.
+    focusTabAfterCompare.current = target;
     saveDocument();
     runCommand(DOCUMENT_COMPARISONS[target].command);
     setPendingCompare(null);
-    // 배너 버튼이 사라져 포커스가 body로 튀지 않도록, 비교를 실행한 탭 버튼으로 옮겨요.
-    window.requestAnimationFrame(() => tabRefs.current[target]?.focus());
   }
 
   function showWorkingComparison() {

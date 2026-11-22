@@ -62,10 +62,20 @@ export function PixelStageCanvas() {
   const runCommand = usePixelStore((s) => s.runCommand);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const fileButtons = useRef<Record<string, HTMLButtonElement | null>>({});
+  const focusGuidedAfterResolve = useRef(false);
 
   useEffect(() => {
     setSelectedFile(null);
   }, [stageId]);
+
+  // 충돌 해결 뒤 새로 나타난 '합친 내용 기록하기' 버튼으로 포커스를 이어 줘요.
+  // requestAnimationFrame은 CI처럼 느린 환경에서 React 렌더보다 먼저 끝날 수 있어 effect로 처리해요.
+  useEffect(() => {
+    if (!focusGuidedAfterResolve.current) return;
+    if (!sim.conflict || sim.conflict.resolvedChoice === 'none') return;
+    focusGuidedAfterResolve.current = false;
+    document.querySelector<HTMLButtonElement>('[data-testid="guided-command"]')?.focus();
+  }, [sim.conflict]);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -256,11 +266,8 @@ export function PixelStageCanvas() {
   }
 
   function resolveConflict(command: string) {
+    focusGuidedAfterResolve.current = true;
     runCommand(command);
-    // 해결 뒤 새로 나타나는 '합친 내용 기록하기' 버튼으로 포커스를 이어 줘요.
-    window.requestAnimationFrame(() => {
-      document.querySelector<HTMLButtonElement>('[data-testid="guided-command"]')?.focus();
-    });
   }
   const canvasMinHeight = stageId === 'ch2' ? 'min-h-[215px] sm:min-h-[245px]'
     : stageId === 'ch3' ? 'min-h-[192px] sm:min-h-[245px]' : 'min-h-[225px] sm:min-h-[260px]';
