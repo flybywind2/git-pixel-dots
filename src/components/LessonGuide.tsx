@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { ArrowRight, Pencil, Play, Save } from 'lucide-react';
 import { getNextPendingStep, isPracticeCommand, isStepCompleted, STAGE_MAP, STAGE_TRACKS } from '../engine';
 import { diffDocumentLines, DOCUMENT_REVERT, getDocumentComparison } from '../engine/documentDiff';
@@ -15,6 +16,11 @@ export function LessonGuide() {
   const [basic, advanced] = STAGE_TRACKS;
   const track = lesson.track === 'basic' ? basic : advanced;
   const nextStep = getNextPendingStep(sim);
+  const [quiz, setQuiz] = useState<{ stepId: string; picked: 0 | 1 | null } | null>(null);
+  const nextStepId = nextStep?.id;
+  useEffect(() => {
+    setQuiz((current) => (current && current.stepId !== nextStepId ? null : current));
+  }, [nextStepId]);
   const nextLesson = track.lessons.at(track.lessons.indexOf(lesson) + 1);
   const unfinishedBasic = lesson.track === 'basic' && !nextStep && !nextLesson && basic.lessons.find((item) => {
     const session = sessions[item.id];
@@ -34,8 +40,9 @@ export function LessonGuide() {
   });
   const editDocument = lesson.id === 'docs' && nextStep?.doneAction === 'EDIT';
   const saveDraft = draft !== null;
-  const ButtonIcon = saveDraft ? Save : editDocument ? Pencil : Play;
-  const label = saveDraft ? '문서 저장하기' : nextStep?.label;
+  const continuing = quiz !== null && quiz.picked !== null && quiz.stepId === nextStep?.id;
+  const ButtonIcon = saveDraft ? Save : editDocument ? Pencil : continuing ? ArrowRight : Play;
+  const label = saveDraft ? '문서 저장하기' : continuing ? '계속하기' : nextStep?.label;
   // 지금 단계에서 쓰는 용어만 보여 줘서 첫 화면을 가볍게 해요. 단계에 명시된 용어를 우선 사용해요.
   const stepTerms = nextStep
     ? nextStep.terms
@@ -50,7 +57,7 @@ export function LessonGuide() {
   const docRemoved = docLines.filter((line) => line.kind === 'removed').length;
   const docAdded = docLines.filter((line) => line.kind === 'added').length;
 
-  function runGuidedStep() {
+  function runNow() {
     if (saveDraft) {
       saveDocument();
     } else if (editDocument) {
@@ -62,6 +69,18 @@ export function LessonGuide() {
         document.getElementById('document-comparison')?.focus({ preventScroll: true });
       }
     }
+  }
+
+  function runGuidedStep() {
+    if (nextStep?.prediction && !saveDraft && !editDocument) {
+      if (!quiz || quiz.stepId !== nextStep.id) {
+        setQuiz({ stepId: nextStep.id, picked: null });
+        return;
+      }
+      if (quiz.picked === null) return;
+    }
+    setQuiz(null);
+    runNow();
   }
 
   return (
@@ -115,6 +134,37 @@ export function LessonGuide() {
                     ? `비교 결과: 빠진 줄 ${docRemoved}개 · 들어간 줄 ${docAdded}개`
                     : '비교 결과: 바뀐 줄이 없어요'}
                 </p>
+              )}
+              {nextStep?.prediction && quiz && quiz.stepId === nextStep.id && (
+                <div data-testid="prediction-quiz" className="mt-2 rounded-md border border-[#C9B8E8] bg-[#F5F0FB] px-2.5 py-2 text-xs leading-relaxed text-[#4A3670]">
+                  <p className="font-semibold text-[#5B3E9E]">잠깐! 실행 전에 예측해 봐요</p>
+                  <p className="mt-1 break-keep">{nextStep.prediction.question}</p>
+                  {quiz.picked === null ? (
+                    <div className="mt-1.5 flex flex-col items-start gap-1.5">
+                      {nextStep.prediction.choices.map((choice, index) => (
+                        <button
+                          key={choice}
+                          type="button"
+                          data-testid={`prediction-choice-${index}`}
+                          onClick={() => setQuiz({ stepId: nextStep.id, picked: index as 0 | 1 })}
+                          className="pixel-btn max-w-full rounded-md border-[#B9A6E8] bg-[#FFFDF8] px-2.5 py-1 text-left font-semibold hover:bg-[#F1EAF9]"
+                        >
+                          {index === 0 ? '①' : '②'} {choice}
+                        </button>
+                      ))}
+                      <button type="button" onClick={() => { setQuiz(null); runNow(); }} className="text-[#715A43] underline">
+                        건너뛰고 실행하기
+                      </button>
+                    </div>
+                  ) : (
+                    <p role="status" className="mt-1.5 break-keep font-semibold">
+                      {quiz.picked === nextStep.prediction.answer
+                        ? '정답! 🎉 '
+                        : `아쉬워요. 정답은 ${nextStep.prediction.answer === 0 ? '①' : '②'}번. `}
+                      {nextStep.prediction.explain}
+                    </p>
+                  )}
+                </div>
               )}
               <button
                 type="button"

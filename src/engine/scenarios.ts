@@ -1,6 +1,6 @@
 import { ALL_STAGE_IDS, type CommandChip, type StageId, type StageScenario } from '../types/sim';
 import { DOCUMENT_COMPARISONS, DOCUMENT_REVERT } from './documentDiff';
-import { ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, MISTAKEN_NOTICE_PATH } from './meetingExample';
+import { ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, MISTAKEN_NOTICE_PATH, SECRET_NOTE_PATH } from './meetingExample';
 import { term } from './terms';
 
 const { working, staged, commits } = DOCUMENT_COMPARISONS;
@@ -31,9 +31,21 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     steps: [
       { id: 'docs-edit', label: '문서 편집하기', goal: '회의록.md의 "금요일 저녁 7시"를 다른 시간으로 바꾸고 저장하기', command: 'edit 회의록.md', doneAction: 'EDIT', terms: ['회의록.md'] },
       { id: 'docs-diff', label: '바뀐 줄 확인하기', goal: '방금 고친 문서와 이전 기준 비교하기', command: working.command, doneAction: working.action, terms: ['diff', '스테이징 영역'], commandNote: '아직 담기 전이라 원래 초안과 비교돼요. -- 뒤에 비교할 파일 이름을 적어요.' },
-      { id: 'docs-add', label: '다음 기록에 담기', goal: '검토한 회의록.md를 다음 커밋에 담기', command: 'git add 회의록.md', doneAction: 'ADD', terms: ['스테이징 영역'] },
+      { id: 'docs-add', label: '다음 기록에 담기', goal: '검토한 회의록.md를 다음 커밋에 담기', command: 'git add 회의록.md', doneAction: 'ADD', terms: ['스테이징 영역'],
+        prediction: {
+          question: '장바구니에 담기(git add)를 누르면 문서는 어디로 갈까요?',
+          choices: ['내 컴퓨터의 장바구니(스테이징 영역)로', '바로 팀의 GitHub로'],
+          answer: 0,
+          explain: 'add는 내 컴퓨터 안의 장바구니에 담기만 해요. 팀에게는 커밋 후 push로 공유해야 보여요.',
+        } },
       { id: 'docs-staged', label: '담아 둔 변경 확인하기', goal: '다음 커밋에 들어갈 줄 확인하기', command: staged.command, doneAction: staged.action, terms: ['스테이징 영역', '커밋'], commandNote: '--staged는 장바구니(스테이징)에 담은 변경 기준이에요.' },
-      { id: 'docs-commit', label: '기록 남기기', goal: '스테이징 영역의 문서를 새 커밋에 기록하기', command: 'git commit -m "모임 안내 수정"', doneAction: 'COMMIT', terms: ['커밋'], commandNote: '-m 뒤에 기록 설명 메시지를 적어요.' },
+      { id: 'docs-commit', label: '기록 남기기', goal: '스테이징 영역의 문서를 새 커밋에 기록하기', command: 'git commit -m "모임 안내 수정"', doneAction: 'COMMIT', terms: ['커밋'], commandNote: '-m 뒤에 기록 설명 메시지를 적어요.',
+        prediction: {
+          question: '기록 남기기(git commit) 뒤, 팀이 GitHub에서 볼 수 있을까요?',
+          choices: ['아직요, 내 컴퓨터에만 기록돼요', '네, 자동으로 공유돼요'],
+          answer: 0,
+          explain: 'commit은 내 저장소의 기록이에요. GitHub에 올리려면 push가 필요해요.',
+        } },
       { id: 'docs-history', label: '이전 기록과 비교하기', goal: '이전 커밋과 최근 커밋에서 문서 비교하기', command: commits.command, doneAction: commits.action, terms: ['HEAD', '커밋'], commandNote: 'HEAD는 현재 커밋, HEAD~1은 바로 이전 커밋이에요.' },
     ],
     chips: [
@@ -93,6 +105,12 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         doneAction: 'PUSH',
         terms: ['원격 저장소'],
         commandNote: 'Git은 내 컴퓨터 기록(인터넷 없이도 동작), GitHub은 팀 공유 클라우드예요. push는 그 기록을 GitHub에 올려요.',
+        prediction: {
+          question: '팀에 공유하기(git push)는 기록을 어디로 보내나요?',
+          choices: ['내 컴퓨터의 임시 보관함으로', '팀의 GitHub(원격 저장소)로'],
+          answer: 1,
+          explain: 'push는 내 컴퓨터의 커밋을 원격 저장소로 올려 팀이 볼 수 있게 해요.',
+        },
       },
     ],
     chips: [
@@ -114,15 +132,31 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     track: 'basic',
     shortTitle: '보관과 취소',
     title: '작업 도중에 지난 커밋을 취소하려면?',
-    tagline: `지난 장에서 커밋한 회의록에 준비물을 더 적다가, 실수로 올린 ${MISTAKEN_NOTICE_PATH}를 발견했어요. 아직 커밋하지 않은 준비물 수정을 잠시 보관하고 잘못 올린 안내부터 되돌려 보세요.`,
-    takeaway: 'stash로 하던 일을 보관하고, revert로 지난 변경을 취소하는 커밋을 남겼어요. stash pop으로 중단했던 작업도 되찾고, 취소 커밋을 팀에 공유해 GitHub에서도 임시 안내를 없앴어요.',
+    tagline: `지난 장에서 커밋한 회의록에 준비물을 더 적다가, 실수로 올린 ${MISTAKEN_NOTICE_PATH}를 발견했어요. 게다가 ${SECRET_NOTE_PATH}까지 장바구니에 담겨 있네요! 비밀 메모부터 빼고, 준비물 수정을 잠시 보관한 뒤 잘못 올린 안내를 되돌려 보세요.`,
+    takeaway: '비밀 메모는 장바구니에서 빼서 커밋에 들어가지 않게 했어요. stash로 하던 일을 보관하고, revert로 지난 변경을 취소하는 커밋을 남겼어요. stash pop으로 중단했던 작업도 되찾고, 취소 커밋을 팀에 공유해 GitHub에서도 임시 안내를 없앴어요.',
     accent: '#fbbf24',
     terms: [
+      term('스테이징 영역'),
       term('stash'),
       term('HEAD'),
       term('원격 저장소'),
     ],
     steps: [
+      {
+        id: 'ch2-unstage',
+        label: '장바구니에서 비밀 메모 빼기',
+        goal: '실수로 담은 비밀번호메모.md를 스테이징 영역에서 빼기',
+        command: `git restore --staged ${SECRET_NOTE_PATH}`,
+        doneAction: 'UNSTAGE',
+        terms: ['스테이징 영역'],
+        commandNote: '--staged는 장바구니(스테이징)에서만 빼라는 뜻이에요. 작업 폴더의 메모는 그대로 남아요.',
+        prediction: {
+          question: '장바구니에서 빼면 메모 파일은 어떻게 될까요?',
+          choices: ['작업 폴더에서도 사라져요', '작업 폴더엔 남고 장바구니에서만 빠져요'],
+          answer: 1,
+          explain: 'restore --staged는 스테이징 사본만 되돌려요. 작업 폴더의 파일은 그대로예요.',
+        },
+      },
       {
         id: 'ch2-stash',
         label: '작업 임시 보관하기',
@@ -131,6 +165,12 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         doneAction: 'STASH',
         terms: ['stash'],
         commandNote: '되돌리기 작업과 섞이지 않게 작업 폴더를 비워요.',
+        prediction: {
+          question: '임시 보관(git stash)하면 고치던 변경은 어디로 갈까요?',
+          choices: ['임시 보관함에 들어가 작업 폴더가 깨끗해져요', '영구 삭제돼요'],
+          answer: 0,
+          explain: 'stash는 보관함에 넣어 두고 stash pop으로 언제든 되찾아요.',
+        },
       },
       {
         id: 'ch2-revert',
@@ -140,6 +180,12 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         doneAction: 'REVERT',
         terms: ['HEAD'],
         commandNote: '이미 팀에 올린 기록은 지우지 않고 취소 커밋을 새로 덧붙여요.',
+        prediction: {
+          question: '이미 공유한 기록을 취소(git revert HEAD)하면 기존 기록은?',
+          choices: ['삭제돼요', '남아 있고 취소 커밋이 새로 덧붙어요'],
+          answer: 1,
+          explain: 'revert는 기존 기록을 지우지 않고 취소하는 새 커밋을 남겨요. 팀과 공유한 기록에 안전해요.',
+        },
       },
       {
         id: 'ch2-stash-pop',
@@ -166,9 +212,11 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
       { stepIndex: 1 },
       { stepIndex: 2 },
       { stepIndex: 3 },
+      { stepIndex: 4 },
       { command: 'git reset --soft HEAD~1', label: '커밋만 되감기' },
     ],
     cheatSheet: [
+      { cmd: `git restore --staged ${SECRET_NOTE_PATH}`, desc: '장바구니(스테이징 영역)에서만 변경을 빼요. 작업 폴더의 파일은 그대로 남아요.' },
       { cmd: 'git log', desc: '현재 브랜치의 커밋을 최신순으로 확인해요.' },
       { cmd: 'git diff', desc: '수정 전과 후가 어떻게 달라졌는지 비교해요.' },
       { cmd: 'git stash', desc: '아직 커밋하지 않은 변경을 임시 보관해요.' },
@@ -202,6 +250,12 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         doneAction: 'BRANCH',
         terms: ['브랜치'],
         commandNote: '-c는 새 브랜치를 만들라는 뜻이에요. 미리 고쳐 둔 회의록 변경도 새 브랜치로 따라와요.',
+        prediction: {
+          question: '새 브랜치(git switch -c)를 만들면 main은 어떻게 될까요?',
+          choices: ['그대로 남아 있어요', '새 브랜치로 바뀌어 사라져요'],
+          answer: 0,
+          explain: '브랜치는 별도 갈래예요. main은 그대로이고 HEAD만 새 브랜치로 이동해요.',
+        },
       },
       {
         id: 'ch4-add',
@@ -225,6 +279,12 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         doneAction: 'PUSH',
         terms: ['원격 저장소', 'origin'],
         commandNote: '-u는 원격 브랜치와 연결해 다음부터 git push만으로 보내게 해요.',
+        prediction: {
+          question: 'git push -u origin docs/meeting 뒤 새 브랜치는 어디에 보일까요?',
+          choices: ['내 컴퓨터에만', 'GitHub에도'],
+          answer: 1,
+          explain: 'push하면 원격 저장소에도 같은 브랜치가 생겨요. -u는 다음 push를 간단하게 하는 연결이에요.',
+        },
       },
       {
         id: 'ch4-pr-create',
@@ -252,6 +312,12 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         doneAction: 'PR_MERGE',
         terms: ['풀 리퀘스트(PR)'],
         commandNote: '실제 gh는 합치는 방식과 브랜치 삭제 여부를 물어봐요. 이 실습에서는 바로 합쳐요.',
+        prediction: {
+          question: 'PR 합치기(gh pr merge)는 어디의 main에 합치나요?',
+          choices: ['GitHub의 main', '내 컴퓨터의 main'],
+          answer: 0,
+          explain: 'PR 합치기는 GitHub에서 일어나요. 내 컴퓨터는 pull로 따로 가져와야 해요.',
+        },
       },
       {
         id: 'ch4-switch',
@@ -269,6 +335,12 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         doneAction: 'SYNC_MAIN',
         terms: ['원격 저장소', 'origin'],
         commandNote: 'origin main은 GitHub(origin)의 main을 가져온다는 뜻이에요. 팀원의 참석 안내도 함께 들어와요.',
+        prediction: {
+          question: 'GitHub에서 합친 뒤 내 컴퓨터의 main도 자동으로 최신일까요?',
+          choices: ['네, 자동이에요', '아니요, git pull로 가져와야 해요'],
+          answer: 1,
+          explain: '원격과 내 컴퓨터는 별도예요. pull이 원격의 합친 내용을 내 main에 반영해요.',
+        },
       },
     ],
     chips: [
@@ -328,6 +400,12 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'git merge feat/ui',
         doneAction: 'CONFLICT',
         terms: ['병합 충돌', '브랜치'],
+        prediction: {
+          question: '두 사람이 같은 줄을 다르게 고쳤다면 합칠 때 무슨 일이 생길까요?',
+          choices: ['Git이 알아서 골라줘요', '충돌이 나서 내가 남길 내용을 골라요'],
+          answer: 1,
+          explain: '같은 줄의 다른 변경은 Git이 판단하지 못해요. 충돌 표시를 보고 사람이 골라요.',
+        },
       },
       {
         id: 'ch3-resolve',
@@ -459,6 +537,12 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'token fine',
         doneAction: 'TOKEN_FINE',
         terms: ['개인 액세스 토큰(PAT)'],
+        prediction: {
+          question: 'fine-grained 토큰이 classic 토큰보다 안전한 이유는?',
+          choices: ['모든 권한을 줘서', '필요한 저장소·권한만 줘서'],
+          answer: 1,
+          explain: '권한이 좁을수록 유출돼도 피해가 작아요. 최소 권한이 원칙이에요.',
+        },
       },
       {
         id: 'ch6-sso',
@@ -594,6 +678,12 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'ai push-main',
         doneAction: 'AI_BLOCK_MAIN',
         terms: ['브랜치 보호 규칙'],
+        prediction: {
+          question: 'AI가 main에 직접 push하면 어떻게 될까요?',
+          choices: ['보호 규칙에 걸려 차단돼요', '항상 허용돼요'],
+          answer: 0,
+          explain: '브랜치 보호 규칙은 main에 들어갈 변경이 검토(PR)를 거치게 해요.',
+        },
       },
       {
         id: 'ch8-pr',

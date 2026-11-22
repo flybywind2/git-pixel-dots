@@ -69,6 +69,17 @@ async function runCommand(page, command) {
   await input.press('Enter');
 }
 
+// 예측 퀴즈가 있는 단계는 첫 클릭이 퀴즈를 열어요. 보기를 고른 뒤 계속하기로 실행해요.
+async function clickGuided(page) {
+  const button = page.getByTestId('guided-command');
+  await button.click();
+  const choice = page.getByTestId('prediction-choice-0');
+  if (await choice.isVisible()) {
+    await choice.click();
+    await button.click();
+  }
+}
+
 async function expectProgress(page, current, total) {
   assert.equal(await page.getByTestId('stage-step-badge').innerText(), `실습 ${current}/${total} 완료`);
 }
@@ -92,7 +103,7 @@ async function documentLesson(page, url, capture) {
   assert.equal(editorFont, page.viewportSize().width < 640 ? '16px' : '14px');
 
   assert.equal(await page.getByTestId('terminal-input').isVisible(), false);
-  await guide.click();
+  await clickGuided(page);
   assert(await editor.evaluate((node) => node === document.activeElement));
   const edited = original.replace('금요일 저녁 7시', '수요일 오후 2시');
   await editor.fill(edited);
@@ -115,13 +126,13 @@ async function documentLesson(page, url, capture) {
   await page.getByText('먼저 문서를 저장하세요.', { exact: false }).waitFor();
   await expectProgress(page, 0, 6);
   await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
-  await guide.click();
+  await clickGuided(page);
   await expectProgress(page, 1, 6);
 
   await comparison.getByRole('button', { name: '담아 둔 변경', exact: true }).click();
   await expectProgress(page, 1, 6);
   assert.equal(await guide.innerText(), '바뀐 줄 확인하기');
-  await guide.click();
+  await clickGuided(page);
   await expectProgress(page, 2, 6);
   await diff.getByText('다음 모임은 수요일 오후 2시예요.', { exact: false }).waitFor();
   await checkViewport(page);
@@ -131,7 +142,7 @@ async function documentLesson(page, url, capture) {
   }
 
   for (let step = 3; step <= 6; step++) {
-    await guide.click();
+    await clickGuided(page);
     await expectProgress(page, step, 6);
   }
   await page.getByRole('button', { name: '마지막 변경 취소해 보기', exact: true }).click();
@@ -155,7 +166,7 @@ async function documentLesson(page, url, capture) {
   await expectQuickAction(page, '팀에 공유하기', 'git push');
   for (const label of ['다음 기록에 담기', '기록 남기기', '팀에 공유하기']) {
     assert.equal(await guide.innerText(), label);
-    await guide.click();
+    await clickGuided(page);
   }
   await expectProgress(page, 3, 3);
   await page.goto(`${url}#/docs`);
@@ -205,8 +216,8 @@ async function terminalAndScenes(page, url) {
   await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await openChapter(page, url, 5);
-  await page.getByTestId('guided-command').click();
-  await page.getByTestId('guided-command').click();
+  await clickGuided(page);
+  await clickGuided(page);
   await page.getByRole('button', { name: '상대 브랜치 내용 사용', exact: true }).waitFor();
   const bubble = page.getByTestId('speech-bubble');
   assert.match(await bubble.innerText(), /아래 버튼에서 남길 내용을 고르세요/);
@@ -233,9 +244,9 @@ async function practiceTracks(page, url) {
   const guide = page.getByTestId('guided-command');
   await openTerminal(page);
   await expectQuickAction(page, '보관한 작업 복원하기', 'git stash pop');
-  for (const label of ['작업 임시 보관하기', '지난 변경 취소하기', '보관한 작업 복원하기', '팀에 공유하기']) {
+  for (const label of ['장바구니에서 비밀 메모 빼기', '작업 임시 보관하기', '지난 변경 취소하기', '보관한 작업 복원하기', '팀에 공유하기']) {
     assert.equal(await guide.innerText(), label);
-    await guide.click();
+    await clickGuided(page);
   }
   await page.getByTestId('next-chapter-btn').click();
   await page.waitForURL('**/#/chapter/4');
@@ -247,7 +258,7 @@ async function practiceTracks(page, url) {
   }
   for (const label of ['새 브랜치 만들기', '다음 기록에 담기', '기록 남기기', '팀에 공유하기', '검토 요청하기', '팀원 승인 확인하기', '검토한 변경 합치기', '기본 브랜치로 이동하기', '합친 내용 가져오기']) {
     assert.equal(await guide.innerText(), label);
-    await guide.click();
+    await clickGuided(page);
   }
   await expectProgress(page, 9, 9);
   await runCommand(page, 'git show origin/main:회의록.md');
@@ -287,7 +298,7 @@ async function storageRecovery(page, url) {
     window.draftWrites = 0;
     const originalSet = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key, value) {
-      if (key === 'gitdots.practice.v3.docs') window.draftWrites++;
+      if (key === 'gitdots.practice.v4.docs') window.draftWrites++;
       return originalSet.call(this, key, value);
     };
     const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
@@ -308,18 +319,18 @@ async function storageRecovery(page, url) {
 
   const guide = page.getByTestId('guided-command');
   await openChapter(page, url, 5);
-  await guide.click();
+  await clickGuided(page);
   await openChapter(page, url, 4);
-  await guide.click();
+  await clickGuided(page);
   await page.evaluate(() => {
-    // docs와 ch4의 v3 저장본을 v2 레거시로 돌려 예제 변경 마이그레이션을 검증해요.
+    // docs와 ch4의 v4 저장본을 v2 레거시로 돌려 예제 변경 마이그레이션을 검증해요.
     for (const id of ['docs', 'ch4']) {
-      const key = `gitdots.practice.v3.${id}`;
+      const key = `gitdots.practice.v4.${id}`;
       localStorage.setItem(`gitdots.practice.v2.${id}`, localStorage.getItem(key));
       localStorage.removeItem(key);
     }
     // ch3 저장본의 커밋 부모를 깨뜨려 읽기 불가 복구를 검증해요.
-    const key = 'gitdots.practice.v3.ch3';
+    const key = 'gitdots.practice.v4.ch3';
     const broken = JSON.parse(localStorage.getItem(key));
     const firstCommit = broken.sim.commits[0];
     firstCommit.parents = [firstCommit.id];
@@ -333,7 +344,7 @@ async function storageRecovery(page, url) {
   // 복구 화면의 초기화는 확인 창 없이 바로 동작하고, 옛 v2 저장본은 지워져요.
   await reset.click();
   await expectProgress(page, 0, 9);
-  assert(await page.evaluate(() => !localStorage.getItem('gitdots.practice.v2.ch4') && localStorage.getItem('gitdots.practice.v3.ch4')));
+  assert(await page.evaluate(() => !localStorage.getItem('gitdots.practice.v2.ch4') && localStorage.getItem('gitdots.practice.v4.ch3')));
   await page.reload();
   await expectProgress(page, 0, 9);
 
@@ -349,7 +360,7 @@ async function storageRecovery(page, url) {
   // docs는 v2 레거시에서 조용히 마이그레이션돼요.
   await openChapter(page, url, 1);
   assert.equal(await editor.inputValue(), latest);
-  assert(await page.evaluate(() => JSON.parse(localStorage.getItem('gitdots.practice.v3.docs')).sim.bubbles.length > 0));
+  assert(await page.evaluate(() => JSON.parse(localStorage.getItem('gitdots.practice.v4.docs')).sim.bubbles.length > 0));
 }
 
 async function mobileCanvasAndKeyboard(browser, url) {
@@ -437,7 +448,7 @@ async function revertConflict(page) {
   const second = first.replace('1층 회의실', '도서관');
   for (const text of [first, second]) {
     await editor.fill(text);
-    await page.getByTestId('guided-command').click();
+    await clickGuided(page);
     await runCommand(page, 'git add 회의록.md');
     await runCommand(page, 'git commit -m "회의록 수정"');
     await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
@@ -467,14 +478,14 @@ async function storageWarning(page, url) {
       return originalSet.call(this, key, value);
     };
   });
-  await page.getByTestId('guided-command').click();
+  await clickGuided(page);
   const alert = page.getByRole('alert');
   await alert.waitFor();
   assert.match(await alert.innerText(), /이 창을 닫으면 진행 상태가 사라져요/);
   await alert.getByRole('button', { name: '닫기', exact: true }).click();
   assert.equal(await page.getByRole('alert').count(), 0);
   // 닫은 뒤에는 저장 실패가 반복돼도 경고를 다시 띄우지 않아요.
-  await page.getByTestId('guided-command').click();
+  await clickGuided(page);
   assert.equal(await page.getByRole('alert').count(), 0);
 }
 
@@ -490,7 +501,7 @@ async function crossTabSync(browser, url) {
   const draftA = original + '탭 A에서 작성 중인 초안이에요.\n';
   const draftB = original + '탭 B에서 작성 중인 초안이에요.\n';
   const draftSaved = (page, draft) => page.waitForFunction((expected) => {
-    const raw = localStorage.getItem('gitdots.practice.v3.docs');
+    const raw = localStorage.getItem('gitdots.practice.v4.docs');
     return raw !== null && JSON.parse(raw).documentDraft === expected;
   }, draft);
   // 두 탭이 각자 입력 중인 초안을 가져요. 서로의 초안을 받아도 내 초안은 유지돼요.
@@ -500,7 +511,7 @@ async function crossTabSync(browser, url) {
   await draftSaved(b, draftB);
   assert.equal(await editorA.inputValue(), draftA);
   // 탭 A가 초안을 저장하면 EDIT 단계가 완료되고 저장본이 다른 탭으로 전파돼요.
-  await a.getByTestId('guided-command').click();
+  await clickGuided(a);
   await expectProgress(a, 1, 6);
   // 탭 B는 진행 상태를 반영하되, 이 탭에서 입력 중인 초안(draftB)은 그대로 유지해요.
   await b.waitForFunction(() => document.querySelector('[data-testid="stage-step-badge"]')?.textContent === '실습 1/6 완료');
@@ -514,16 +525,16 @@ async function advancedVisualCards(browser, url) {
   // 7장: 토큰 권한 목록이 화면에 보이고, fine-grained에는 삭제 권한이 없어요.
   await openChapter(page, url, 7);
   const scopes = page.getByTestId('token-scopes');
-  await guide.click();
+  await clickGuided(page);
   await scopes.waitFor();
   assert.match(await scopes.innerText(), /delete_repo/);
-  await guide.click();
+  await clickGuided(page);
   assert.match(await scopes.innerText(), /contents:write/);
   assert.doesNotMatch(await scopes.innerText(), /delete_repo/);
   // 9장: 자동 테스트 결과 화면이 보여요.
   await openChapter(page, url, 9);
-  await guide.click();
-  await guide.click();
+  await clickGuided(page);
+  await clickGuided(page);
   const tests = page.getByTestId('ai-tests');
   await tests.waitFor();
   assert.match(await tests.innerText(), /sum\(2, 3\) === 5 PASS/);
@@ -561,7 +572,7 @@ async function advancedGuidedCompletion(browser, url) {
     await openChapter(page, url, chapter);
     const guide = page.getByTestId('guided-command');
     for (let i = 0; i < total; i++) {
-      await guide.click();
+      await clickGuided(page);
     }
     await expectProgress(page, total, total);
   }

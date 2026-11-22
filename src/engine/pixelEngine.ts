@@ -30,7 +30,7 @@ import {
   getDocumentWorkingText,
   ORIGINAL_DOCUMENT,
 } from './documentDiff';
-import { ATTENDANCE_DOCUMENT, ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, MEETING_REVIEW_COMMENT, MEETING_REVIEWER, MISTAKEN_NOTICE_PATH } from './meetingExample';
+import { ATTENDANCE_DOCUMENT, ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, MEETING_REVIEW_COMMENT, MEETING_REVIEWER, MISTAKEN_NOTICE_PATH, SECRET_NOTE_DOCUMENT, SECRET_NOTE_PATH } from './meetingExample';
 import {
   changedPaths,
   checkoutTree,
@@ -279,7 +279,11 @@ export function createStageState(id: StageId): PixelSimState {
   const committed = workingTree({ files: seed.files.filter((file) => file.status === 'committed') });
   const commits = seed.commits.map((commit) => ({ ...commit, tree: commit.tree ?? committed }));
   const state = { ...seed, commits, index: {} };
-  return updateWorkspace(state, workingTree(seed), headTree(state));
+  const index = { ...headTree(state) };
+  for (const file of seed.files) {
+    if (file.status === 'staged') writeTreeEntry(index, file.name, file.content);
+  }
+  return updateWorkspace(state, workingTree(seed), index);
 }
 
 function stageSeed(id: StageId): StageSeed {
@@ -385,6 +389,7 @@ function stageSeed(id: StageId): StageSeed {
           { name: DOCUMENT_PATH, status: 'modified', content: `${EXAMPLE_DOCUMENT}\n준비물은 읽을 책과 필기 도구예요.\n` },
           { name: ATTENDANCE_PATH, status: 'committed', content: ATTENDANCE_DOCUMENT },
           { name: MISTAKEN_NOTICE_PATH, status: 'committed', content: mistakenNotice },
+          { name: SECRET_NOTE_PATH, status: 'staged', content: SECRET_NOTE_DOCUMENT },
         ],
         staged: [],
         commits: [
@@ -415,14 +420,14 @@ function stageSeed(id: StageId): StageSeed {
             34,
             54,
             '작업 중에 급한 수정이 생겼어요',
-            `마지막 커밋에 ${MISTAKEN_NOTICE_PATH}를 실수로 넣었어요. 회의록에 적던 준비물을 임시 보관한 뒤 잘못 올린 안내를 취소해 보세요.`,
-            '아래 추천 버튼을 눌러 작업 중인 변경을 임시 보관해 보세요.',
-            [{ label: '작업 임시 보관하기', command: 'git stash', tone: 'amber' }],
+            `마지막 커밋에 ${MISTAKEN_NOTICE_PATH}를 실수로 넣었고, ${SECRET_NOTE_PATH}까지 장바구니에 담겨 있어요. 비밀 메모부터 빼고, 준비물 수정을 임시 보관한 뒤 잘못 올린 안내를 취소해 보세요.`,
+            '아래 추천 버튼을 눌러 비밀번호 메모를 장바구니에서 빼 보세요.',
+            [{ label: '장바구니에서 비밀 메모 빼기', command: `git restore --staged ${SECRET_NOTE_PATH}`, tone: 'amber' }],
           ),
         ],
         terminal: [
           makeLogEntry(0, 'welcome', 'main', [
-            { text: `수정 중인 ${DOCUMENT_PATH}와 잘못 올린 ${MISTAKEN_NOTICE_PATH}가 있어요.`, tone: 'muted' },
+            { text: `수정 중인 ${DOCUMENT_PATH}, 잘못 올린 ${MISTAKEN_NOTICE_PATH}, 장바구니에 담긴 ${SECRET_NOTE_PATH}가 있어요.`, tone: 'muted' },
           ]),
         ],
       };
@@ -2253,6 +2258,55 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       );
     }
 
+    // git restore --staged
+    if (sub === 'restore') {
+      if (!tokens.includes('--staged') && !tokens.includes('--cached')) {
+        return commandNotice(state, cmd, '실습에서는 --staged 빼기를 연습해요',
+          'git restore --staged <파일>로 장바구니에서 변경을 빼요. 작업 파일 되돌리기는 git reset으로 연습할 수 있어요.', 'amber');
+      }
+      const args = tokens.slice(2).filter((arg) => arg !== '--staged' && arg !== '--cached' && arg !== '--');
+      if (args.length === 0) {
+        return commandNotice(state, cmd, '파일 이름을 적어 주세요', 'git restore --staged 뒤에 파일 이름이나 현재 폴더를 뜻하는 점(.)을 적으세요.', 'amber');
+      }
+      const head = headTree(state);
+      const matches = new Set<string>();
+      for (const arg of args) {
+        const target = arg.replace(/^\.\//, '').replace(/\/$/, '');
+        const selected = Object.keys(state.index).filter((path) => target === '.' || path === target || path.startsWith(target + '/'));
+        if (selected.length === 0 && target !== '.') {
+          return commandNotice(state, cmd, '스테이징 영역을 확인해 주세요', `${arg} 파일은 장바구니(스테이징 영역)에 없어요.`, 'amber');
+        }
+        selected.forEach((path) => matches.add(path));
+      }
+      if (matches.size === 0) {
+        return finalizeTransition(
+          state, state, 'IDLE', '스테이징 영역 확인', undefined, cmd,
+          [{ text: '장바구니(스테이징 영역)가 비어 있어요. 뺄 변경이 없어요.', tone: 'muted' }],
+          makeBubble(`restore-empty-${seqNext}`, 'buddy', 34, 54, '장바구니를 확인했어요', '지금 장바구니에 담긴 변경이 없어요.'),
+        );
+      }
+      const index = { ...state.index };
+      for (const path of matches) writeTreeEntry(index, path, treeEntry(head, path));
+      if (changedPaths(state.index, index).length === 0) {
+        return finalizeTransition(
+          state, state, 'IDLE', '스테이징 영역 확인', undefined, cmd,
+          [{ text: '장바구니(스테이징 영역)에 담긴 변경이 없어요. 뺄 것이 없어요.', tone: 'muted' }],
+          makeBubble(`restore-empty-${seqNext}`, 'buddy', 34, 54, '장바구니를 확인했어요', '지금 장바구니에 담긴 변경이 없어요.'),
+        );
+      }
+      const draft = updateWorkspace(state, workingTree(state), index);
+      const names = [...matches].join(', ');
+      return finalizeTransition(
+        state, draft, 'UNSTAGE', '장바구니에서 빼기', names, cmd,
+        [
+          { text: `스테이징에서 뺌: ${names}`, tone: 'amber' },
+          { text: '작업 폴더의 파일 내용은 그대로예요. 다음 커밋에도 들어가지 않아요.', tone: 'muted' },
+        ],
+        makeBubble(`unstage-${seqNext}`, 'buddy', 38, 54, '장바구니에서 뺐어요',
+          `${names} — 이제 다음 커밋에 들어가지 않아요. 파일은 작업 폴더에 그대로 남아요. 비밀 메모는 실제로는 파일을 지우거나 .gitignore에 추가해 관리해요.`),
+      );
+    }
+
     // git reset
     if (sub === 'reset') {
       const args = readResetArgs(tokens.slice(2));
@@ -3361,6 +3415,7 @@ const GENERAL_CATALOG: { cmd: string; hint: string }[] = [
   { cmd: 'git rebase main', hint: 'main 위로 커밋 일직선 정렬' },
   { cmd: 'git fetch', hint: '원격 GitHub 최신 소식 확인하기' },
   { cmd: 'git pull', hint: '원격 최신 커밋 받아 합치기' },
+  { cmd: 'git restore --staged', hint: '장바구니(스테이징)에서 변경 빼기' },
   { cmd: 'gh auth status', hint: 'gh CLI 로그인 상태 확인하기' },
   { cmd: 'gh repo view', hint: '저장소 요약 보기' },
   { cmd: 'gh pr create', hint: '변경을 검토해 달라는 PR 열기' },

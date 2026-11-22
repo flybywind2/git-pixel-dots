@@ -11,7 +11,7 @@ import {
   savePracticeDocument,
 } from './index';
 import { diffDocumentLines, DOCUMENT_COMPARISONS, DOCUMENT_PATH, getDocumentComparison, ORIGINAL_DOCUMENT } from './documentDiff';
-import { ATTENDANCE_DOCUMENT, ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, MEETING_REVIEWER, MISTAKEN_NOTICE_PATH } from './meetingExample';
+import { ATTENDANCE_DOCUMENT, ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, MEETING_REVIEWER, MISTAKEN_NOTICE_PATH, SECRET_NOTE_PATH } from './meetingExample';
 
 function deepFreeze<T>(obj: T): T {
   if (obj && typeof obj === 'object' && !Object.isFrozen(obj)) {
@@ -147,10 +147,16 @@ describe('Full stage walkthroughs', () => {
     expect(s.bubbles[0]?.title).toContain('2장 실습 완료');
   });
 
-  it('Ch2: git log, diff, stash, stash pop, reset --soft, revert HEAD', () => {
+  it('Ch2: unstage secret note, stash, stash pop, reset --soft, revert HEAD', () => {
     let s = deepFreeze(createStageState('ch2'));
     const initialCommitCount = s.commits.length;
-    const originalChange = s.files[0]?.content;
+    const originalChange = s.files.find((f) => f.name === DOCUMENT_PATH)?.content;
+    expect(s.files.find((f) => f.name === SECRET_NOTE_PATH)?.status).toBe('staged');
+
+    s = deepFreeze(executePixelCommand(s, `git restore --staged ${SECRET_NOTE_PATH}`));
+    expect(s.lastAnim.kind).toBe('UNSTAGE');
+    expect(s.files.find((f) => f.name === SECRET_NOTE_PATH)?.status).toBe('untracked');
+    expect(s.staged).toEqual([]);
 
     s = deepFreeze(executePixelCommand(s, 'git log'));
     expect(s.lastAnim.kind).toBe('IDLE');
@@ -161,13 +167,13 @@ describe('Full stage walkthroughs', () => {
     s = deepFreeze(executePixelCommand(s, 'git stash'));
     expect(s.lastAnim.kind).toBe('STASH');
     expect(s.stashCount).toBe(1);
-    expect(s.files.every((f) => f.status === 'committed')).toBe(true);
+    expect(s.files.filter((f) => f.name !== SECRET_NOTE_PATH).every((f) => f.status === 'committed')).toBe(true);
 
     s = deepFreeze(executePixelCommand(s, 'git stash pop'));
     expect(s.lastAnim.kind).toBe('STASH_POP');
     expect(s.stashCount).toBe(0);
-    expect(s.files[0]?.status).toBe('modified');
-    expect(s.files[0]?.content).toBe(originalChange);
+    expect(s.files.find((f) => f.name === DOCUMENT_PATH)?.status).toBe('modified');
+    expect(s.files.find((f) => f.name === DOCUMENT_PATH)?.content).toBe(originalChange);
 
     s = deepFreeze(executePixelCommand(s, 'git revert HEAD'));
     expect(s.lastAnim.kind).toBe('REVERT');
@@ -187,6 +193,25 @@ describe('Full stage walkthroughs', () => {
     expect(s.lastAnim.kind).toBe('PUSH');
     expect(s.remoteBranches.main).toBe(s.branches.main);
     expect(s.bubbles[0]?.title).toContain('3장 실습 완료');
+  });
+
+  it('unstages without touching the working file, HEAD or other paths', () => {
+    const initial = createStageState('ch2');
+    const note = initial.files.find((f) => f.name === SECRET_NOTE_PATH);
+    const s = executePixelCommand(initial, `git restore --staged ${SECRET_NOTE_PATH}`);
+    expect(s.lastAnim.kind).toBe('UNSTAGE');
+    expect(s.completedActions).toContain('UNSTAGE');
+    expect(s.files.find((f) => f.name === SECRET_NOTE_PATH)).toEqual({ name: SECRET_NOTE_PATH, status: 'untracked', content: note?.content });
+    expect(s.index).toEqual(initial.commits[2]?.tree);
+    expect(s.branches).toEqual(initial.branches);
+    expect(s.files.find((f) => f.name === DOCUMENT_PATH)?.status).toBe('modified');
+
+    const withoutFlag = executePixelCommand(initial, `git restore ${SECRET_NOTE_PATH}`);
+    expect(withoutFlag.files).toBe(initial.files);
+    const missing = executePixelCommand(initial, 'git restore --staged unknown.md');
+    expect(missing.files).toBe(initial.files);
+    const empty = executePixelCommand(s, 'git restore --staged .');
+    expect(empty.lastAnim.kind).toBe('IDLE');
   });
 
   it('restores the files in each stash and keeps the entry when newer edits overlap', () => {
@@ -722,7 +747,7 @@ describe('Git file snapshots', () => {
   });
 
   it('reverts tracked additions and leaves unrelated working edits intact', () => {
-    const before = createStageState('ch2');
+    const before = executePixelCommand(createStageState('ch2'), `git restore --staged ${SECRET_NOTE_PATH}`);
     const state = executePixelCommand(before, 'git revert 7e8f9a0');
     expect(state.files.some((file) => file.name === MISTAKEN_NOTICE_PATH)).toBe(false);
     expect(state.files.find((file) => file.name === DOCUMENT_PATH)).toEqual(before.files[0]);

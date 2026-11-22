@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { BookOpen, RotateCcw } from 'lucide-react';
-import { getNextPendingStep, STAGE_MAP, STAGE_TRACKS } from '../engine';
+import { getNextPendingStep, isStepCompleted, STAGE_MAP, STAGE_SCENARIOS, STAGE_TRACKS } from '../engine';
+import { CertificateModal } from './CertificateModal';
 import { chapterHash, usePixelStore } from '../store/usePixelStore';
 import { ALL_STAGE_IDS } from '../types/sim';
 import type { StageScenario } from '../types/sim';
@@ -13,6 +15,13 @@ export function TopStageBar() {
   const resetStage = usePixelStore((state) => state.resetStage);
   const setHelpOpen = usePixelStore((state) => state.setHelpOpen);
   const inAdvanced = STAGE_MAP[stageId].track === 'advanced';
+  const [certificateOpen, setCertificateOpen] = useState(false);
+  const grass = STAGE_SCENARIOS.map((lesson) => {
+    const session = sessions[lesson.id];
+    const done = session ? lesson.steps.filter((step) => isStepCompleted(session.sim, step)).length : 0;
+    return { lesson, done, complete: session !== undefined && getNextPendingStep(session.sim) === null };
+  });
+  const allComplete = grass.every((cell) => cell.complete);
 
   function changeStage(value: string) {
     const next = ALL_STAGE_IDS.find((id) => id === value);
@@ -40,7 +49,24 @@ export function TopStageBar() {
         GitDots
       </a>
 
-      <nav aria-label="학습 장" className="col-span-full row-start-2 min-w-0 lg:col-start-2 lg:col-span-1 lg:row-start-1">
+      <div className="col-span-full row-start-2 flex items-center justify-center gap-2 lg:col-start-2 lg:row-start-2">
+        <span role="img" aria-label={`잔디 진행: ${grass.filter((cell) => cell.complete).length}/9장 완료`} className="flex items-center gap-1">
+          {grass.map(({ lesson, done, complete }) => (
+            <span
+              key={`${lesson.id}-${complete}`}
+              title={`${lesson.number}장 ${lesson.shortTitle} · ${complete ? '완료' : done > 0 ? '진행 중' : '시작 전'}`}
+              className={`h-2.5 w-2.5 rounded-[2px] ${complete ? 'grass-pop bg-[#198361]' : done > 0 ? 'bg-[#9CCDB4]' : 'bg-[#DED1B8]'}`}
+            />
+          ))}
+        </span>
+        {allComplete && (
+          <button type="button" onClick={() => setCertificateOpen(true)}
+            className="pixel-btn rounded-md border-[#116349] bg-[#197957] px-2 py-0.5 text-xs font-semibold text-white">
+            수료증 보기
+          </button>
+        )}
+      </div>
+      <nav aria-label="학습 장" className="col-span-full row-start-3 min-w-0 lg:col-start-2 lg:col-span-1 lg:row-start-1">
         <select
           value={stageId}
           aria-label="학습할 장 선택"
@@ -99,6 +125,7 @@ export function TopStageBar() {
           <span className="hidden min-[360px]:inline">명령어 </span>사전
         </button>
       </div>
+      <CertificateModal open={certificateOpen} onClose={() => setCertificateOpen(false)} />
     </header>
   );
 }

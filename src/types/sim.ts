@@ -123,6 +123,7 @@ const PIXEL_ANIMATION_KINDS = [
   'IDLE',
   'EDIT',
   'ADD',
+  'UNSTAGE',
   'COMMIT',
   'PUSH',
   'PULL',
@@ -185,6 +186,13 @@ export interface CommandChip {
   stepIndex?: number;
 }
 
+export interface StagePrediction {
+  question: string;
+  choices: [string, string];
+  answer: 0 | 1;
+  explain: string;
+}
+
 export interface StageStep {
   id: string;
   label: string;
@@ -193,6 +201,7 @@ export interface StageStep {
   doneAction: LessonAction | LessonAction[];
   terms?: TermName[];
   commandNote?: string;
+  prediction?: StagePrediction;
 }
 
 export const LESSON_ACTIONS = [
