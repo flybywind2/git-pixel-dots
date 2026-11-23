@@ -58,4 +58,16 @@ describe('practice storage seed migration', () => {
     expect(issues.ch5).toBe('example-updated');
     expect(sessions.ch5).toBeUndefined();
   });
+
+  it('removes legacy keys after migrating a valid older session into v4', () => {
+    const docs = createStageState('docs');
+    const { lastAnim, terminal: _terminal, ...snapshot } = docs;
+    saved.set('gitdots.practice.v2.docs', JSON.stringify({ sim: snapshot, seq: lastAnim.seq, documentDraft: null }));
+
+    const { sessions, issues } = readPracticeSessions();
+    expect(sessions.docs).toBeDefined();
+    expect(issues.docs).toBeUndefined();
+    expect(saved.has('gitdots.practice.v4.docs')).toBe(true);
+    expect(saved.has('gitdots.practice.v2.docs')).toBe(false);
+  });
 });

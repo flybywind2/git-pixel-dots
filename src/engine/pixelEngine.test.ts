@@ -1379,3 +1379,180 @@ describe('Cycle 2 review regressions', () => {
     expect(Object.keys(sourceBlocked.remoteBranches).some((branch) => branch.startsWith('refs/'))).toBe(false);
   });
 });
+
+describe('GLM-5.4 full review regressions', () => {
+  it('H-1: skipping both diff steps and going straight to add → commit recovers via commit diff', () => {
+    let state = savePracticeDocument(createStageState('docs'), EXAMPLE_DOCUMENT);
+    state = executePixelCommand(state, `git add ${DOCUMENT_PATH}`);
+    state = executePixelCommand(state, 'git commit -m "비교 건너뛴 기록"');
+    expect(getNextPendingStep(state)?.id).toBe('docs-diff');
+
+    // 두 탭이 모두 비어 있을 때 안내 말풍선과 이전 기록 버튼을 제공해요.
+    const emptyWorking = executePixelCommand(state, DOCUMENT_COMPARISONS.working.command);
+    expect(emptyWorking.bubbles[0]?.message).toContain('이미 기록했네요');
+    expect(emptyWorking.bubbles[0]?.actions?.some((a) => a.command === DOCUMENT_COMPARISONS.commits.command)).toBe(true);
+
+    // 이전 기록 탭을 확인하면 두 비교 단계와 커밋 비교 단계가 함께 인정돼요.
+    const committedDiff = executePixelCommand(emptyWorking, DOCUMENT_COMPARISONS.commits.command);
+    expect(committedDiff.completedActions).toContain('DOCUMENT_WORKING_DIFF');
+    expect(committedDiff.completedActions).toContain('DOCUMENT_STAGED_DIFF');
+    expect(committedDiff.completedActions).toContain('DOCUMENT_COMMIT_DIFF');
+    expect(getNextPendingStep(committedDiff)).toBeNull();
+  });
+
+  it('M-1: deleting the currently checked-out branch is refused without leaving an orphan root commit', () => {
+    let state = executePixelCommand(createStageState('ch3'), 'git switch -c feat/dark');
+    const refused = executePixelCommand(state, 'git branch -d feat/dark');
+    expect(refused.lastAnim.kind).toBe('IDLE');
+    expect(refused.branches['feat/dark']).toBe(state.branches['feat/dark']);
+    expect(refused.bubbles[0]?.message).toContain('지금 서 있는 브랜치는 지울 수 없어요');
+
+    state = executePixelCommand(refused, 'edit theme.js');
+    state = executePixelCommand(state, 'git add .');
+    state = executePixelCommand(state, 'git commit -m "브랜치 유지"');
+    expect(state.commits.at(-1)?.parents.length).toBeGreaterThan(0);
+  });
+
+  it('M-2: git branch -d deletes only local branch, prints 7-char hash, and checks merge against HEAD', () => {
+    let state = runSequence('ch4', [
+      `git switch -c ${MEETING_PR_BRANCH}`,
+      `git add ${DOCUMENT_PATH}`,
+      `git commit -m "${MEETING_PR_TITLE}"`,
+      `git push -u origin ${MEETING_PR_BRANCH}`,
+      `gh pr create --title "${MEETING_PR_TITLE}"`,
+      'gh pr view --comments',
+      'gh pr merge',
+      'git switch main',
+      'git pull origin main',
+    ]);
+    const tipHash = state.commits.find((c) => c.id === state.branches[MEETING_PR_BRANCH])?.hash;
+    const deleted = executePixelCommand(state, `git branch -d ${MEETING_PR_BRANCH}`);
+    expect(deleted.branches[MEETING_PR_BRANCH]).toBeUndefined();
+    expect(deleted.remoteBranches[MEETING_PR_BRANCH]).toBe(state.remoteBranches[MEETING_PR_BRANCH]);
+    const output = deleted.terminal.at(-1)?.lines.map((l) => l.text).join(' ') ?? '';
+    expect(output).toContain(`was ${tipHash}`);
+    expect(deleted.bubbles[0]?.message).toContain('git push origin --delete');
+
+    // HEAD 기준으로 병합 판정: main에 합치지 않았더라도 현재 HEAD에 합친 브랜치는 -d가 허용돼요.
+    let headMerged = runSequence('ch3', [
+      'git switch -c feat/dark',
+      'git merge feat/ui',
+      'resolve both',
+      'git commit',
+    ]);
+    const deleteUi = executePixelCommand(headMerged, 'git branch -d feat/ui');
+    expect(deleteUi.branches['feat/ui']).toBeUndefined();
+    expect(deleteUi.remoteBranches['feat/ui']).toBe(headMerged.remoteBranches['feat/ui']);
+  });
+
+  it('M-3: token fine/classic/sso/ssh do not clear pushBlockedDemo; only removing the secret and committing unlocks push', () => {
+    let state = executePixelCommand(createStageState('ch6'), 'token leak-test');
+    expect(state.token.pushBlockedDemo).toBe(true);
+
+    for (const cmd of ['token fine', 'token classic', 'token sso', 'token ssh']) {
+      state = executePixelCommand(state, cmd);
+      expect(state.token.pushBlockedDemo).toBe(true);
+      const blockedPush = executePixelCommand(state, 'git push');
+      expect(blockedPush.lastAnim.kind).toBe('TOKEN_BLOCK');
+      expect(blockedPush.bubbles[0]?.nextHint).toContain('파일에서 토큰을 뺀 뒤 다시 기록');
+    }
+
+    // 작업 폴더의 .env.example(GITHUB_TOKEN=***)을 스테이징하고 다시 커밋하면 차단이 풀려요.
+    state = executePixelCommand(state, 'git add .env.example');
+    state = executePixelCommand(state, 'git commit -m "비밀 토큰 제거"');
+    expect(state.token.pushBlockedDemo).toBe(false);
+    const pushed = executePixelCommand(state, 'git push');
+    expect(pushed.lastAnim.kind).toBe('PUSH');
+  });
+
+  it('M-5: Ch4 ADD/COMMIT require non-main branch and Ch2 REVERT requires removing 임시안내.md commit', () => {
+    // 4장: main에서 바로 add/commit 해도 단계 완료로 인정되지 않아요.
+    let ch4 = executePixelCommand(createStageState('ch4'), `git add ${DOCUMENT_PATH}`);
+    expect(getNextPendingStep(ch4)?.id).toBe('ch4-branch');
+    expect(isStepCompleted(ch4, STAGE_MAP.ch4.steps[1])).toBe(false);
+    ch4 = executePixelCommand(ch4, 'git commit -m "실수로 main에 기록"');
+    expect(isStepCompleted(ch4, STAGE_MAP.ch4.steps[1])).toBe(false);
+    expect(isStepCompleted(ch4, STAGE_MAP.ch4.steps[2])).toBe(false);
+    expect(ch4.bubbles[0]?.title).toContain('main에 직접 기록');
+
+    // 되감고 새 브랜치에 기록하면 완료되고, 마지막 git switch main 뒤에도 완료가 유지돼요.
+    ch4 = executePixelCommand(ch4, 'git reset --soft HEAD~1');
+    ch4 = executePixelCommand(ch4, `git switch -c ${MEETING_PR_BRANCH}`);
+    expect(isStepCompleted(ch4, STAGE_MAP.ch4.steps[1])).toBe(true);
+    ch4 = executePixelCommand(ch4, `git commit -m "${MEETING_PR_TITLE}"`);
+    expect(isStepCompleted(ch4, STAGE_MAP.ch4.steps[2])).toBe(true);
+    ch4 = executePixelCommand(ch4, `git push -u origin ${MEETING_PR_BRANCH}`);
+    ch4 = executePixelCommand(ch4, `gh pr create --title "${MEETING_PR_TITLE}"`);
+    ch4 = executePixelCommand(ch4, 'gh pr view --comments');
+    ch4 = executePixelCommand(ch4, 'gh pr merge');
+    ch4 = executePixelCommand(ch4, 'git switch main');
+    expect(isStepCompleted(ch4, STAGE_MAP.ch4.steps[1])).toBe(true);
+    expect(isStepCompleted(ch4, STAGE_MAP.ch4.steps[2])).toBe(true);
+
+    // 3장: 다른 커밋(c2)을 revert하면 임시안내.md가 남아 있어 REVERT 미완료.
+    let ch2 = runSequence('ch2', [`git restore --staged ${SECRET_NOTE_PATH}`, 'git stash']);
+    ch2 = executePixelCommand(ch2, 'git revert 4d5e6f7');
+    expect(isStepCompleted(ch2, STAGE_MAP.ch2.steps[2])).toBe(false);
+    expect(ch2.bubbles[0]?.title).toContain('잘못 올린 임시 안내 커밋이 아니에요');
+  });
+
+  it('L-1/L-2/L-4/L-6/L-7/L-8/L-13: stash restore hint, ch3 merge noop, checkout file, stage-only guards, merge abort, post-merge ai pr, and CLI fidelity', () => {
+    // L-1: 3장 비밀 메모가 stash에 있을 때 stash pop 안내와 버튼 제공
+    const ch2Stash = executePixelCommand(createStageState('ch2'), 'git stash');
+    const restoreHint = executePixelCommand(ch2Stash, `git restore --staged ${SECRET_NOTE_PATH}`);
+    expect(restoreHint.bubbles[0]?.message).toContain('임시 보관함');
+    expect(restoreHint.bubbles[0]?.actions?.[0]?.command).toBe('git stash pop');
+
+    // L-2: 5장 feat/ui 위에서 feat/dark 생성 후 merge no-op 시 원인 안내
+    let ch3Noop = runSequence('ch3', ['git switch feat/ui', 'git switch -c feat/dark']);
+    ch3Noop = executePixelCommand(ch3Noop, 'git merge feat/ui');
+    expect(ch3Noop.bubbles[0]?.title).toContain('main에서 시작하지 않았어요');
+    expect(ch3Noop.bubbles[0]?.actions?.[0]?.command).toBe('git switch main');
+
+    // L-4: git checkout -- <file>은 브랜치 오류가 아니라 파일 되돌리기 안내로 분기
+    const checkoutFile = executePixelCommand(createStageState('docs'), `git checkout -- ${DOCUMENT_PATH}`);
+    expect(checkoutFile.bubbles[0]?.title).toContain('작업 파일 되돌리기는 이 실습에서 다루지 않아요');
+
+    // L-6: 장 전용 체험 명령은 다른 장에서 상태를 바꾸지 않고 안내만 반환
+    const wrongToken = executePixelCommand(createStageState('ch1'), 'token classic');
+    expect(wrongToken.bubbles[0]?.title).toContain('7장');
+    expect(wrongToken.token.riskScore).toBe(85);
+    const wrongGhes = executePixelCommand(createStageState('ch1'), 'ghes test-public');
+    expect(wrongGhes.bubbles[0]?.title).toContain('8장');
+    const wrongAi = executePixelCommand(createStageState('ch1'), 'ai code');
+    expect(wrongAi.bubbles[0]?.title).toContain('9장');
+
+    // L-7: 충돌 중 git merge --abort
+    let ch3Conflict = runSequence('ch3', ['git switch -c feat/dark', 'git merge feat/ui']);
+    expect(ch3Conflict.conflict).not.toBeNull();
+    const aborted = executePixelCommand(ch3Conflict, 'git merge --abort');
+    expect(aborted.conflict).toBeNull();
+    expect(aborted.bubbles[0]?.title).toContain('합치기를 중단했어요');
+
+    // L-8: 9장 병합 완료 후 ai pr 재실행 시 고아 초안 PR 생성 차단
+    const ch8Merged = runSequence('ch8', [
+      'git worktree add -b ai/fix wt-ai',
+      'ai code',
+      'ai push-main',
+      'ai pr',
+      'ai ready',
+      'ai approve',
+    ]);
+    const afterMergePr = executePixelCommand(ch8Merged, 'ai pr');
+    expect(afterMergePr.prs).toHaveLength(1);
+    expect(afterMergePr.bubbles[0]?.title).toContain('이미 합쳐진 변경');
+
+    // L-13: 8장 repo 이름 일치, pull 미등록 리모트 차단, log --oneline 간략 형식, 1장 git pull 오안내 제거
+    const ch7Issue = executePixelCommand(createStageState('ch7'), 'gh issue create --title "사내 이슈"');
+    expect(ch7Issue.terminal.at(-1)?.lines.map((l) => l.text).join(' ')).toContain('corp/payroll-core/issues/');
+    const badRemotePull = executePixelCommand(createStageState('ch4'), 'git pull upstream main');
+    expect(badRemotePull.lastAnim.kind).toBe('IDLE');
+    expect(badRemotePull.bubbles[0]?.message).toContain('origin');
+    const oneline = executePixelCommand(createStageState('ch2'), 'git log --oneline');
+    const firstLogLine = oneline.terminal.at(-1)?.lines[0]?.text ?? '';
+    expect(firstLogLine).toMatch(/^[0-9a-f]{7} /);
+    expect(firstLogLine).not.toContain('HEAD ->');
+    const docsPull = executePixelCommand(createStageState('docs'), 'git pull');
+    expect(docsPull.bubbles[0]?.message).not.toContain('git push');
+  });
+});

@@ -1,7 +1,11 @@
-import { ALL_STAGE_IDS, type CommandChip, type StageId, type StageScenario } from '../types/sim';
+import { ALL_STAGE_IDS, type CommandChip, type PixelSimState, type StageId, type StageScenario } from '../types/sim';
 import { DOCUMENT_COMPARISONS, DOCUMENT_REVERT } from './documentDiff';
-import { ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, SECRET_NOTE_PATH } from './meetingExample';
+import { ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, MISTAKEN_NOTICE_PATH, SECRET_NOTE_PATH } from './meetingExample';
+import { headTree, treeEntry } from './repoVersions';
 import { term } from './terms';
+
+const hasCh4BranchCommit = (sim: PixelSimState): boolean =>
+  sim.commits.some((commit) => !commit.ghost && commit.id !== 'c1' && commit.id !== 'c2' && commit.branch !== 'main');
 
 const { working, staged, commits } = DOCUMENT_COMPARISONS;
 
@@ -184,6 +188,9 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         goal: '잘못 올린 임시안내.md를 취소하는 커밋 만들기',
         command: 'git revert HEAD',
         doneAction: 'REVERT',
+        isDone: (sim) =>
+          treeEntry(headTree(sim), MISTAKEN_NOTICE_PATH) === undefined
+          && sim.commits.some((commit) => !commit.ghost && commit.isRevert && commit.message.includes('잘못 올린 임시 안내')),
         terms: ['HEAD'],
         commandNote: '이미 팀에 올린 기록은 지우지 않고 취소 커밋을 새로 덧붙여요.',
         prediction: {
@@ -274,6 +281,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         goal: '장소를 바꾼 회의록.md를 다음 커밋에 담기',
         command: 'git add 회의록.md',
         doneAction: 'ADD',
+        isDone: (sim) => hasCh4BranchCommit(sim) || (sim.headBranch !== 'main' && sim.staged.length > 0),
         terms: ['스테이징 영역'],
         commandNote: '고친 회의록을 다음 커밋에 담아요. 담기만 하고 아직 기록(커밋)은 아니에요.',
       },
@@ -283,6 +291,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         goal: '담아 둔 회의록 변경을 새 커밋으로 기록하기',
         command: `git commit -m "${MEETING_PR_TITLE}"`,
         doneAction: 'COMMIT',
+        isDone: (sim) => hasCh4BranchCommit(sim),
         terms: ['커밋'],
         commandNote: '-m 뒤의 글이 커밋 메시지가 돼요.',
       },

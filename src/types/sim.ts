@@ -206,6 +206,7 @@ export interface StageStep {
   goal: string;
   command: string;
   doneAction: LessonAction | LessonAction[];
+  isDone?: (sim: PixelSimState) => boolean;
   terms?: TermName[];
   commandNote?: string;
   prediction?: StagePrediction;

@@ -206,7 +206,7 @@ export function readPracticeSessions() {
         issues[id] = 'example-updated';
       } else {
         sessions[id] = session;
-        if (legacyVersion !== null) writeNow(session);
+        if (legacyVersion !== null && writeNow(session)) clearLegacyPracticeSessions(id);
       }
     } catch {
       issues[id] = 'invalid';
@@ -233,18 +233,20 @@ export function practiceStorageAvailable(): boolean {
   return getStorage() !== undefined;
 }
 
-function writeNow({ sim, documentDraft }: PracticeSession) {
+function writeNow({ sim, documentDraft }: PracticeSession): boolean {
   const { lastAnim, terminal: _terminal, ...snapshot } = sim;
   const storage = getStorage();
   if (!storage) {
     notifyStorageFailure();
-    return;
+    return false;
   }
   try {
     storage.setItem(`${SESSION_KEY}.${sim.stageId}`, JSON.stringify({ sim: snapshot, seq: lastAnim.seq, documentDraft }));
+    return true;
   } catch {
     // The page keeps the latest work in memory when browser storage is unavailable.
     notifyStorageFailure();
+    return false;
   }
 }
 

@@ -266,11 +266,20 @@ function hasMergeMarker(text: string | undefined): boolean {
   return Boolean(text && /^<{7}|^={7}$|^>{7}/m.test(text));
 }
 
+function hasSecretToken(tree: FileTree): boolean {
+  return Object.values(tree).some((content) => /(?:ghp_|github_pat_)/i.test(content));
+}
+
+function stageRepoName(state: PixelSimState): string {
+  return state.stageId === 'ch7' ? 'corp/payroll-core' : 'gitdots/app';
+}
+
 export function isStepCompleted(state: PixelSimState, step: StageStep): boolean {
-  if (Array.isArray(step.doneAction)) {
-    return step.doneAction.some((act) => state.completedActions.includes(act));
-  }
-  return state.completedActions.includes(step.doneAction);
+  const actionDone = Array.isArray(step.doneAction)
+    ? step.doneAction.some((act) => state.completedActions.includes(act))
+    : state.completedActions.includes(step.doneAction);
+  if (!actionDone) return false;
+  return step.isDone ? step.isDone(state) : true;
 }
 
 export function getNextPendingStep(state: PixelSimState): StageStep | null {
@@ -873,20 +882,34 @@ function recordRevert(state: PixelSimState, draft: PixelSimState, target: PixelC
     tree: draft.index,
     isRevert: true,
   };
+  const clearedLeak = state.stageId === 'ch6' && state.token.pushBlockedDemo && !hasSecretToken(draft.index);
   const next = updateWorkspace({
     ...draft,
     commits: [...state.commits, commit],
     branches: { ...state.branches, [state.headBranch]: commit.id },
     conflict: null,
+    ...(clearedLeak ? { token: { ...draft.token, pushBlockedDemo: false } } : {}),
   }, workingTree(draft), draft.index);
   const description = `“${target.message}”의 변경을 취소했어요. 바뀐 파일은 ${changed.join(', ')}예요.`;
+  const wrongCh2Revert = state.stageId === 'ch2'
+    && (treeEntry(next.index, MISTAKEN_NOTICE_PATH) !== undefined || !message.includes('잘못 올린 임시 안내'));
   return finalizeTransition(
     state, next, 'REVERT', '취소 커밋 기록', commit.hash, cmd,
     [
       { text: `[${state.headBranch} ${commit.hash}] ${message}`, tone: 'mint' },
       { text: description, tone: 'sky' },
     ],
-    makeBubble(`revert-${seq}`, 'buddy', 48, 52, '지난 변경을 취소하는 커밋을 만들었어요', description),
+    wrongCh2Revert
+      ? makeBubble(
+        `revert-${seq}`,
+        'buddy',
+        48,
+        52,
+        '잘못 올린 임시 안내 커밋이 아니에요',
+        `방금 취소한 커밋은 “${target.message}”이고, ${MISTAKEN_NOTICE_PATH}를 올린 커밋을 취소해야 해요.`,
+        '이전 단계로 되돌린 뒤 잘못 올린 임시 안내(c3)를 취소해 보세요.',
+      )
+      : makeBubble(`revert-${seq}`, 'buddy', 48, 52, '지난 변경을 취소하는 커밋을 만들었어요', description),
   );
 }
 
@@ -955,12 +978,29 @@ function comparePracticeDocument(state: PixelSimState, cmd: string, args: string
   const lines: TerminalLine[] = [{ text: `${labels.before} → ${labels.after}`, tone: 'sky' }];
   const stagedDocument = state.staged.includes(DOCUMENT_PATH);
   const emptyWorkingAfterAdd = mode === 'working' && changes.length === 0 && stagedDocument;
+  const head = headCommit(state);
+  const previousCommit = head ? commitById(state, head.parents[0]) : undefined;
+  const lastCommitChangedDoc = Boolean(head && previousCommit && changedPaths(previousCommit.tree, head.tree).includes(DOCUMENT_PATH));
+  const workingDiff = getDocumentComparison(state, 'working');
+  const stagedDiff = getDocumentComparison(state, 'staged');
+  const workingEmpty = !workingDiff || diffDocumentLines(workingDiff.before, workingDiff.after).length === 0;
+  const stagedEmpty = !stagedDiff || diffDocumentLines(stagedDiff.before, stagedDiff.after).length === 0;
+  const missingWorkingOrStaged = !state.completedActions.includes('DOCUMENT_WORKING_DIFF')
+    || !state.completedActions.includes('DOCUMENT_STAGED_DIFF');
+  const emptyAfterCommit = (mode === 'working' || mode === 'staged')
+    && changes.length === 0
+    && workingEmpty
+    && stagedEmpty
+    && lastCommitChangedDoc
+    && missingWorkingOrStaged;
   const message = !comparison
     ? '문서를 커밋하면 이전 기록과 비교할 수 있어요.'
     : changes.length === 0
       ? emptyWorkingAfterAdd
         ? '이미 장바구니에 담겨 있어서 바뀐 줄 탭은 비어 있어요. ‘담아 둔 변경’ 탭에서 확인할 수 있어요.'
-        : view.empty
+        : emptyAfterCommit
+          ? "이미 기록했네요. '이전 기록' 탭에서 방금 기록한 줄을 확인해 보세요."
+          : view.empty
       : '−는 빠진 줄, +는 들어간 줄이에요.';
 
   if (changes.length === 0) {
@@ -977,16 +1017,39 @@ function comparePracticeDocument(state: PixelSimState, cmd: string, args: string
 
   // 빈 diff로 조용히 단계가 끝나지 않도록, 실제로 바뀐 줄이 있을 때만 완료로 인정해요.
   // add를 먼저 해서 바뀐 줄 탭이 비었다면, 담아 둔 변경 탭에서 확인한 것도 같은 학습 목표로 인정해요.
+  // 비교 두 단계를 모두 건너뛰고 바로 커밋했다면, 이전 기록 탭에서 방금 기록한 줄을 확인했을 때 함께 인정해요.
   const nextAction = getNextPendingStep(state)?.doneAction;
-  const creditComparison = comparison && changes.length > 0 && (
-    nextAction === view.action
-    || (nextAction === 'DOCUMENT_WORKING_DIFF' && mode === 'staged' && state.staged.includes(DOCUMENT_PATH))
-  );
+  let completedActions = state.completedActions;
+  if (comparison && changes.length > 0) {
+    if (nextAction === view.action) {
+      completedActions = withCompletedAction(completedActions, view.action);
+    } else if (nextAction === 'DOCUMENT_WORKING_DIFF' && mode === 'staged' && stagedDocument) {
+      completedActions = withCompletedAction(completedActions, 'DOCUMENT_WORKING_DIFF');
+    } else if (mode === 'commits' && lastCommitChangedDoc && missingWorkingOrStaged) {
+      if (!completedActions.includes('DOCUMENT_WORKING_DIFF')) {
+        completedActions = withCompletedAction(completedActions, 'DOCUMENT_WORKING_DIFF');
+      }
+      if (!completedActions.includes('DOCUMENT_STAGED_DIFF')) {
+        completedActions = withCompletedAction(completedActions, 'DOCUMENT_STAGED_DIFF');
+      }
+      completedActions = withCompletedAction(completedActions, 'DOCUMENT_COMMIT_DIFF');
+    }
+  }
   const draft: PixelSimState = {
     ...state,
     document: { ...state.document, comparison: mode },
-    completedActions: creditComparison ? withCompletedAction(state.completedActions, nextAction as LessonAction) : state.completedActions,
+    completedActions,
   };
+  const nextHint = emptyWorkingAfterAdd
+    ? '담아 둔 변경 탭에서 방금 담은 줄을 확인해 보세요.'
+    : emptyAfterCommit
+      ? '이전 기록 탭에서 방금 기록한 줄을 확인해 보세요.'
+      : undefined;
+  const actions: BubbleAction[] | undefined = emptyWorkingAfterAdd
+    ? [{ label: '담아 둔 변경 보기', command: DOCUMENT_COMPARISONS.staged.command, tone: 'mint' }]
+    : emptyAfterCommit
+      ? [{ label: '이전 기록 보기', command: DOCUMENT_COMPARISONS.commits.command, tone: 'mint' }]
+      : undefined;
   return finalizeTransition(
     state, draft, 'IDLE', `${view.label} 비교`, DOCUMENT_PATH, cmd, lines,
     makeBubble(
@@ -996,10 +1059,8 @@ function comparePracticeDocument(state: PixelSimState, cmd: string, args: string
       52,
       `${view.label} 비교`,
       message,
-      emptyWorkingAfterAdd ? '담아 둔 변경 탭에서 방금 담은 줄을 확인해 보세요.' : undefined,
-      emptyWorkingAfterAdd
-        ? [{ label: '담아 둔 변경 보기', command: DOCUMENT_COMPARISONS.staged.command, tone: 'mint' }]
-        : undefined,
+      nextHint,
+      actions,
     ),
   );
 }
@@ -1145,6 +1206,10 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
     const sub = tokens[1]?.toLowerCase();
     const resolveConflict = state.conflict && lower.startsWith('resolve ');
     if (!resolveConflict && (tokens[0].toLowerCase() !== 'git' || !sub || !DOCUMENT_GIT_COMMANDS.has(sub))) {
+      if (tokens[0].toLowerCase() === 'git' && sub === 'pull') {
+        return commandNotice(state, cmd, '원격 저장소 가져오기는 4장에서 배워요',
+          '1장에서는 내 컴퓨터에서 문서 편집·비교·기록만 연습해요. git pull은 4장에서 다뤄요.', 'muted');
+      }
       if (tokens[0].toLowerCase() === 'git' && sub) {
         const suggestion = closestCommand(sub, DOCUMENT_GIT_COMMANDS);
         if (suggestion) {
@@ -1173,9 +1238,11 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
     const working = workingTree(state);
     const previous = treeEntry(working, targetName);
     const exists = previous !== undefined;
-    const content = targetName.toLowerCase().endsWith('.md')
-      ? exists ? `${previous.trimEnd()}\n\n${state.stageId === 'ch4' ? '- 모임 장소는 2층 모임방으로 안내했어요.' : '- 스터디 준비 사항을 확인했어요.'} (수정 ${seqNext})\n` : `# ${targetName.slice(0, -3)}\n`
-      : exists ? `${previous}\n// 수정됨 (#${seqNext})` : `// 새 파일 ${targetName}`;
+    const content = state.stageId === 'ch6' && targetName === '.env.example' && previous && /(?:ghp_|github_pat_)/i.test(previous)
+      ? previous.replace(/(?:ghp_|github_pat_)[^\s]*/gi, '***')
+      : targetName.toLowerCase().endsWith('.md')
+        ? exists ? `${previous.trimEnd()}\n\n${state.stageId === 'ch4' ? '- 모임 장소는 2층 모임방으로 안내했어요.' : '- 스터디 준비 사항을 확인했어요.'} (수정 ${seqNext})\n` : `# ${targetName.slice(0, -3)}\n`
+        : exists ? `${previous}\n// 수정됨 (#${seqNext})` : `// 새 파일 ${targetName}`;
     const draft = updateWorkspace(state, { ...working, [targetName]: content }, state.index);
     return finalizeTransition(
       state,
@@ -1306,6 +1373,10 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
   // ── Token security commands (Ch6) ────────────────────────────────────────
   if (lower.startsWith('token ')) {
+    if (state.stageId !== 'ch6') {
+      return commandNotice(state, cmd, '이 명령은 7장에서 배워요',
+        '토큰 권한과 보안 관문 체험(token ...)은 7장(인증과 권한)에서 사용할 수 있어요.', 'amber');
+    }
     const sub = (tokens[1] ?? '').toLowerCase();
 
     if (sub === 'classic') {
@@ -1315,7 +1386,6 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         mode: 'classic',
         scopes: ['repo', 'admin:org', 'delete_repo', 'workflow'],
         riskScore: 88,
-        pushBlockedDemo: false,
         expires: undefined,
       };
       const draft: PixelSimState = { ...state, token: nextToken };
@@ -1356,7 +1426,6 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         scopes: ['contents:write (gitdots/app)'],
         expires: '30일 뒤',
         riskScore: state.token.ssoAuthorized ? 12 : 22,
-        pushBlockedDemo: false,
       };
       const draft: PixelSimState = { ...state, token: nextToken };
       return finalizeTransition(
@@ -1390,7 +1459,6 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         ...state.token,
         ssoAuthorized: true,
         riskScore: Math.max(8, state.token.riskScore - 10),
-        pushBlockedDemo: false,
       };
       const draft: PixelSimState = { ...state, token: nextToken };
       return finalizeTransition(
@@ -1424,7 +1492,6 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         ...state.token,
         sshReady: true,
         riskScore: Math.max(5, state.token.riskScore - 7),
-        pushBlockedDemo: false,
       };
       const draft: PixelSimState = { ...state, token: nextToken };
       return finalizeTransition(
@@ -1483,6 +1550,10 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
   // ── GHES commands (Ch7) ──────────────────────────────────────────────────
   if (lower.startsWith('ghes ')) {
+    if (state.stageId !== 'ch7') {
+      return commandNotice(state, cmd, '이 명령은 8장에서 배워요',
+        '사내 GitHub 체험 명령(ghes ...)은 8장(사내 GitHub)에서 사용할 수 있어요.', 'amber');
+    }
     const sub = (tokens[1] ?? '').toLowerCase();
 
     if (sub === 'test-public' || sub === 'block') {
@@ -1623,6 +1694,10 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
   // ── AI Agent commands (Ch8) ──────────────────────────────────────────────
   if (lower.startsWith('ai ')) {
+    if (state.stageId !== 'ch8') {
+      return commandNotice(state, cmd, '이 명령은 9장에서 배워요',
+        'AI 협업 체험 명령(ai ...)은 9장(AI와 협업)에서 사용할 수 있어요.', 'amber');
+    }
     const sub = (tokens[1] ?? '').toLowerCase();
 
     if (sub === 'code') {
@@ -1749,6 +1824,18 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           ),
         );
       }
+      const aiBranch = state.ai.worktreeBranch;
+      const aiTip = treeEntry(state.branches, aiBranch);
+      const remoteMain = treeEntry(state.remoteBranches, 'main');
+      if (state.ai.merged || Boolean(remoteMain && aiTip && reachableCommits(state, remoteMain).has(aiTip))) {
+        return commandNotice(
+          state,
+          cmd,
+          '이미 합쳐진 변경이에요',
+          '이 변경은 이미 PR로 합쳐졌어요. 다시 연습하려면 초기화 버튼을 눌러 주세요.',
+          'mint',
+        );
+      }
       // 이미 열어 둔 AI PR이 있으면 고아 초안 PR을 또 만들지 않아요.
       if (state.ai.prNumber !== null) {
         const openAiPr = state.prs.find((pr) => pr.number === state.ai.prNumber && pr.status !== 'merged');
@@ -1776,7 +1863,6 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         }
       }
       const nextNum = nextSharedNumber(state);
-      const aiBranch = state.ai.worktreeBranch;
       const newPr: PixelPr = {
         number: nextNum,
         title: '[AI] 덧셈 연산자 버그 수정',
@@ -2162,13 +2248,22 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       }
 
       // 바뀐 줄 탭을 유지해 git add 뒤 작업 폴더와 장바구니가 같아졌음을 보여 주고, 다음 단계에서 담아 둔 변경 탭을 직접 확인하게 해요.
+      const onCh4Main = state.stageId === 'ch4' && state.headBranch === 'main';
       const addMessage = state.document
         ? '고친 내용을 다음 기록의 장바구니(스테이징 영역)에 담았어요. 작업 문서와 장바구니가 같아져서 바뀐 줄 탭은 비어 보이지만, 사라진 게 아니라 장바구니에 담겨 있어요. 아래 비교에서 담아 둔 변경 탭으로 확인할 수 있어요.'
-        : `수정한 파일(${draft.staged.join(', ')})을 다음 기록의 장바구니(스테이징 영역)에 담았어요. 이제 기록 남기기로 커밋할 수 있어요.`;
+        : onCh4Main
+          ? '장바구니에는 담았지만 아직 main 브랜치에 있어요. 이 장에서는 main은 그대로 두고 새 브랜치에서 기록해야 해요.'
+          : `수정한 파일(${draft.staged.join(', ')})을 다음 기록의 장바구니(스테이징 영역)에 담았어요. 이제 기록 남기기로 커밋할 수 있어요.`;
       return finalizeTransition(
         state, draft, 'ADD', '다음 기록에 담기', draft.staged.join(', '), cmd,
-        [{ text: `스테이징: ${draft.staged.join(', ')}`, tone: 'mint' }],
-        makeBubble(`add-${seqNext}`, 'buddy', 38, 54, '다음 기록에 담았어요', addMessage),
+        [{ text: `스테이징: ${draft.staged.join(', ')}`, tone: onCh4Main ? 'amber' : 'mint' }],
+        onCh4Main
+          ? makeBubble(
+            `add-${seqNext}`, 'buddy', 38, 54, '새 브랜치에서 담는 게 좋아요', addMessage,
+            `git switch -c ${MEETING_PR_BRANCH}로 새 브랜치를 만들어 보세요.`,
+            [{ label: '새 브랜치 만들기', command: `git switch -c ${MEETING_PR_BRANCH}`, tone: 'primary' }],
+          )
+          : makeBubble(`add-${seqNext}`, 'buddy', 38, 54, '다음 기록에 담았어요', addMessage),
       );
     }
 
@@ -2247,25 +2342,36 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         tree: index,
         ...(isMergeCommit ? { isMerge: true } : {}),
       };
+      const clearedLeak = state.stageId === 'ch6' && state.token.pushBlockedDemo && !hasSecretToken(index);
       const draft = updateWorkspace({
         ...state,
         commits: [...state.commits, newCommit],
         branches: { ...state.branches, [state.headBranch]: newCommitId },
         conflict: null,
+        ...(clearedLeak ? { token: { ...state.token, pushBlockedDemo: false } } : {}),
         completedActions: isMergeCommit
           ? withCompletedAction(state.completedActions, 'MERGE_COMMIT') : state.completedActions,
       }, working, index);
 
+      const committedOnCh4Main = state.stageId === 'ch4' && state.headBranch === 'main' && !isMergeCommit;
       const message = isMergeCommit
         ? '합친 파일이 새 커밋에 기록됐어요.'
-        : `${parsedMessage.message ? '적은 메시지' : '메시지를 적지 않아 기본 이름'}으로 “${parsedMsg}” 커밋을 기록했어요. 커밋 ID(7자리 고유 번호)는 ${newCommit.hash}예요.`;
+        : committedOnCh4Main
+          ? 'main에 직접 기록했어요. 이 장에서는 main은 그대로 두고 새 브랜치를 먼저 만든 뒤 기록해야 해요.'
+          : `${parsedMessage.message ? '적은 메시지' : '메시지를 적지 않아 기본 이름'}으로 “${parsedMsg}” 커밋을 기록했어요. 커밋 ID(7자리 고유 번호)는 ${newCommit.hash}예요.`;
       return finalizeTransition(
         state, draft, 'COMMIT', '커밋 기록', newCommit.hash, cmd,
         [
-          { text: `[${state.headBranch} ${newCommit.hash}] ${parsedMsg}`, tone: 'mint' },
-          { text: message, tone: 'sky' },
+          { text: `[${state.headBranch} ${newCommit.hash}] ${parsedMsg}`, tone: committedOnCh4Main ? 'amber' : 'mint' },
+          { text: message, tone: committedOnCh4Main ? 'amber' : 'sky' },
         ],
-        makeBubble(`commit-${seqNext}`, 'buddy', 48, 52, '새 커밋을 기록했어요', message),
+        committedOnCh4Main
+          ? makeBubble(
+            `commit-${seqNext}`, 'buddy', 48, 52, 'main에 직접 기록했어요', message,
+            `되감은 뒤 git switch -c ${MEETING_PR_BRANCH}로 새 브랜치에 기록해 보세요.`,
+            [{ label: '커밋만 되감기', command: 'git reset --soft HEAD~1', tone: 'amber' }],
+          )
+          : makeBubble(`commit-${seqNext}`, 'buddy', 48, 52, '새 커밋을 기록했어요', message),
       );
     }
 
@@ -2326,13 +2432,12 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           [
             { text: 'remote: error: GH013: Repository rule violations found! (저장소 보안 규칙 위반)', tone: 'coral' },
             { text: 'remote: - PUSH PROTECTION: .env.example의 GitHub Personal Access Token(ghp_***) 감지', tone: 'coral' },
-            { text: '토큰이 담긴 파일은 push할 수 없어요. 토큰을 빼거나 token fine으로 안전한 토큰 상태를 확인하세요.', tone: 'amber' },
+            { text: '토큰 권한을 바꿔도 내용에 든 비밀 정보는 계속 차단돼요. 파일에서 토큰을 뺀 뒤 다시 기록해야 해요.', tone: 'amber' },
           ],
           makeBubble(
             `push-leak-blocked-${seqNext}`, 'guard', 56, 48, '토큰이 담긴 push는 막혔어요 🛡️',
             '.env.example에 들어 있던 토큰 패턴을 GitHub가 감지해 전송을 거부했어요.',
-            'token fine으로 최소 권한 토큰 상태를 확인한 뒤 다시 시도해 보세요.',
-            [{ label: '최소 권한 토큰 보기', command: 'token fine', tone: 'mint' }],
+            '토큰 권한을 바꿔도 내용에 든 비밀 정보는 계속 차단돼요. 파일에서 토큰을 뺀 뒤 다시 기록해야 해요.',
           ),
         );
       }
@@ -2450,7 +2555,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         'origin',
         cmd,
         [
-          { text: `From https://${state.ghHost}/gitdots/app (원격 저장소에서 최신 정보 확인)`, tone: 'sky' },
+          { text: `From https://${state.ghHost}/${stageRepoName(state)} (원격 저장소에서 최신 정보 확인)`, tone: 'sky' },
           {
             text: relation === 'behind'
               ? ` * [updated] origin/main — 팀원의 새 커밋 ${behindCount}건이 있어요!`
@@ -2479,7 +2584,17 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
     // git pull
     if (sub === 'pull') {
-      const branch = tokens[2] === 'origin' ? (tokens[3] ?? state.headBranch) : state.headBranch;
+      const args = tokens.slice(2).filter((arg) => !arg.startsWith('-'));
+      if (args.length > 0 && args[0] !== 'origin') {
+        return commandNotice(
+          state,
+          cmd,
+          '원격 저장소 이름을 확인하세요',
+          `'${args[0]}' 원격 저장소는 등록되어 있지 않아요. 이 실습의 원격 저장소는 origin이에요. (예: git pull origin main)`,
+          'amber',
+        );
+      }
+      const branch = args[0] === 'origin' ? (args[1] ?? state.headBranch) : state.headBranch;
       const remote = resolveRevision(state, `origin/${branch}`);
       const local = headCommit(state);
       if (!remote || !local) {
@@ -2554,11 +2669,12 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         .reverse()
         .slice(0, 7);
 
+      const oneline = tokens.includes('--oneline');
       const lines: TerminalLine[] = recent.map((c) => {
         const refs = branchByCommit.get(c.id);
         const refTag = refs ? ` (${refs.join(', ')})` : '';
         return {
-          text: `* ${c.hash}${refTag} ${c.message}`,
+          text: oneline ? `${c.hash} ${c.message}` : `* ${c.hash}${refTag} ${c.message}`,
           tone: c.isRevert ? 'amber' : c.isMerge ? 'lavender' : 'sky',
         };
       });
@@ -2728,8 +2844,16 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           ...(untracked.length > 0 && !includeUntracked
             ? [{ text: `추적하지 않는 새 파일(${untracked.map(([path]) => path).join(', ')})은 보관함에 넣지 않고 작업 폴더에 그대로 뒀어요.`, tone: 'muted' as const }]
             : [])],
-        makeBubble(`stash-${seqNext}`, 'buddy', 34, 54, '하던 작업을 잠시 보관했어요',
-          '고치던 파일이 최근 커밋 상태로 돌아왔어요. 새 파일(추적하지 않는 파일)은 작업 폴더에 그대로 남아 있어요.'),
+        makeBubble(
+          `stash-${seqNext}`,
+          'buddy',
+          34,
+          54,
+          '하던 작업을 잠시 보관했어요',
+          '고치던 파일이 최근 커밋 상태로 돌아왔어요. 새 파일(추적하지 않는 파일)은 작업 폴더에 그대로 남아 있어요.',
+          state.stageId === 'docs' ? '보관한 수정은 git stash pop으로 다시 꺼낼 수 있어요.' : undefined,
+          state.stageId === 'docs' ? [{ label: '보관함에서 꺼내기', command: 'git stash pop', tone: 'primary' }] : undefined,
+        ),
       );
     }
 
@@ -2760,6 +2884,21 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
               [{ text: `${target}은 이미 장바구니(스테이징 영역) 밖에 있어요. 작업 폴더에만 남아 있으니 이 단계는 마친 것으로 볼 수 있어요.`, tone: 'mint' }],
               makeBubble(`restore-already-${seqNext}`, 'buddy', 38, 54, '이미 장바구니 밖에 있어요',
                 `${target}은 지금 작업 폴더에만 있고 다음 커밋에는 들어가지 않아요. 이 단계를 마친 것으로 볼게요.`),
+            );
+          }
+          const inStash = state.stashes.some((stash) =>
+            treeEntry(stash.index, target) !== undefined || treeEntry(stash.working, target) !== undefined);
+          if (state.stageId === 'ch2' && target === SECRET_NOTE_PATH && inStash) {
+            return finalizeTransition(
+              state, state, 'IDLE', '임시 보관함에 들어 있어요', undefined, cmd,
+              [{ text: '비밀 메모가 임시 보관함에 들어 있어요. git stash pop으로 꺼낸 뒤 다시 빼 보세요.', tone: 'amber' }],
+              makeBubble(
+                `restore-in-stash-${seqNext}`, 'buddy', 38, 54,
+                '비밀 메모가 임시 보관함에 들어 있어요',
+                '비밀 메모를 장바구니에서 빼기 전에 임시 보관함(stash)에 넣어 두었어요. 먼저 꺼낸 뒤 다시 장바구니에서 빼 보세요.',
+                'git stash pop으로 꺼내 보세요.',
+                [{ label: '보관함에서 꺼내기', command: 'git stash pop', tone: 'primary' }],
+              ),
             );
           }
           return commandNotice(state, cmd, '스테이징 영역을 확인해 주세요',
@@ -2840,8 +2979,11 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       const commits = state.commits.map((commit) => ({ ...commit, ghost: !reachable.has(commit.id) }));
       const nextWorking = args.mode === '--hard' ? restoreWorktree(state, target.tree) : working;
       const index = args.mode === '--soft' ? state.index : target.tree;
+      const clearedLeak = state.stageId === 'ch6' && args.mode !== '--soft'
+        && state.token.pushBlockedDemo && !hasSecretToken(target.tree);
       const draft = updateWorkspace({
         ...state, branches, commits, origHead: oldHead?.id, conflict: null,
+        ...(clearedLeak ? { token: { ...state.token, pushBlockedDemo: false } } : {}),
       }, nextWorking, index);
       const message = args.mode === '--hard'
         ? '커밋하지 않은 추적 파일의 변경을 덮어쓰고, 작업 파일과 스테이징 영역을 대상 커밋의 버전으로 복원했어요.'
@@ -2986,27 +3128,30 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         const name = tokens[3];
         if (!name) return commandNotice(state, cmd, '삭제할 브랜치 이름을 적어 주세요', 'git branch -d 브랜치이름처럼 적어요.', 'amber');
         if (name === 'main') return commandNotice(state, cmd, 'main은 삭제할 수 없어요', '기본 브랜치는 삭제하지 않아요.', 'amber');
+        if (name === state.headBranch) {
+          return commandNotice(state, cmd, '지금 서 있는 브랜치는 지울 수 없어요',
+            '지금 서 있는 브랜치는 지울 수 없어요. 먼저 git switch main으로 이동하세요.', 'amber');
+        }
         const tip = treeEntry(state.branches, name);
         if (!tip) return commandNotice(state, cmd, '없는 브랜치예요', 'git branch로 브랜치 목록을 확인하세요.', 'amber');
         if (state.ai.worktreeActive && name === state.ai.worktreeBranch) {
           return commandNotice(state, cmd, 'AI 작업 폴더가 쓰는 브랜치예요',
             `${name} 브랜치는 ${state.ai.worktreeDir ?? 'wt-ai'} 작업 폴더가 사용 중이라 지울 수 없어요. 작업 폴더가 끝까지 사용한 뒤에 정리해요.`, 'amber');
         }
-        const mainTip = treeEntry(state.branches, 'main');
-        const merged = Boolean(mainTip && reachableCommits(state, mainTip).has(tip));
+        const headTip = treeEntry(state.branches, state.headBranch);
+        const merged = Boolean(headTip && reachableCommits(state, headTip).has(tip));
         if (!merged) {
           return commandNotice(state, cmd, '아직 합치지 않은 브랜치예요',
-            'main에 합친 브랜치만 -d로 지울 수 있어요. (강제 삭제는 -D지만 이 실습에서는 권장하지 않아요.)', 'amber');
+            `현재 브랜치(${state.headBranch})에 합친 브랜치만 -d로 지울 수 있어요. (강제 삭제는 -D지만 이 실습에서는 권장하지 않아요.)`, 'amber');
         }
         const branches = { ...state.branches };
         delete branches[name];
-        const remoteBranches = { ...state.remoteBranches };
-        delete remoteBranches[name];
+        const hash = commitById(state, tip)?.hash ?? tip;
         return finalizeTransition(
-          state, { ...state, branches, remoteBranches }, 'IDLE', `브랜치 ${name} 삭제`, name, cmd,
-          [{ text: `Deleted branch ${name} (was ${tip.slice(0, 7)}). (다 쓴 브랜치를 정리했어요)`, tone: 'mint' }],
+          state, { ...state, branches }, 'IDLE', `브랜치 ${name} 삭제`, name, cmd,
+          [{ text: `Deleted branch ${name} (was ${hash}). (다 쓴 브랜치를 정리했어요)`, tone: 'mint' }],
           makeBubble(`branch-delete-${seqNext}`, 'buddy', 42, 52, `${name} 브랜치를 정리했어요`,
-            '합친 브랜치는 지워도 커밋 기록은 main에 그대로 남아 있어요.'),
+            '합친 브랜치는 지워도 커밋 기록은 그대로 남아 있어요. GitHub에 남은 브랜치는 PR을 합칠 때 삭제하거나 `git push origin --delete`로 지워요.'),
         );
       }
       if (!newName || newName.startsWith('-')) {
@@ -3067,6 +3212,24 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
     // git switch / git checkout
     if (sub === 'switch' || sub === 'checkout') {
+      if (sub === 'checkout') {
+        const hasDoubleDash = tokens.includes('--');
+        const knownFiles = new Set([
+          ...state.files.map((f) => f.name),
+          ...Object.keys(state.index),
+          ...Object.keys(headTree(state)),
+        ]);
+        const targetArg = tokens[2]?.replace(/^\.\//, '');
+        if (hasDoubleDash || (targetArg && !treeEntry(state.branches, targetArg) && knownFiles.has(targetArg))) {
+          return commandNotice(
+            state,
+            cmd,
+            '작업 파일 되돌리기는 이 실습에서 다루지 않아요',
+            '작업 파일 되돌리기는 이 실습에서 다루지 않아요. 원치 않은 수정은 상단의 ‘이전 단계로’로 되돌릴 수 있어요.',
+            'amber',
+          );
+        }
+      }
       const isCreate = tokens[2] === '-c' || tokens[2] === '-b';
       const name = isCreate ? tokens[3] : tokens[2];
       const targetBranch = name === '-' && !isCreate ? state.previousBranch : name;
@@ -3141,6 +3304,22 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
     // git merge
     if (sub === 'merge') {
       const targetName = tokens[2];
+      if (targetName === '--abort') {
+        if (!state.conflict || state.conflict.revert) {
+          return commandNotice(state, cmd, '중단할 합치기 충돌이 없어요', '지금은 진행 중인 브랜치 합치기 충돌이 없어요.', 'muted');
+        }
+        const targetTree = headTree(state);
+        const draft = updateWorkspace({
+          ...state,
+          conflict: null,
+        }, restoreWorktree(state, targetTree), targetTree);
+        return finalizeTransition(
+          state, draft, 'RESET', '합치기 중단', state.headBranch, cmd,
+          [{ text: '진행 중이던 합치기를 중단하고 충돌 전 상태로 되돌렸어요.', tone: 'mint' }],
+          makeBubble(`merge-abort-${seqNext}`, 'buddy', 44, 52, '합치기를 중단했어요',
+            '충돌이 난 합치기를 취소하고 직전 커밋 상태로 돌아왔어요.'),
+        );
+      }
       const target = targetName ? resolveRevision(state, targetName) : undefined;
       const local = headCommit(state);
       if (!target || !local) {
@@ -3162,6 +3341,22 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         return commandNotice(state, cmd, '현재 변경을 먼저 정리하세요', '스테이징한 변경을 커밋하거나 진행 중인 합치기를 마무리하세요.', 'amber');
       }
       if (reachableCommits(state, local.id).has(target.id)) {
+        if (state.stageId === 'ch3' && !state.completedActions.includes('CONFLICT')) {
+          return finalizeTransition(
+            state, state, 'IDLE', 'feat/dark를 main에서 시작하지 않았어요', undefined, cmd,
+            [
+              { text: `${state.headBranch} 브랜치에 이미 ${targetName}의 커밋이 들어 있어 합칠 새 변경이 없어요.`, tone: 'amber' },
+              { text: 'main에서 새 브랜치를 만들어야 두 변경을 합쳐 볼 수 있어요. git switch main으로 이동하거나 상단의 ‘이전 단계로’를 눌러 되돌려 보세요.', tone: 'muted' },
+            ],
+            makeBubble(
+              `merge-noop-ch3-${seqNext}`, 'buddy', 40, 52,
+              'feat/dark를 main에서 시작하지 않았어요',
+              `현재 브랜치(${state.headBranch})가 이미 ${targetName}의 기록을 포함하고 있어서 새로 합칠 변경이 없어요. main으로 이동하거나 상단의 ‘이전 단계로’를 눌러 다시 시작해 보세요.`,
+              'git switch main으로 이동해 보세요.',
+              [{ label: 'main으로 이동', command: 'git switch main', tone: 'primary' }],
+            ),
+          );
+        }
         return commandNotice(state, cmd, '이미 합쳐진 변경이에요', '대상 커밋이 현재 브랜치의 이력에 들어 있어요.');
       }
 
@@ -3562,7 +3757,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
 
     // gh repo view
     if (sub === 'repo' && sub2 === 'view') {
-      const repoName = state.stageId === 'ch7' ? 'corp/payroll-core' : 'gitdots/app';
+      const repoName = stageRepoName(state);
       return finalizeTransition(
         state,
         state,
@@ -3671,7 +3866,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         };
         const lines: TerminalLine[] = [
           { text: `📋 Creating pull request for ${headBranch} into ${baseBranch}... (PR 작성 중)`, tone: 'sky' },
-          { text: `✓ https://${state.ghHost}/gitdots/app/pull/${nextNum} — "${title}"`, tone: 'mint' },
+          { text: `✓ https://${state.ghHost}/${stageRepoName(state)}/pull/${nextNum} — "${title}"`, tone: 'mint' },
           ...(body ? [{ text: `  본문: ${body}`, tone: 'default' as const }] : []),
           { text: '✅ 자동 검사(CI) 통과! (GitHub에 올라간 변경을 검사해요)', tone: 'mint' },
           ...(state.stageId === 'ch5' ? [{ text: '이 실습에서는 자동 검사가 바로 통과한 것으로 보여 줘요. gh run watch로 과정을 지켜볼 수 있어요.', tone: 'muted' as const }] : []),
@@ -3983,9 +4178,10 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           issues: [...state.issues, newIssue],
           completedActions: withCompletedAction(state.completedActions, 'ISSUE_CREATE'),
         };
+        const repoName = stageRepoName(state);
         const lines: TerminalLine[] = [
-          { text: `📌 Creating issue in gitdots/app... (이슈 등록 중)`, tone: 'sky' },
-          { text: `✓ https://${state.ghHost}/gitdots/app/issues/${nextNum} — "${title}"`, tone: 'mint' },
+          { text: `📌 Creating issue in ${repoName}... (이슈 등록 중)`, tone: 'sky' },
+          { text: `✓ https://${state.ghHost}/${repoName}/issues/${nextNum} — "${title}"`, tone: 'mint' },
         ];
         const nextStep = getNextPendingStep(draft);
 
