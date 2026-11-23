@@ -2273,13 +2273,20 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
     if (sub === 'push') {
       const args = tokens.slice(2).filter((arg) => arg !== '-u' && arg !== '--set-upstream');
       const [remote = 'origin', refspec = state.headBranch] = args;
-      const [rawBranch, rawRemoteBranch] = refspec.split(':');
+      const isDeleteRefspec = refspec.startsWith(':');
+      // refs/heads/main처럼 전체 경로로 적어도 같은 브랜치로 인식하도록 접두어를 떼어요.
+      const normalizeBranchRef = (ref: string) => ref.replace(/^refs\/heads\//, '');
+      const [rawSource, rawDestination] = refspec.split(':');
+      const rawBranch = normalizeBranchRef(rawSource ?? '');
+      const rawRemoteBranch = rawDestination === undefined ? undefined : normalizeBranchRef(rawDestination);
       // HEAD는 현재 브랜치를 가리켜요. 실제 git처럼 현재 브랜치 이름으로 풀어요.
-      const branch = rawBranch === 'HEAD' ? state.headBranch : rawBranch || state.headBranch;
+      // 삭제형 refspec(:ai/fix)은 출발 브랜치가 없으므로 현재 브랜치로 대체하지 않아요.
+      const branch = rawBranch === 'HEAD'
+        ? state.headBranch
+        : rawBranch || (isDeleteRefspec ? '' : state.headBranch);
       const remoteBranch = rawRemoteBranch === 'HEAD'
         ? state.headBranch
         : rawRemoteBranch ?? branch;
-      const isDeleteRefspec = refspec.startsWith(':');
 
       // 9장: 삭제형 push로 main을 지우는 것도 보호 규칙이 막아요.
       if (state.stageId === 'ch8' && isDeleteRefspec && remoteBranch === 'main') {
@@ -3298,14 +3305,15 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         return commandNotice(state, cmd, 'main 브랜치는 worktree 전용으로 쓸 수 없어요',
           '이미 있는 main 브랜치는 새 작업 폴더의 브랜치로 덮어쓸 수 없어요. ai/fix처럼 새 이름을 써 주세요.', 'amber');
       }
-      if (state.ai.worktreeActive && state.ai.worktreeBranch === branchName) {
+      if (state.ai.worktreeActive) {
         const activeDir = state.ai.worktreeDir ?? 'wt-ai';
+        const activeBranch = state.ai.worktreeBranch;
         return finalizeTransition(
           state, state, 'IDLE', '이미 작업 폴더가 있어요', undefined, cmd,
-          [{ text: `${activeDir} 작업 폴더와 ${branchName} 브랜치가 이미 준비돼 있어요. ai code로 다음 단계를 진행하세요.`, tone: 'mint' }],
+          [{ text: `${activeDir} 작업 폴더가 ${activeBranch} 브랜치를 이미 쓰고 있어요. 다른 폴더를 또 만들지 말고 ai code로 다음 단계를 진행하세요.`, tone: 'mint' }],
           makeBubble(
             `worktree-existing-${seqNext}`, 'ai', 66, 52, '이미 작업 폴더가 있어요',
-            `${activeDir} 폴더가 ${branchName} 브랜치를 이미 쓰고 있어요. 같은 작업 폴더를 또 만들 필요 없이 AI에게 수정을 맡기면 돼요.`,
+            `${activeDir} 폴더가 ${activeBranch} 브랜치를 이미 쓰고 있어요. 이 실습은 AI 작업 폴더를 하나만 써요.`,
             'ai code로 다음 단계를 진행하세요.',
             [{ label: '덧셈 오류 고치기', command: 'ai code', tone: 'mint' }],
           ),

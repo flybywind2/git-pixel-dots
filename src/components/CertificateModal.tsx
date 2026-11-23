@@ -60,7 +60,14 @@ export function CertificateModal({ open, onClose, completed, allComplete }: Cert
       tabIndex={-1}
       aria-labelledby="certificate-title"
       onCancel={(event) => { event.preventDefault(); onClose(); }}
-      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+      onClick={(event) => {
+        if (event.target !== event.currentTarget) return;
+        // dialog 자체 padding까지 콘텐츠 영역으로 봐요. 실제 backdrop(카드 밖)을 눌렀을 때만 닫아요.
+        const rect = event.currentTarget.getBoundingClientRect();
+        const outside = event.clientX < rect.left || event.clientX > rect.right
+          || event.clientY < rect.top || event.clientY > rect.bottom;
+        if (outside) onClose();
+      }}
       className="m-auto w-[calc(100%-2rem)] max-w-[600px] rounded-xl border-2 border-[#CDBCA3] bg-[#FFFDF8] p-4 text-[#2F241D] shadow-xl outline-none backdrop:bg-[#2F241D]/50"
     >
       <h2 id="certificate-title" className="text-lg font-bold">{allComplete ? '수료증' : '기본 과정 수료증'}</h2>

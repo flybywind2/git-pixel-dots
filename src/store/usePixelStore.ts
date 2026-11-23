@@ -3,9 +3,9 @@ import { ALL_STAGE_IDS, type PixelSimState, type StageId } from '../types/sim';
 import { createStageState, executePixelCommand, pendingHardReset, savePracticeDocument } from '../engine';
 import { EXAMPLE_DOCUMENT, getDocumentWorkingText } from '../engine/documentDiff';
 import {
-  cancelPendingPracticeSave, clearLegacyPracticeSessions, flushPracticeSaves, practiceStorageAvailable,
-  readPracticeSessions, setPracticeStorageFailureListener, writePracticeSession,
-  type PracticeSaveIssue, type PracticeSession,
+  cancelPendingPracticeSave, clearLegacyPracticeSessions, flushPracticeSaves, hasPendingPracticeSave,
+  practiceProgressSignature, practiceStorageAvailable, readPracticeSessions, setPracticeStorageFailureListener,
+  writePracticeSession, type PracticeSaveIssue, type PracticeSession,
 } from './practiceStorage';
 
 export function chapterHash(id: StageId): string {
@@ -60,6 +60,15 @@ export interface PixelStore extends PracticeSession {
 }
 
 const MAX_UNDO_STEPS = 20;
+
+// 외부 저장본을 채택하며 이 탭의 초안을 다시 저장한 진행 상태 서명이에요.
+// 같은 서명에 대해서는 다시 저장하지 않아 두 탭이 서로의 저장을 무한히 되풀이하지 않게 해요.
+const draftResaveSignatures = new Map<StageId, Set<string>>();
+
+/** 테스트나 장 초기화에서 재저장 추적을 비워요. */
+export function resetDraftResaveTracking() {
+  draftResaveSignatures.clear();
+}
 
 function freshSession(id: StageId): PracticeSession {
   return { sim: createStageState(id), documentDraft: null };
@@ -203,6 +212,7 @@ export const usePixelStore = create<PixelStore>((set) => ({
 
   resetStageImmediately: () => set((state) => {
     clearLegacyPracticeSessions(state.stageId);
+    draftResaveSignatures.delete(state.stageId);
     return {
       ...applySession(state, createStageState(state.stageId), null),
       undoStacks: clearUndoStack(state),
@@ -221,7 +231,11 @@ export const usePixelStore = create<PixelStore>((set) => ({
     };
   }),
 
-  setDocumentDraft: (text) => set((state) => applyDocumentDraft(state, text, true)),
+  setDocumentDraft: (text) => {
+    // 사용자가 새로 입력한 초안은 다음 외부 진행 상태 변경 때 한 번 다시 저장할 수 있게 해요.
+    draftResaveSignatures.delete(usePixelStore.getState().stageId);
+    set((state) => applyDocumentDraft(state, text, true));
+  },
 
   loadExampleDocument: () => set((state) => {
     if (state.documentDraft !== null && state.documentDraft !== EXAMPLE_DOCUMENT) {
@@ -247,8 +261,27 @@ export const usePixelStore = create<PixelStore>((set) => ({
   dismissStorageWarning: () => set({ storageWarning: false }),
 
   adoptExternalSession: (id, session) => {
+    const before = usePixelStore.getState();
+    const incomingSignature = practiceProgressSignature(session.sim);
+    const activeSignature = before.stageId === id ? practiceProgressSignature(before.sim) : null;
+
+    // 진행 상태는 그대로인데 초안만 바뀐 저장 이벤트(다른 탭의 초안 에코)예요.
+    // 이때는 채택·재저장·undo 초기화를 하지 않아요. 두 탭이 서로 다른 초안을 가진 경우
+    // 재저장이 storage 이벤트를 다시 만들어 250ms 무한 왕복이 되던 회귀를 막아요.
+    // 이 탭에 초안이 없을 때만 다른 탭이 저장한 초안을 조용히 따라가요.
+    if (activeSignature !== null && activeSignature === incomingSignature) {
+      if (before.documentDraft === null && session.documentDraft !== null) {
+        usePixelStore.setState((state) => ({
+          documentDraft: session.documentDraft,
+          sessions: { ...state.sessions, [id]: { sim: state.sim, documentDraft: session.documentDraft } },
+        }));
+      }
+      return;
+    }
+
     // 다른 탭의 저장본을 받아들이기 전에 이 탭에서 예약해 둔 저장을 취소해요.
     // 그래야 늦게 도착한 예전 초안이 새 저장본을 다시 덮어쓰지 않아요.
+    const hadPendingSave = hasPendingPracticeSave(id);
     cancelPendingPracticeSave(id);
     set((state) => {
       const sessions = { ...state.sessions, [id]: session };
@@ -260,12 +293,26 @@ export const usePixelStore = create<PixelStore>((set) => ({
       if (id !== state.stageId) return { sessions, saveIssues, undoStacks };
       // 다른 탭의 진행 상태를 받더라도 이 탭에서 입력 중인 초안은 지우지 않아요.
       const documentDraft = state.documentDraft !== null ? state.documentDraft : session.documentDraft;
-      // 예약 저장을 취소했으므로, 이 탭의 미저장 초안을 새 진행 상태와 함께 다시 저장해요.
-      // 그래야 곧바로 새로고침해도 방금 입력한 초안이 사라지지 않아요.
-      if (state.documentDraft !== null) {
+      // 원래 M4 경합: 예약 저장이 취소된 동안 진행 상태가 바뀌었을 때만 이 탭의 초안을
+      // 새 진행 상태와 함께 딱 한 번 다시 저장해요. 같은 진행 상태에 대해서는 반복 저장하지 않아요.
+      const resaved = draftResaveSignatures.get(id);
+      const alreadyResaved = resaved?.has(incomingSignature) ?? false;
+      if (state.documentDraft !== null && hadPendingSave && !alreadyResaved) {
+        const signatures = resaved ?? new Set<string>();
+        signatures.add(incomingSignature);
+        draftResaveSignatures.set(id, signatures);
         writePracticeSession({ sim: session.sim, documentDraft }, true);
       }
-      return { ...session, documentDraft, stageId: id, sessions, saveIssues, undoStacks, notice: null, confirmation: null };
+      return {
+        ...session,
+        documentDraft,
+        stageId: id,
+        sessions: { ...sessions, [id]: { sim: session.sim, documentDraft } },
+        saveIssues,
+        undoStacks,
+        notice: null,
+        confirmation: null,
+      };
     });
   },
 }));

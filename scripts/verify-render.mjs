@@ -542,6 +542,21 @@ async function crossTabSync(browser, url) {
   await editorB.fill(draftB);
   await draftSaved(b, draftB);
   assert.equal(await editorA.inputValue(), draftA);
+  // 두 탭이 서로 다른 미저장 초안을 가진 뒤에는 초안 에코로 인한 재저장 왕복이 없어야 해요.
+  const echoedWrites = await a.evaluate(async () => {
+    let count = 0;
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function setItem(key, value) {
+      if (key === 'gitdots.practice.v4.docs') count += 1;
+      return original.call(this, key, value);
+    };
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    Storage.prototype.setItem = original;
+    return count;
+  });
+  assert.equal(echoedWrites, 0, 'Two tabs kept re-saving each other draft in an infinite echo loop');
+  assert.equal(await editorA.inputValue(), draftA, 'Tab A draft changed during a draft-only echo');
+  assert.equal(await editorB.inputValue(), draftB, 'Tab B draft changed during a draft-only echo');
   // 탭 A가 초안을 저장하면 EDIT 단계가 완료되고 저장본이 다른 탭으로 전파돼요.
   await clickGuided(a);
   await expectProgress(a, 1, 6);
@@ -711,6 +726,11 @@ async function basicCertificate(browser, url) {
   const dialog = page.getByRole('dialog');
   await dialog.waitFor();
   assert.match(await dialog.innerText(), /기본 과정 4장을 마쳤어요/);
+  // 카드 안쪽 여백(padding)을 눌러도 닫히지 않고, 실제 바깥 배경만 닫아요.
+  const cardBox = await dialog.boundingBox();
+  assert(cardBox, 'Certificate dialog has no visible box');
+  await page.mouse.click(cardBox.x + 4, cardBox.y + 4);
+  assert.equal(await page.getByRole('dialog').count(), 1, 'Clicking the dialog padding closed the certificate');
   // 네이티브 dialog가 포커스를 가두고, 닫으면 트리거 버튼으로 돌려줘요.
   for (let i = 0; i < 6; i++) await page.keyboard.press('Tab');
   assert(await dialog.evaluate((element) => element.contains(document.activeElement)),
@@ -936,6 +956,17 @@ async function cycleOneRegressions(browser, url) {
   assert.match(await page.getByTestId('speech-bubble').innerText(), /작업 폴더가 사용 중/);
   await runCommand(page, 'git worktree add -b ai/fix wt-ai');
   assert.match(await page.getByTestId('speech-bubble').innerText(), /이미 작업 폴더/);
+  // 두 번째 worktree는 브랜치 이름과 무관하게 거절되고 원래 AI 브랜치 보호가 유지돼요.
+  await runCommand(page, 'git worktree add -b other wt-x');
+  assert.match(await page.getByTestId('speech-bubble').innerText(), /이미 작업 폴더/);
+  await runCommand(page, 'git switch ai/fix');
+  assert.match(await page.getByTestId('speech-bubble').innerText(), /AI 작업 폴더/);
+  // 삭제형 refspec과 refs/heads/ 접두어도 실제 대상 브랜치로 판단해요.
+  await runCommand(page, 'git push origin :ai/fix');
+  assert.match(await page.getByTestId('speech-bubble').innerText(), /삭제 push/);
+  await runCommand(page, 'git push origin ai/fix:refs/heads/main');
+  assert.match(await page.getByTestId('speech-bubble').innerText(), /직접 push|main 직접|보호/);
+  assert.doesNotMatch(await page.getByRole('log').innerText(), /origin\/refs\/heads\/main/);
 
   // M3: ai pr을 두 번 실행해도 초안 PR은 하나예요.
   await runCommand(page, 'ai pr');

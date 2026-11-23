@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createStageState, getNextPendingStep, savePracticeDocument } from '../engine';
+import { createStageState, executePixelCommand, getNextPendingStep, savePracticeDocument } from '../engine';
 import {
   EXAMPLE_DOCUMENT, getDocumentComparisonLabels, getDocumentWorkingText, ORIGINAL_DOCUMENT,
 } from '../engine/documentDiff';
 import { DOCUMENT_PATH } from '../engine/documentDiff';
-import { flushPracticeSaves } from './practiceStorage';
+import { flushPracticeSaves, cancelPendingPracticeSave, hasPendingPracticeSave } from './practiceStorage';
 import type { PixelSimState, StageId } from '../types/sim';
-import { usePixelStore } from './usePixelStore';
+import { resetDraftResaveTracking, usePixelStore } from './usePixelStore';
 
 function seed(id: StageId, sim = createStageState(id)) {
+  cancelPendingPracticeSave(id);
+  resetDraftResaveTracking();
   usePixelStore.setState({
     stageId: id,
     sim,
@@ -25,6 +27,24 @@ function seed(id: StageId, sim = createStageState(id)) {
 
 function sessionFor(sim: PixelSimState) {
   return { sim, documentDraft: null };
+}
+
+function installStorage() {
+  const saved = new Map<string, string>();
+  let writes = 0;
+  vi.stubGlobal('window', {
+    localStorage: {
+      getItem: (key: string) => saved.get(key) ?? null,
+      setItem: (key: string, value: string) => { writes += 1; saved.set(key, value); },
+      removeItem: (key: string) => { saved.delete(key); },
+      clear: () => { saved.clear(); },
+      key: (index: number) => [...saved.keys()][index] ?? null,
+      get length() { return saved.size; },
+    },
+    setTimeout: (callback: () => void, ms: number) => setTimeout(callback, ms),
+    clearTimeout: (id: number) => clearTimeout(id),
+  });
+  return { saved, writes: () => writes };
 }
 
 describe('practice store undo safety', () => {
@@ -87,11 +107,12 @@ describe('practice store external tab adoption', () => {
 
   it('drops the current chapter undo stack when another tab saves a newer session', () => {
     usePixelStore.setState({ undoStacks: { ch1: [sessionFor(createStageState('ch1'))] } });
-    const external = savePracticeDocument(createStageState('ch1'), EXAMPLE_DOCUMENT);
+    const external = executePixelCommand(createStageState('ch1'), 'git add .');
     usePixelStore.getState().adoptExternalSession('ch1', sessionFor(external));
 
     expect(usePixelStore.getState().undoStacks.ch1).toEqual([]);
-    expect(getDocumentWorkingText(usePixelStore.getState().sim)).toBe(EXAMPLE_DOCUMENT);
+    expect(usePixelStore.getState().sim.staged).toEqual(external.staged);
+    expect(external.staged.length).toBeGreaterThan(0);
   });
 
   it('also invalidates undo stacks for an inactive chapter', () => {
@@ -145,6 +166,66 @@ describe('practice store external tab adoption', () => {
     expect(raw).toBeTruthy();
     expect(JSON.parse(raw as string).documentDraft).toBe(draftB);
     expect(getDocumentWorkingText(usePixelStore.getState().sim)).toBe(EXAMPLE_DOCUMENT);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('multi-tab draft echo convergence', () => {
+  it('ignores a draft-only echo instead of re-saving and clearing undo/confirmation', () => {
+    const storage = installStorage();
+    seed('docs');
+    const draftA = `${ORIGINAL_DOCUMENT}탭 A 미저장 초안\n`;
+    usePixelStore.getState().setDocumentDraft(draftA);
+    usePixelStore.setState({
+      undoStacks: { docs: [sessionFor(createStageState('docs'))] },
+      confirmation: { kind: 'replace-draft' },
+    });
+    const sim = usePixelStore.getState().sim;
+    const beforeWrites = storage.writes();
+
+    // 탭 B도 서로 다른 초안을 저장했지만 진행 상태(sim)는 같아요 = 초안 에코.
+    usePixelStore.getState().adoptExternalSession('docs', {
+      sim, documentDraft: `${ORIGINAL_DOCUMENT}탭 B 미저장 초안\n`,
+    });
+
+    expect(storage.writes()).toBe(beforeWrites);
+    expect(usePixelStore.getState().documentDraft).toBe(draftA);
+    expect(usePixelStore.getState().confirmation).toEqual({ kind: 'replace-draft' });
+    expect(usePixelStore.getState().undoStacks.docs).toHaveLength(1);
+    expect(hasPendingPracticeSave('docs')).toBe(true);
+
+    // 예약 저장은 한 번만 실행되고, 같은 에코가 다시 와도 쓰기가 늘지 않아요.
+    flushPracticeSaves();
+    expect(storage.writes()).toBe(beforeWrites + 1);
+    const afterFirstSave = storage.writes();
+    usePixelStore.getState().adoptExternalSession('docs', {
+      sim, documentDraft: `${ORIGINAL_DOCUMENT}탭 B 미저장 초안\n`,
+    });
+    flushPracticeSaves();
+    expect(storage.writes()).toBe(afterFirstSave);
+    vi.unstubAllGlobals();
+  });
+
+  it('re-saves a pending draft at most once per new external progress snapshot', () => {
+    const storage = installStorage();
+    seed('docs');
+    const draftB = `${ORIGINAL_DOCUMENT}탭 B 미저장 초안\n`;
+    usePixelStore.getState().setDocumentDraft(draftB);
+    const external = savePracticeDocument(createStageState('docs'), EXAMPLE_DOCUMENT);
+
+    usePixelStore.getState().adoptExternalSession('docs', { sim: external, documentDraft: null });
+    flushPracticeSaves();
+    expect(storage.writes()).toBe(1);
+    expect(JSON.parse(storage.saved.get('gitdots.practice.v4.docs') ?? '{}').documentDraft).toBe(draftB);
+    expect(getDocumentWorkingText(usePixelStore.getState().sim)).toBe(EXAMPLE_DOCUMENT);
+
+    // 이미 채택한 진행 상태의 초안 에코는 더 이상 재저장하지 않아요(무한 왕복 0).
+    const adopted = usePixelStore.getState().sim;
+    const afterFirstSave = storage.writes();
+    usePixelStore.getState().adoptExternalSession('docs', { sim: adopted, documentDraft: '다른 탭 초안' });
+    flushPracticeSaves();
+    expect(storage.writes()).toBe(afterFirstSave);
+    expect(usePixelStore.getState().documentDraft).toBe(draftB);
     vi.unstubAllGlobals();
   });
 });

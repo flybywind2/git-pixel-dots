@@ -1315,3 +1315,67 @@ describe('Utility commands, unknown commands & autocomplete', () => {
     expect(unknown.terminal.at(-1)?.lines.map(({ text }) => text).join(' ')).not.toContain('노란');
   });
 });
+
+describe('Cycle 2 review regressions', () => {
+  it('M-1: a second worktree with another branch is refused and keeps ai/fix protected', () => {
+    const state = runSequence('ch8', ['git worktree add -b ai/fix wt-ai', 'ai code']);
+    const attempt = executePixelCommand(state, 'git worktree add -b other wt-x');
+    expect(attempt.lastAnim.kind).toBe('IDLE');
+    expect(attempt.bubbles[0]?.title).toContain('이미 작업 폴더');
+    expect(attempt.bubbles[0]?.actions?.[0]?.command).toBe('ai code');
+    expect(attempt.ai.worktreeBranch).toBe('ai/fix');
+    expect(attempt.ai.worktreeDir).toBe('wt-ai');
+    expect(attempt.branches.other).toBeUndefined();
+
+    // 원래 AI 브랜치의 switch/삭제 보호가 그대로 유지돼요.
+    const switched = executePixelCommand(attempt, 'git switch ai/fix');
+    expect(switched.lastAnim.kind).toBe('IDLE');
+    expect(switched.headBranch).toBe('main');
+    expect(switched.bubbles[0]?.title).toContain('AI 작업 폴더');
+    const deleted = executePixelCommand(attempt, 'git branch -D ai/fix');
+    expect(deleted.branches['ai/fix']).toBe(attempt.branches['ai/fix']);
+    expect(deleted.bubbles[0]?.title).toContain('작업 폴더');
+
+    // 수동으로 연 ai/fix PR도 여전히 팀원 자동 승인 대상이 아니에요(HITL 유지).
+    const manual = {
+      ...attempt,
+      prs: [{
+        number: 77, title: 'AI 브랜치 수동 PR', headBranch: 'ai/fix', baseBranch: 'main',
+        status: 'open' as const, ci: 'pass' as const, approved: false,
+      }],
+      ai: { ...attempt.ai, prNumber: null },
+    };
+    const view = executePixelCommand(manual, 'gh pr view 77 --comments');
+    expect(view.prs[0]?.approved).toBe(false);
+    expect(view.bubbles[0]?.title).toContain('직접 승인');
+  });
+
+  it('L-1: deleting a non-main remote branch shows delete guidance without completing ch8-block', () => {
+    const state = runSequence('ch8', ['git worktree add -b ai/fix wt-ai', 'ai code']);
+    const deletion = executePixelCommand(state, 'git push origin :ai/fix');
+    expect(deletion.lastAnim.kind).toBe('IDLE');
+    expect(deletion.bubbles[0]?.title).toContain('삭제 push');
+    expect(deletion.bubbles[0]?.message).not.toContain('main은 직접 push');
+    expect(deletion.ai.mainPushBlocked).toBe(false);
+    expect(deletion.completedActions).not.toContain('AI_BLOCK_MAIN');
+    expect(deletion.remoteBranches['ai/fix']).toBe(state.remoteBranches['ai/fix']);
+
+    const blockedMain = executePixelCommand(state, 'git push origin :main');
+    expect(blockedMain.lastAnim.kind).toBe('IDLE');
+    expect(blockedMain.bubbles[0]?.title).toContain('삭제 push');
+    expect(blockedMain.bubbles[0]?.title).toContain('지울 수 없어요');
+  });
+
+  it('L-2: refs/heads/ refspecs are normalized before protection and branch lookup', () => {
+    const state = runSequence('ch8', ['git worktree add -b ai/fix wt-ai', 'ai code']);
+    const blocked = executePixelCommand(state, 'git push origin ai/fix:refs/heads/main');
+    expect(blocked.lastAnim.kind).toBe('AI_BLOCK_MAIN');
+    expect(blocked.ai.mainPushBlocked).toBe(true);
+    expect(blocked.completedActions).toContain('AI_BLOCK_MAIN');
+    expect(Object.keys(blocked.remoteBranches).some((branch) => branch.startsWith('refs/'))).toBe(false);
+
+    const sourceBlocked = executePixelCommand(state, 'git push origin refs/heads/main:main');
+    expect(sourceBlocked.lastAnim.kind).toBe('AI_BLOCK_MAIN');
+    expect(Object.keys(sourceBlocked.remoteBranches).some((branch) => branch.startsWith('refs/'))).toBe(false);
+  });
+});

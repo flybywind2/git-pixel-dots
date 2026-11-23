@@ -248,6 +248,27 @@ function writeNow({ sim, documentDraft }: PracticeSession) {
   }
 }
 
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
+
+/**
+ * 저장본의 진행 상태만 비교할 수 있는 서명이에요.
+ * lastAnim/terminal/bubbles는 화면 연출·복원 시점에 다시 만들어지므로 빼고 비교해요.
+ * 두 탭이 같은 진행 상태에서 초안만 주고받는지(에코) 구분하는 데 사용해요.
+ */
+export function practiceProgressSignature(sim: PixelSimState): string {
+  const { lastAnim: _lastAnim, terminal: _terminal, bubbles: _bubbles, ...progress } = sim;
+  return stableStringify(progress);
+}
+
 export function readExternalSession(key: string, raw: string): { id: StageId; session: PracticeSession } | null {
   const prefix = `${SESSION_KEY}.`;
   if (!key.startsWith(prefix)) return null;
@@ -292,6 +313,11 @@ export function writePracticeSession(session: PracticeSession, defer = false) {
     writeNow(session);
   }, DRAFT_SAVE_DELAY_MS);
   pendingSaves.set(id, { timer, session });
+}
+
+/** 이 장에 아직 실행되지 않은 예약(지연) 저장이 있는지 확인해요. */
+export function hasPendingPracticeSave(id: StageId): boolean {
+  return pendingSaves.has(id);
 }
 
 /** 예약된 지연 저장만 취소해요. 이미 저장된 내용은 건드리지 않아요. */
