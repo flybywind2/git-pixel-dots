@@ -1749,8 +1749,33 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           ),
         );
       }
-      const nextNum =
-        state.prs.reduce((max, p) => Math.max(max, p.number), 0) + 1;
+      // 이미 열어 둔 AI PR이 있으면 고아 초안 PR을 또 만들지 않아요.
+      if (state.ai.prNumber !== null) {
+        const openAiPr = state.prs.find((pr) => pr.number === state.ai.prNumber && pr.status !== 'merged');
+        if (openAiPr) {
+          const isDraft = openAiPr.status === 'draft';
+          return finalizeTransition(
+            state, state, 'IDLE', `이미 ${isDraft ? '초안 ' : ''}PR #${openAiPr.number}이 있어요`, undefined, cmd,
+            [{ text: `PR #${openAiPr.number}이 이미 ${openAiPr.headBranch} → ${openAiPr.baseBranch}로 열려 있어요. 같은 작업을 또 열지 말고 이 PR을 이어서 진행하세요.`, tone: 'amber' }],
+            makeBubble(
+              `ai-pr-existing-${seqNext}`, 'ai', 66, 52,
+              isDraft ? `이미 초안 PR #${openAiPr.number}이 있어요` : `이미 검토 중인 PR #${openAiPr.number}이 있어요`,
+              '같은 변경으로 PR을 또 열면 검토할 곳이 여러 개가 되어 혼동돼요. 이미 열린 PR의 상태를 확인하고 다음 단계로 이어가요.',
+              isDraft ? 'ai ready로 검토 준비 상태로 전환한 뒤 승인하세요.' : 'gh pr view로 변경과 승인 상태를 확인하세요.',
+              isDraft
+                ? [
+                  { label: '검토 준비로 전환하기', command: 'ai ready', tone: 'primary' as const },
+                  { label: '기존 PR 확인', command: `gh pr view ${openAiPr.number}`, tone: 'mint' as const },
+                ]
+                : [
+                  { label: '기존 PR 확인', command: `gh pr view ${openAiPr.number}`, tone: 'primary' as const },
+                  { label: '승인하고 합치기', command: 'ai approve', tone: 'mint' as const },
+                ],
+            ),
+          );
+        }
+      }
+      const nextNum = nextSharedNumber(state);
       const aiBranch = state.ai.worktreeBranch;
       const newPr: PixelPr = {
         number: nextNum,
@@ -1884,21 +1909,41 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       const aiBranch = state.ai.worktreeBranch;
       const mainHead = state.remoteBranches.main ?? state.branches.main ?? 'c1';
       const aiHead = state.branches[aiBranch] ?? mainHead;
-      if (aiHead === mainHead) {
-        return commandNotice(state, cmd, '합칠 변경이 없어요',
-          'AI 브랜치가 main과 같은 커밋이라 PR에 담긴 변경이 없어요. 먼저 ai code로 코드를 고쳐 주세요.', 'amber');
-      }
-      const result = mergeTrees(
-        mergeBase(state, mainHead, aiHead)?.tree ?? {},
-        commitById(state, mainHead)?.tree ?? {},
-        commitById(state, aiHead)?.tree ?? {},
-      );
+      const mainTree = commitById(state, mainHead)?.tree ?? {};
+      const result = aiHead === mainHead
+        ? { tree: mainTree, conflicts: [] }
+        : mergeTrees(
+          mergeBase(state, mainHead, aiHead)?.tree ?? {},
+          mainTree,
+          commitById(state, aiHead)?.tree ?? {},
+        );
       if (result.conflicts.length > 0) {
         return commandNotice(state, cmd, 'PR에 충돌이 있어요', `${result.conflicts.join(', ')}의 변경을 확인하세요.`, 'amber');
       }
-      if (changedPaths(commitById(state, mainHead)?.tree ?? {}, result.tree).length === 0) {
-        return commandNotice(state, cmd, '합칠 변경이 없어요',
-          'AI 수정 내용이 main에 이미 들어 있어 새로 합칠 변경이 없어요.', 'amber');
+      // 우회 경로(직접 push 등)로 이미 main에 변경이 들어간 경우에도 장이 막히지 않도록
+      // '이미 합쳐진 변경'을 승인 완료로 인정해요.
+      if (aiHead === mainHead || changedPaths(mainTree, result.tree).length === 0) {
+        const nextPrs: PixelPr[] = state.prs.map((p) =>
+          p.number === prNum ? { ...p, status: 'merged', approved: true, ci: 'pass' } : p,
+        );
+        const draft: PixelSimState = {
+          ...state,
+          prs: nextPrs,
+          ai: { ...state.ai, humanApproved: true, merged: true },
+        };
+        return finalizeTransition(
+          state, draft, 'AI_APPROVE', `PR #${prNum} 변경이 이미 main에 반영됨`, 'HITL_MERGED', cmd,
+          [
+            { text: '이미 AI 수정 내용이 main에 들어 있어 새로 합칠 커밋은 없어요.', tone: 'amber' },
+            { text: '변경 내용을 확인했으므로 이 단계를 완료로 인정해요. 실제 GitHub에서는 승인 기록만 남습니다.', tone: 'mint' },
+          ],
+          makeBubble(
+            `ai-approved-existing-${seqNext}`, 'ai', 64, 50,
+            '이미 main에 반영된 변경을 확인했어요',
+            'AI 수정이 어떤 경로로든 main에 이미 들어가 있어요. 새 병합 커밋은 만들지 않지만, 사람이 변경과 테스트를 확인했다는 기록으로 이 단계를 마무리해요.',
+            'AI 협업 실습을 마쳤어요. 상단에서 다시 연습할 장을 고를 수 있어요.',
+          ),
+        );
       }
       const mergeId = `c${state.commits.length + 1}`;
       const mergeCommit: PixelCommit = {
@@ -2228,15 +2273,28 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
     if (sub === 'push') {
       const args = tokens.slice(2).filter((arg) => arg !== '-u' && arg !== '--set-upstream');
       const [remote = 'origin', refspec = state.headBranch] = args;
-      const [branch, remoteBranch = branch] = refspec.split(':');
+      const [rawBranch, rawRemoteBranch] = refspec.split(':');
+      // HEAD는 현재 브랜치를 가리켜요. 실제 git처럼 현재 브랜치 이름으로 풀어요.
+      const branch = rawBranch === 'HEAD' ? state.headBranch : rawBranch || state.headBranch;
+      const remoteBranch = rawRemoteBranch === 'HEAD'
+        ? state.headBranch
+        : rawRemoteBranch ?? branch;
+      const isDeleteRefspec = refspec.startsWith(':');
+
+      // 9장: 삭제형 push로 main을 지우는 것도 보호 규칙이 막아요.
+      if (state.stageId === 'ch8' && isDeleteRefspec && remoteBranch === 'main') {
+        return commandNotice(state, cmd, 'main 브랜치는 삭제 push로 지울 수 없어요',
+          '브랜치 보호 규칙은 main에 올리는 변경뿐 아니라 삭제도 막아요. 지워야 할 작업 브랜치는 PR로 합친 뒤 정리하세요.', 'amber');
+      }
 
       // 9장: 브랜치 보호 규칙은 체험용 ai push-main뿐 아니라 일반 git push에도 적용돼요.
-      if (state.stageId === 'ch8' && branch === 'main') {
+      // 출발 브랜치뿐 아니라 도착 브랜치까지 확인해야 ai/fix:main 같은 우회를 막을 수 있어요.
+      if (state.stageId === 'ch8' && (branch === 'main' || remoteBranch === 'main')) {
         const draft: PixelSimState = { ...state, ai: { ...state.ai, mainPushBlocked: true } };
         return finalizeTransition(
           state, draft, 'AI_BLOCK_MAIN', 'main 직접 푸시 차단', 'BRANCH_PROTECTION', cmd,
           [
-            { text: `git push origin ${branch} (직접 입력)`, tone: 'muted' },
+            { text: `git push origin ${refspec} (직접 입력)`, tone: 'muted' },
             { text: 'remote: error: GH006: Protected branch update failed for refs/heads/main. (보호된 main 브랜치 직접 수정 거부)', tone: 'coral' },
             { text: '브랜치 보호 규칙은 AI뿐 아니라 모든 직접 push를 막아요. PR과 사람의 승인을 거쳐야 해요.', tone: 'amber' },
           ],
@@ -2247,6 +2305,11 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             [{ label: '검토 초안 열기', command: 'ai pr', tone: 'primary' }],
           ),
         );
+      }
+
+      if (isDeleteRefspec) {
+        return commandNotice(state, cmd, '삭제 push는 이 실습에서 다루지 않아요',
+          '원격 브랜치를 지우는 push는 여기서 연습하지 않아요. 정리할 브랜치는 PR로 합친 뒤 git branch -d로 내 컴퓨터에서만 지워요.', 'muted');
       }
 
       // 7장: 유출 차단 데모 뒤에는 실제 push도 같은 규칙으로 막아요.
@@ -2431,7 +2494,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       const common = mergeBase(state, local.id, remote.id);
       const merged = mergeTrees(common?.tree ?? {}, local.tree, remote.tree);
       const checkout = checkoutTree(state, merged.tree);
-      if (merged.conflicts.length > 0 || checkout.blocked.length > 0 || state.staged.length > 0) {
+      if (merged.conflicts.length > 0 || checkout.blocked.length > 0) {
         return commandNotice(state, cmd, '원격 변경을 합치기 전에 확인하세요', '변경이 겹쳐요. 작업을 기록한 뒤 파일 차이를 확인하세요.', 'amber');
       }
       const fastForward = common?.id === local.id;
@@ -2594,11 +2657,24 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         return commandNotice(state, cmd, '합치기를 먼저 마무리하세요', '충돌 중인 파일을 해결한 뒤 작업을 보관할 수 있어요.', 'amber');
       }
       if (action === 'pop' || action === 'apply') {
-        const requested = tokens[3]?.match(/stash@\{(\d+)\}/)?.[1];
+        // stash@{0}은 가장 최근 항목이에요. 배열은 오래된 항목부터 쌓이므로
+        // 목록 표시와 같은 순서가 되도록 인덱스를 뒤집어 매핑해요.
+        // --index 같은 플래그가 섞여도 번호를 찾을 수 있게 토큰을 훑어요.
+        const requested = tokens.slice(3)
+          .map((token) => token.match(/stash@\{(\d+)\}/)?.[1])
+          .find((value) => value !== undefined);
         const requestedIndex = requested === undefined ? state.stashes.length - 1 : Number(requested);
-        const saved = requestedIndex >= 0 && requestedIndex < state.stashes.length
-          ? state.stashes[requestedIndex] : undefined;
-        if (!saved) return commandNotice(state, cmd, '보관한 변경이 없어요', 'git stash list로 보관 항목을 확인하고 git stash로 먼저 보관해 보세요.', 'amber');
+        const arrayIndex = requested === undefined
+          ? state.stashes.length - 1
+          : state.stashes.length - 1 - requestedIndex;
+        const saved = arrayIndex >= 0 && arrayIndex < state.stashes.length
+          ? state.stashes[arrayIndex] : undefined;
+        if (!saved) {
+          return commandNotice(state, cmd, '보관한 변경이 없어요',
+            requested === undefined
+              ? 'git stash list로 보관 항목을 확인하고 git stash로 먼저 보관해 보세요.'
+              : `stash@{${requestedIndex}} 항목을 찾을 수 없어요. git stash list로 보관 번호를 확인하세요.`, 'amber');
+        }
         const paths = changedPaths(saved.base, saved.working);
         const overwritten = paths.filter((path) =>
           treeEntry(working, path) !== treeEntry(state.index, path),
@@ -2611,7 +2687,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             '현재 수정 내용을 먼저 기록하거나 따로 보관하세요. 기존 보관 항목을 다시 적용할 수 있어요.', 'amber');
         }
         const stashes = action === 'pop'
-          ? state.stashes.filter((_item, index_) => index_ !== requestedIndex)
+          ? state.stashes.filter((_item, index_) => index_ !== arrayIndex)
           : state.stashes;
         const draft = updateWorkspace({ ...state, stashes, stashCount: stashes.length }, restored.tree, index.tree);
         return finalizeTransition(
@@ -2905,6 +2981,10 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         if (name === 'main') return commandNotice(state, cmd, 'main은 삭제할 수 없어요', '기본 브랜치는 삭제하지 않아요.', 'amber');
         const tip = treeEntry(state.branches, name);
         if (!tip) return commandNotice(state, cmd, '없는 브랜치예요', 'git branch로 브랜치 목록을 확인하세요.', 'amber');
+        if (state.ai.worktreeActive && name === state.ai.worktreeBranch) {
+          return commandNotice(state, cmd, 'AI 작업 폴더가 쓰는 브랜치예요',
+            `${name} 브랜치는 ${state.ai.worktreeDir ?? 'wt-ai'} 작업 폴더가 사용 중이라 지울 수 없어요. 작업 폴더가 끝까지 사용한 뒤에 정리해요.`, 'amber');
+        }
         const mainTip = treeEntry(state.branches, 'main');
         const merged = Boolean(mainTip && reachableCommits(state, mainTip).has(tip));
         if (!merged) {
@@ -2988,6 +3068,20 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       }
       if (state.conflict) {
         return commandNotice(state, cmd, '현재 합치기를 먼저 마무리하세요', '충돌 해결을 기록한 뒤 브랜치를 바꿀 수 있어요.', 'amber');
+      }
+      // 실제 git과 동일하게, worktree가 체크아웃한 브랜치는 다른 폴더에서 동시에 쓸 수 없어요.
+      if (!isCreate && state.ai.worktreeActive && targetBranch === state.ai.worktreeBranch) {
+        return finalizeTransition(
+          state, state, 'IDLE', 'AI 작업 폴더가 쓰는 브랜치예요', undefined, cmd,
+          [{ text: `${targetBranch} 브랜치는 ${state.ai.worktreeDir ?? 'wt-ai'} 작업 폴더가 사용 중이에요. 같은 브랜치를 두 폴더에서 동시에 열 수 없어요.`, tone: 'amber' }],
+          makeBubble(
+            `switch-worktree-branch-${seqNext}`, 'guard', 54, 48,
+            'AI 작업 폴더가 쓰는 브랜치로는 이동할 수 없어요',
+            `${targetBranch}는 AI가 쓰는 별도 폴더(${state.ai.worktreeDir ?? 'wt-ai'})에 이미 열려 있어요. 사람 폴더는 main에 그대로 두고, AI 변경은 PR로 검토해요.`,
+            `지금은 ${state.headBranch} 브랜치에 머물러 주세요.`,
+            [{ label: 'AI 변경 확인하기', command: `git diff main ${targetBranch}`, tone: 'mint' }],
+          ),
+        );
       }
       const existing = treeEntry(state.branches, targetBranch);
       if (isCreate && existing) {
@@ -3204,13 +3298,22 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         return commandNotice(state, cmd, 'main 브랜치는 worktree 전용으로 쓸 수 없어요',
           '이미 있는 main 브랜치는 새 작업 폴더의 브랜치로 덮어쓸 수 없어요. ai/fix처럼 새 이름을 써 주세요.', 'amber');
       }
+      if (state.ai.worktreeActive && state.ai.worktreeBranch === branchName) {
+        const activeDir = state.ai.worktreeDir ?? 'wt-ai';
+        return finalizeTransition(
+          state, state, 'IDLE', '이미 작업 폴더가 있어요', undefined, cmd,
+          [{ text: `${activeDir} 작업 폴더와 ${branchName} 브랜치가 이미 준비돼 있어요. ai code로 다음 단계를 진행하세요.`, tone: 'mint' }],
+          makeBubble(
+            `worktree-existing-${seqNext}`, 'ai', 66, 52, '이미 작업 폴더가 있어요',
+            `${activeDir} 폴더가 ${branchName} 브랜치를 이미 쓰고 있어요. 같은 작업 폴더를 또 만들 필요 없이 AI에게 수정을 맡기면 돼요.`,
+            'ai code로 다음 단계를 진행하세요.',
+            [{ label: '덧셈 오류 고치기', command: 'ai code', tone: 'mint' }],
+          ),
+        );
+      }
       if (treeEntry(state.branches, branchName)) {
         return commandNotice(state, cmd, '이미 있는 브랜치예요',
           `${branchName} 브랜치가 이미 있어요. -b에는 새 브랜치 이름을 쓰거나, 기존 브랜치를 쓰려면 -b를 빼세요.`, 'amber');
-      }
-      if (state.ai.worktreeActive && state.ai.worktreeBranch === branchName) {
-        return commandNotice(state, cmd, '이미 작업 폴더가 있어요',
-          `${dirName} 작업 폴더와 ${branchName} 브랜치가 이미 준비돼 있어요. ai code로 다음 단계를 진행하세요.`, 'mint');
       }
 
       const baseCommit = state.branches[state.headBranch] ?? state.branches.main ?? 'c1';
@@ -3543,7 +3646,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         }
         const body = extractQuotedFlag(cmd, ['--body', '-b']) ?? undefined;
         const isDraft = tokens.includes('--draft') || tokens.includes('-d');
-        const nextNum = state.prs.reduce((max, p) => Math.max(max, p.number), 0) + 1;
+        const nextNum = nextSharedNumber(state);
         const newPr: PixelPr = {
           number: nextNum,
           title,
@@ -3606,7 +3709,12 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
               : 'gh pr create로 검토를 요청한 뒤 팀원의 의견을 확인할 수 있어요.', 'amber');
         }
         const showComments = tokens.includes('--comments') || tokens.includes('-c');
-        const isAiPr = state.stageId === 'ch8' && state.ai.prNumber === targetPr.number;
+        // AI가 연 PR은 번호가 아니라 브랜치로도 알아봐요. 수동으로 만든 AI 브랜치 PR도
+        // 팀원 자동 승인 대상이 되면 사람 승인(HITL)을 우회할 수 있기 때문이에요.
+        const isAiPr = state.stageId === 'ch8' && (
+          state.ai.prNumber === targetPr.number
+          || (state.ai.worktreeActive && targetPr.headBranch === state.ai.worktreeBranch)
+        );
         const alreadyApproved = targetPr.approved;
         const canAutoApprove = targetPr.status === 'open' && !isAiPr;
         const comment = reviewCommentFor(state, targetPr);
@@ -3929,10 +4037,11 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
     if (sub === 'run') {
       if (sub2 === 'list') {
         const openPr = [...state.prs].reverse().find((p) => p.status === 'open');
+        const ciBranch = state.stageId === 'ch5' ? 'feat/darkmode' : state.headBranch;
         return finalizeTransition(
           state, state, 'GH_CMD', '자동 검사 목록', '1건', cmd,
           [
-            { text: 'CI Build & Test  (feat/darkmode)  ✓ 통과', tone: 'mint' },
+            { text: `CI Build & Test  (${ciBranch})  ✓ 통과`, tone: 'mint' },
             ...(openPr ? [{ text: `PR #${openPr.number} 검사  ✓ ${openPr.ci === 'pass' ? '통과' : '진행 중'}`, tone: 'default' as const }] : []),
           ],
           makeBubble(`gh-run-list-${seqNext}`, 'cloud', 68, 48, '최근 자동 검사 목록이에요',
@@ -3968,7 +4077,9 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           68,
           48,
           '자동 검사(CI) 모두 통과! ✅',
-          `feat/darkmode 브랜치의 코드 변경(다크 모드 CSS)을 GitHub Actions가 빌드·테스트했어요. 검사 대상과 단계별 진행을 터미널에서 확인할 수 있어요.`,
+          state.stageId === 'ch5'
+            ? `feat/darkmode 브랜치의 코드 변경(다크 모드 CSS)을 GitHub Actions가 빌드·테스트했어요. 검사 대상과 단계별 진행을 터미널에서 확인할 수 있어요.`
+            : `${targetBranch} 브랜치의 코드 변경을 GitHub Actions가 빌드·테스트했어요. 검사 대상과 단계별 진행을 터미널에서 확인할 수 있어요.`,
           nextStepHintText(draft),
         ),
       );

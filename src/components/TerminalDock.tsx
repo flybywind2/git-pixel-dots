@@ -17,6 +17,15 @@ const TONE_CLASS: Record<TerminalLineTone, string> = {
 
 type Suggestion = ReturnType<typeof getCommandAutocomplete>[number];
 
+/**
+ * 터미널이 펼쳐질 때 입력창에 포커스를 줄지 결정해요.
+ * 첫 로드(이미 펼쳐진 상태)에서는 자동 포커스를 주지 않고,
+ * 사용자가 접었다가 다시 펼칠 때만 마우스가 있는 환경에서 포커스를 줘요.
+ */
+export function shouldFocusTerminalOnExpand(open: boolean, wasOpen: boolean, finePointer: boolean): boolean {
+  return open && !wasOpen && finePointer;
+}
+
 export function TerminalDock() {
   const sim = usePixelStore((state) => state.sim);
   const history = usePixelStore((state) => state.history);
@@ -56,7 +65,8 @@ export function TerminalDock() {
   }, [sim.stageId]);
 
   useEffect(() => {
-    if (open && !wasOpen.current && window.matchMedia('(pointer: fine)').matches) {
+    const finePointer = window.matchMedia('(pointer: fine)').matches;
+    if (shouldFocusTerminalOnExpand(open, wasOpen.current, finePointer)) {
       prompt.current?.focus({ preventScroll: true });
     }
     wasOpen.current = open;

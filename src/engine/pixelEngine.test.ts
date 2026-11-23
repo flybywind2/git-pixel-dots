@@ -1010,7 +1010,9 @@ describe('Review regressions: ordering guards and UX accuracy', () => {
 
     const duplicate = executePixelCommand(state, 'git worktree add -b ai/fix wt-ai');
     expect(duplicate.lastAnim.kind).toBe('IDLE');
-    expect(duplicate.bubbles[0]?.title).toContain('이미 있는 브랜치');
+    expect(duplicate.bubbles[0]?.title).toContain('이미 작업 폴더');
+    expect(duplicate.bubbles[0]?.actions?.[0]?.command).toBe('ai code');
+    expect(duplicate.ai.worktreeDir).toBe('wt-ai');
 
     const mainTree = executePixelCommand(state, 'git worktree add -b main wt-x');
     expect(mainTree.lastAnim.kind).toBe('IDLE');
@@ -1055,6 +1057,164 @@ describe('Review regressions: ordering guards and UX accuracy', () => {
     expect(suggestions.some((item) => item.cmd === 'git status')).toBe(true);
     expect(suggestions.some((item) => item.cmd.includes('stash'))).toBe(false);
     expect(suggestions.some((item) => item.cmd.includes('switch'))).toBe(false);
+  });
+});
+
+describe('Cycle 1 review regressions', () => {
+  it('H1: stash@{0} restores and removes the same newest entry shown by git stash list', () => {
+    let state = executePixelCommand(createStageState('ch1'), 'git stash');
+    const oldestWorking = state.stashes[0]?.working;
+    state = executePixelCommand(state, `edit ${DOCUMENT_PATH}`);
+    const newestContent = state.files.find((file) => file.name === DOCUMENT_PATH)?.content;
+    state = executePixelCommand(state, 'git stash');
+    expect(state.stashes).toHaveLength(2);
+
+    const list = executePixelCommand(state, 'git stash list');
+    const listLines = list.terminal.at(-1)?.lines.map((line) => line.text) ?? [];
+    expect(listLines[0]).toContain('stash@{1}');
+    expect(listLines[1]).toContain('stash@{0}');
+
+    // 플래그가 앞/뒤에 섞여도 stash@{0}은 가장 최근 항목이어야 해요.
+    const applied = executePixelCommand(state, 'git stash apply --index stash@{0}');
+    expect(applied.files.find((file) => file.name === DOCUMENT_PATH)?.content).toBe(newestContent);
+    expect(applied.stashes).toHaveLength(2);
+
+    const popped = executePixelCommand(state, 'git stash pop stash@{0}');
+    expect(popped.files.find((file) => file.name === DOCUMENT_PATH)?.content).toBe(newestContent);
+    expect(popped.stashes).toHaveLength(1);
+    expect(popped.stashes[0]?.working).toEqual(oldestWorking);
+
+    const missing = executePixelCommand(state, 'git stash pop stash@{9}');
+    expect(missing.lastAnim.kind).toBe('IDLE');
+    expect(missing.bubbles[0]?.title).toContain('보관한 변경이 없어요');
+    expect(missing.stashes).toHaveLength(2);
+  });
+
+  it('H2: refspec pushes to main are all blocked in ch8 and a bypassed merge still completes the chapter', () => {
+    const state = runSequence('ch8', ['git worktree add -b ai/fix wt-ai', 'ai code']);
+    for (const command of [
+      'git push origin ai/fix:main',
+      'git push -u origin ai/fix:main',
+      'git push origin HEAD:main',
+      'git push origin main',
+    ]) {
+      const blocked = executePixelCommand(state, command);
+      expect(blocked.lastAnim.kind).toBe('AI_BLOCK_MAIN');
+      expect(blocked.completedActions).not.toContain('PUSH');
+    }
+    // 출발 브랜치가 main이 아니면 정상 push는 계속 허용돼요.
+    const normal = executePixelCommand(state, 'git push origin ai/fix');
+    expect(normal.lastAnim.kind).toBe('PUSH');
+
+    const deletion = executePixelCommand(state, 'git push origin :main');
+    expect(deletion.lastAnim.kind).toBe('IDLE');
+    expect(deletion.bubbles[0]?.title).toContain('삭제 push');
+
+    // 우회로 AI 변경이 이미 원격 main에 들어간 경우에도 승인 단계가 막히지 않아요.
+    let bypassed = runSequence('ch8', [
+      'git worktree add -b ai/fix wt-ai', 'ai code', 'ai push-main', 'ai pr', 'ai ready',
+    ]);
+    const aiHead = bypassed.branches['ai/fix'];
+    bypassed = { ...bypassed, remoteBranches: { ...bypassed.remoteBranches, main: aiHead } };
+    const approved = executePixelCommand(bypassed, 'ai approve');
+    expect(approved.lastAnim.kind).toBe('AI_APPROVE');
+    expect(approved.ai.merged).toBe(true);
+    expect(approved.completedActions).toContain('AI_APPROVE');
+    expect(approved.bubbles[0]?.title).toContain('9장 실습 완료');
+  });
+
+  it('H3: worktree branch switch/delete is refused and a manual AI-branch PR still needs human approval', () => {
+    const state = runSequence('ch8', ['git worktree add -b ai/fix wt-ai', 'ai code']);
+    for (const command of ['git switch ai/fix', 'git checkout ai/fix']) {
+      const refused = executePixelCommand(state, command);
+      expect(refused.lastAnim.kind).toBe('IDLE');
+      expect(refused.headBranch).toBe('main');
+      expect(refused.bubbles[0]?.title).toContain('AI 작업 폴더');
+    }
+    for (const command of ['git branch -d ai/fix', 'git branch -D ai/fix']) {
+      const refused = executePixelCommand(state, command);
+      expect(refused.lastAnim.kind).toBe('IDLE');
+      expect(refused.branches['ai/fix']).toBe(state.branches['ai/fix']);
+      expect(refused.bubbles[0]?.title).toContain('작업 폴더');
+    }
+
+    // ai.prNumber가 비어 있어도 AI 브랜치에서 연 PR은 팀원 자동 승인 대상이 아니에요.
+    const manual = {
+      ...state,
+      prs: [{
+        number: 77, title: 'AI 브랜치 수동 PR', headBranch: 'ai/fix', baseBranch: 'main',
+        status: 'open' as const, ci: 'pass' as const, approved: false,
+      }],
+      ai: { ...state.ai, prNumber: null },
+    };
+    const view = executePixelCommand(manual, 'gh pr view 77 --comments');
+    expect(view.prs[0]?.approved).toBe(false);
+    expect(view.bubbles[0]?.title).toContain('직접 승인');
+  });
+
+  it('M1: issue and PR numbers share one sequence in both creation orders', () => {
+    const issueFirst = executePixelCommand(createStageState('ch5'), 'gh issue create --title "새 버그"');
+    expect(issueFirst.issues.at(-1)?.number).toBe(13);
+    const prAfterIssue = executePixelCommand(issueFirst, 'gh pr create --title "다크 모드"');
+    expect(prAfterIssue.prs.at(-1)?.number).toBe(14);
+
+    const prFirst = executePixelCommand(createStageState('ch5'), 'gh pr create --title "다크 모드"');
+    expect(prFirst.prs.at(-1)?.number).toBe(13);
+    const issueAfterPr = executePixelCommand(prFirst, 'gh issue create --title "새 버그"');
+    expect(issueAfterPr.issues.at(-1)?.number).toBe(14);
+
+    let ch8 = runSequence('ch8', ['git worktree add -b ai/fix wt-ai', 'ai code']);
+    ch8 = executePixelCommand(ch8, 'gh issue create --title "AI 이슈"');
+    expect(ch8.issues.at(-1)?.number).toBe(1);
+    ch8 = executePixelCommand(ch8, 'ai pr');
+    expect(ch8.prs.at(-1)?.number).toBe(2);
+  });
+
+  it('M2: repeating worktree creation points at the existing folder instead of a dead-end branch error', () => {
+    const state = runSequence('ch8', ['git worktree add -b ai/fix wt-ai']);
+    for (const command of ['git worktree add -b ai/fix wt-ai', 'git worktree add wt-ai']) {
+      const duplicate = executePixelCommand(state, command);
+      expect(duplicate.lastAnim.kind).toBe('IDLE');
+      expect(duplicate.bubbles[0]?.title).toContain('이미 작업 폴더');
+      expect(duplicate.bubbles[0]?.actions?.[0]?.command).toBe('ai code');
+    }
+  });
+
+  it('M3: running ai pr twice keeps one draft PR and offers the next step', () => {
+    let state = runSequence('ch8', ['git worktree add -b ai/fix wt-ai', 'ai code']);
+    state = executePixelCommand(state, 'ai pr');
+    expect(state.prs).toHaveLength(1);
+    const again = executePixelCommand(state, 'ai pr');
+    expect(again.prs).toHaveLength(1);
+    expect(again.ai.prNumber).toBe(state.ai.prNumber);
+    expect(again.bubbles[0]?.title).toContain('이미 초안 PR');
+    expect(again.bubbles[0]?.actions?.map((action) => action.command)).toEqual(
+      expect.arrayContaining(['ai ready', `gh pr view ${state.ai.prNumber}`]),
+    );
+  });
+
+  it('M6: pull only blocks on real overlap, not on unrelated staged changes', () => {
+    let state = executePixelCommand(createStageState('ch4'), `git add ${DOCUMENT_PATH}`);
+    expect(state.staged).toContain(DOCUMENT_PATH);
+    state = executePixelCommand(state, 'git pull origin main');
+    expect(state.lastAnim.kind).toBe('PULL');
+    expect(state.staged).toContain(DOCUMENT_PATH);
+    expect(state.files.some((file) => file.name === ATTENDANCE_PATH)).toBe(true);
+  });
+
+  it('L1: ci wording follows the current chapter branch instead of always naming feat/darkmode', () => {
+    const ch4Watch = executePixelCommand(createStageState('ch4'), 'gh run watch');
+    expect(ch4Watch.bubbles[0]?.message).not.toContain('다크 모드');
+    expect(ch4Watch.bubbles[0]?.message).toContain('main');
+    const ch4List = executePixelCommand(createStageState('ch4'), 'gh run list');
+    const ch4Line = ch4List.terminal.at(-1)?.lines[0]?.text ?? '';
+    expect(ch4Line).toContain('(main)');
+    expect(ch4Line).not.toContain('feat/darkmode');
+
+    const ch5Watch = executePixelCommand(createStageState('ch5'), 'gh run watch');
+    expect(ch5Watch.bubbles[0]?.message).toContain('다크 모드');
+    const ch5List = executePixelCommand(createStageState('ch5'), 'gh run list');
+    expect(ch5List.terminal.at(-1)?.lines[0]?.text).toContain('(feat/darkmode)');
   });
 });
 

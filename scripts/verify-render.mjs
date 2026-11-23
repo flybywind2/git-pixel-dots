@@ -558,6 +558,36 @@ async function crossTabSync(browser, url) {
   await context.close();
 }
 
+async function crossTabDraftRace(browser, url) {
+  const context = await browser.newContext({ viewport: { width: 1024, height: 768 } });
+  const a = await context.newPage();
+  const b = await context.newPage();
+  await openChapter(a, url, 1);
+  await openChapter(b, url, 1);
+  // 탭 A가 먼저 저장본을 만들어 둬요(다른 탭 저장 이벤트의 기준).
+  await runCommand(a, 'git status');
+  const editorB = b.getByRole('textbox', { name: '회의록.md', exact: true });
+  const original = await editorB.inputValue();
+  const draftB = original + '지연 저장 도중 도착한 초안이에요.\n';
+  await editorB.fill(draftB);
+  // 탭 B의 250ms 지연 저장이 끝나기 전에 탭 A의 저장본이 도착해요.
+  await a.evaluate(() => {
+    const key = 'gitdots.practice.v4.docs';
+    const raw = JSON.parse(localStorage.getItem(key));
+    raw.documentDraft = '탭 A가 방금 저장한 초안';
+    localStorage.setItem(key, JSON.stringify(raw));
+  });
+  await b.waitForFunction((expected) => {
+    const raw = localStorage.getItem('gitdots.practice.v4.docs');
+    return raw !== null && JSON.parse(raw).documentDraft === expected;
+  }, draftB, { timeout: 4000 });
+  await b.reload();
+  await b.getByRole('textbox', { name: '회의록.md', exact: true }).waitFor();
+  assert.equal(await b.getByRole('textbox', { name: '회의록.md', exact: true }).inputValue(), draftB,
+    'Tab B draft was lost after adopting another tab save during the debounce window');
+  await context.close();
+}
+
 async function advancedVisualCards(browser, url) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const guide = page.getByTestId('guided-command');
@@ -577,6 +607,17 @@ async function advancedVisualCards(browser, url) {
   const tests = page.getByTestId('ai-tests');
   await tests.waitFor();
   assert.match(await tests.innerText(), /sum\(2, 3\) === 5 PASS/);
+  // 정보 카드는 캔버스보다 먼저 DOM에 있고, 화면에서도 위에 있어요(키보드/스크린리더 순서 일치).
+  const cardOrder = await page.evaluate(() => {
+    const card = document.querySelector('[data-testid="ai-tests"]');
+    const canvas = document.querySelector('[data-testid="pixel-stage-canvas"]');
+    if (!card || !canvas) return null;
+    return {
+      domBefore: Boolean(card.compareDocumentPosition(canvas) & Node.DOCUMENT_POSITION_FOLLOWING),
+      visualAbove: card.getBoundingClientRect().top < canvas.getBoundingClientRect().top,
+    };
+  });
+  assert.deepEqual(cardOrder, { domBefore: true, visualAbove: true });
   await page.close();
 }
 
@@ -670,7 +711,14 @@ async function basicCertificate(browser, url) {
   const dialog = page.getByRole('dialog');
   await dialog.waitFor();
   assert.match(await dialog.innerText(), /기본 과정 4장을 마쳤어요/);
+  // 네이티브 dialog가 포커스를 가두고, 닫으면 트리거 버튼으로 돌려줘요.
+  for (let i = 0; i < 6; i++) await page.keyboard.press('Tab');
+  assert(await dialog.evaluate((element) => element.contains(document.activeElement)),
+    'Certificate dialog let focus escape to the background');
+  const trigger = page.getByRole('button', { name: '수료증 보기', exact: true });
   await dialog.getByRole('button', { name: '닫기', exact: true }).click();
+  assert(await trigger.evaluate((element) => element === document.activeElement),
+    'Certificate dialog did not restore focus to its trigger');
   await page.close();
 }
 
@@ -858,6 +906,67 @@ async function reviewRegressions(browser, url) {
   await page.close();
 }
 
+async function cycleOneRegressions(browser, url) {
+  const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  page.setDefaultTimeout(9000);
+
+  // H1: stash 목록의 stash@{0}(최신)과 pop 대상이 같아요.
+  await openChapter(page, url, 2);
+  await runCommand(page, 'git stash');
+  await runCommand(page, 'edit 회의록.md');
+  await runCommand(page, 'git stash');
+  await runCommand(page, 'git stash list');
+  const stashLog = await page.getByRole('log').innerText();
+  assert.match(stashLog, /stash@\{0\}: 작업 보관 2/);
+  assert.match(stashLog, /stash@\{1\}: 작업 보관 1/);
+  await runCommand(page, 'git stash pop stash@{0}');
+  assert.match(await page.getByRole('log').innerText(), /남은 항목 1개/);
+
+  // H2/H3/M2: worktree 브랜치 보호와 중복 안내.
+  await openChapter(page, url, 9);
+  await runCommand(page, 'git worktree add -b ai/fix wt-ai');
+  await runCommand(page, 'ai code');
+  for (const command of ['git push origin ai/fix:main', 'git push origin HEAD:main']) {
+    await runCommand(page, command);
+    assert.match(await page.getByTestId('speech-bubble').innerText(), /직접 push|main 직접|보호/);
+  }
+  await runCommand(page, 'git switch ai/fix');
+  assert.match(await page.getByTestId('speech-bubble').innerText(), /AI 작업 폴더/);
+  await runCommand(page, 'git branch -d ai/fix');
+  assert.match(await page.getByTestId('speech-bubble').innerText(), /작업 폴더가 사용 중/);
+  await runCommand(page, 'git worktree add -b ai/fix wt-ai');
+  assert.match(await page.getByTestId('speech-bubble').innerText(), /이미 작업 폴더/);
+
+  // M3: ai pr을 두 번 실행해도 초안 PR은 하나예요.
+  await runCommand(page, 'ai pr');
+  await runCommand(page, 'ai pr');
+  const duplicatePr = await page.getByTestId('speech-bubble').innerText();
+  assert.match(duplicatePr, /이미 초안 PR/);
+  assert.match(await page.getByRole('log').innerText(), /PR #1/);
+
+  // M1: 이슈 다음에 만든 PR은 같은 번호를 쓰지 않아요.
+  await openChapter(page, url, 6);
+  await runCommand(page, 'gh issue create --title "QA 이슈"');
+  await runCommand(page, 'gh pr create --title "QA PR"');
+  const numbering = await page.getByRole('log').innerText();
+  assert.match(numbering, /issues\/13/);
+  assert.match(numbering, /pull\/14/);
+
+  // M6: 겹치지 않는 스테이징 변경이 있어도 pull은 진행돼요.
+  await openChapter(page, url, 4);
+  await runCommand(page, 'git add 회의록.md');
+  await runCommand(page, 'git pull origin main');
+  const pullBubble = await page.getByTestId('speech-bubble').innerText();
+  assert.doesNotMatch(pullBubble, /겹쳐요/);
+  assert.match(pullBubble, /가져왔어요/);
+
+  // L1: 4장 자동 검사 안내가 6장 다크 모드 문구를 복사하지 않아요.
+  await runCommand(page, 'gh run watch');
+  assert.doesNotMatch(await page.getByTestId('speech-bubble').innerText(), /다크 모드/);
+
+  await page.close();
+}
+
 async function terminalSizingAndUsability(browser, url) {
   const cases = [
     { width: 1366, height: 860, minDock: 250, minLog: 110, minMain: 500, minTallDock: 560, minTallLog: 400, minInputWidth: 680, minFont: 15 },
@@ -877,6 +986,8 @@ async function terminalSizingAndUsability(browser, url) {
     assert.equal(await dock.getAttribute('data-expanded'), 'true', `Terminal not expanded by default at ${spec.width}x${spec.height}`);
     assert.equal(await dock.getAttribute('data-size'), 'default', `Terminal not in default size on load at ${spec.width}x${spec.height}`);
     assert.equal(await input.isVisible(), true, `Terminal input hidden on initial load at ${spec.width}x${spec.height}`);
+    assert(!(await input.evaluate((node) => node === document.activeElement)),
+      `Terminal input stole focus on initial load at ${spec.width}x${spec.height}`);
     const ch1DockBox = await dock.boundingBox();
     const ch1GuidedBox = await page.getByTestId('guided-command').boundingBox();
     const ch1MainBox = await page.locator('main').boundingBox();
@@ -959,12 +1070,39 @@ async function terminalSizingAndUsability(browser, url) {
     await page.getByRole('button', { name: '직접 입력해 보기', exact: true }).click();
     assert.equal(await dock.getAttribute('data-size'), 'default');
     assert.equal(await input.isVisible(), true, `Input did not reopen at ${spec.width}x${spec.height}`);
+    assert(await input.evaluate((node) => node === document.activeElement),
+      `Terminal input did not receive focus after reopen at ${spec.width}x${spec.height}`);
     const reopenedDockBox = await dock.boundingBox();
     assert(Math.abs(reopenedDockBox.height - defaultDockBox.height) <= 2,
       `Dock did not reopen to default height at ${spec.width}x${spec.height}`);
     assert.deepEqual(errors, []);
     await page.close();
   }
+}
+
+async function compactTerminalToggle(browser, url) {
+  // 가로 모드 폰처럼 높이 420px 미만(compact)에서도 '크게 보기'가 실제로 커져야 해요.
+  const page = await browser.newPage({ viewport: { width: 740, height: 360 } });
+  page.setDefaultTimeout(9000);
+  const errors = trackErrors(page, new URL(url).origin);
+  await openChapter(page, url, 1);
+  const shell = page.locator('.practice-shell');
+  assert.notEqual(await shell.getAttribute('data-compact'), null, 'Compact mode not enabled under 420px height');
+  const dock = page.getByRole('region', { name: '실습 터미널', exact: true });
+  const input = page.getByTestId('terminal-input');
+  const sizeBtn = page.getByTestId('terminal-size-toggle');
+  await input.waitFor();
+  const defaultBox = await dock.boundingBox();
+  await sizeBtn.click();
+  assert.equal(await sizeBtn.getAttribute('aria-pressed'), 'true');
+  const tallBox = await dock.boundingBox();
+  assert(tallBox.height >= defaultBox.height + 40,
+    `Compact tall toggle did not grow the dock: ${defaultBox.height}px → ${tallBox.height}px`);
+  assert(tallBox.y + tallBox.height <= 361, `Compact tall dock overflows the viewport: ${tallBox.height}px`);
+  assert.equal(await dock.getAttribute('data-size'), 'tall');
+  await checkViewport(page);
+  assert.deepEqual(errors, []);
+  await page.close();
 }
 
 async function main() {
@@ -1010,7 +1148,8 @@ async function main() {
     assert.deepEqual(warningErrors, []);
     await warningPage.close();
     await crossTabSync(browser, url);
-    console.log('[QA] Storage failure warning and cross-tab sync passed');
+    await crossTabDraftRace(browser, url);
+    console.log('[QA] Storage failure warning, cross-tab sync, and pending-draft race passed');
     await advancedVisualCards(browser, url);
     console.log('[QA] Token scope and AI test result cards passed');
     await mobileLessonLayout(browser, url);
@@ -1024,8 +1163,12 @@ async function main() {
     console.log('[QA] Draft-safe undo, staged-plus-working cards, multi-stash cards and remote share status passed');
     await reviewRegressions(browser, url);
     console.log('[QA] Ordering guards (PR/main, conflict markers, GHES login, AI PR, ahead status) passed');
+    await cycleOneRegressions(browser, url);
+    console.log('[QA] Cycle 1 fixes (stash index, main refspec guard, worktree branch, PR numbering/dedupe, pull overlap, CI wording) passed');
     await terminalSizingAndUsability(browser, url);
     console.log('[QA] Terminal expanded/tall sizing, input width, and responsive layout checks passed');
+    await compactTerminalToggle(browser, url);
+    console.log('[QA] Compact (<420px) terminal tall toggle passed');
 
     const link = await browser.newPage();
     await link.goto(url + 'docs/deeper/');

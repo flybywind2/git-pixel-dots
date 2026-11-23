@@ -7,6 +7,7 @@ import {
 } from '../types/sim';
 
 // Bump the version when changing the saved snapshot shape or replacing a chapter's example.
+// 시드(예제) 변경도 아래 stale* 감지 대상이에요. 저장본 shape가 같아도 새 예제가 필요하면 감지해요.
 const SESSION_KEY = 'gitdots.practice.v4';
 const LEGACY_KEYS = ['gitdots.practice.v3', 'gitdots.practice.v2', 'gitdots.practice.v1'] as const;
 const DRAFT_SAVE_DELAY_MS = 250;
@@ -196,9 +197,12 @@ export function readPracticeSessions() {
       const session = decodeSession(raw, id, legacyVersion);
       // 이미 v3으로 옮겨졌더라도 옛 브랜치 이름이 남아 있으면 새 예제로 안내해요.
       const staleExample = id === 'ch3' && session !== null && 'feature/ui' in session.sim.branches;
+      // 6장(ch5)도 시드 변경 대상이에요. fix/font 브랜치가 없는 옛 저장본은
+      // PR #12를 병합할 브랜치가 없어 막히므로 새 예제로 안내해요.
+      const staleCh5 = id === 'ch5' && session !== null && !('fix/font' in session.sim.branches);
       if (!session) {
         issues[id] = 'invalid';
-      } else if (staleExample || (legacyVersion !== null && replacedExamples[legacyVersion].has(id))) {
+      } else if (staleExample || staleCh5 || (legacyVersion !== null && replacedExamples[legacyVersion].has(id))) {
         issues[id] = 'example-updated';
       } else {
         sessions[id] = session;

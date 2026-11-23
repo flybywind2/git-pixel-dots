@@ -260,6 +260,11 @@ export const usePixelStore = create<PixelStore>((set) => ({
       if (id !== state.stageId) return { sessions, saveIssues, undoStacks };
       // 다른 탭의 진행 상태를 받더라도 이 탭에서 입력 중인 초안은 지우지 않아요.
       const documentDraft = state.documentDraft !== null ? state.documentDraft : session.documentDraft;
+      // 예약 저장을 취소했으므로, 이 탭의 미저장 초안을 새 진행 상태와 함께 다시 저장해요.
+      // 그래야 곧바로 새로고침해도 방금 입력한 초안이 사라지지 않아요.
+      if (state.documentDraft !== null) {
+        writePracticeSession({ sim: session.sim, documentDraft }, true);
+      }
       return { ...session, documentDraft, stageId: id, sessions, saveIssues, undoStacks, notice: null, confirmation: null };
     });
   },

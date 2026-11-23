@@ -39,6 +39,14 @@
   min-height: min(58%, 9.5rem);
 }
 
+/* 컴팩트(높이 <420px)에서도 '크게 보기'가 실제로 커지도록 별도 규칙을 둬요.
+   헤더가 여러 줄로 높아지는 좁은 화면에서는 flex-shrink로 화면 안에 맞춰요. */
+.practice-shell[data-compact] .terminal-dock[data-expanded][data-size="tall"] {
+  height: min(72%, 16rem);
+  min-height: min(58%, 9.5rem);
+  flex-shrink: 1;
+}
+
 .practice-shell[data-compact] .terminal-toggle {
   min-height: 2rem;
 }

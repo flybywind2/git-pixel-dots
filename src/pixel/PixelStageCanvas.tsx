@@ -275,7 +275,7 @@ export function PixelStageCanvas() {
 
   return (
     <div className="relative flex flex-1 flex-col bg-[#F6EFE2]">
-      <div className="order-1 px-3 pt-2.5 sm:px-6 sm:pt-3" aria-live="polite">
+      <div className="px-3 pt-2.5 sm:px-6 sm:pt-3" aria-live="polite">
         {sim.bubbles.map((bubble) => {
           const theme = SPEAKER_THEMES[bubble.speaker];
           const actions = bubble.actions?.filter((action) => {
@@ -353,7 +353,7 @@ export function PixelStageCanvas() {
         <div
           id="conflict-comparison"
           tabIndex={-1}
-          className="order-2 mx-auto mt-1.5 w-full max-w-3xl rounded-xl px-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#80613B] sm:px-6"
+          className="mx-auto mt-1.5 w-full max-w-3xl rounded-xl px-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#80613B] sm:px-6"
           data-testid="conflict-preview"
         >
           <div className="rounded-xl border border-[#D69B61] bg-[#FFFDF8] px-3 py-2">
@@ -399,7 +399,7 @@ export function PixelStageCanvas() {
         </div>
       )}
       {stageId === 'ch2' || stageId === 'ch1' ? shareRelation && (
-        <div className="order-2 mx-auto mt-1.5 w-full max-w-3xl px-3 sm:px-6" data-testid="stage-sync-status" role="status">
+        <div className="mx-auto mt-1.5 w-full max-w-3xl px-3 sm:px-6" data-testid="stage-sync-status" role="status">
           <p className="break-keep rounded-md border border-[#D8C9B0] bg-[#FAF4E8] px-2.5 py-1 text-xs font-semibold text-[#59483B]">
             팀 저장소: {SHARE_STATUS_TEXT[shareRelation]}
           </p>
@@ -410,7 +410,134 @@ export function PixelStageCanvas() {
           )}
         </div>
       ) : null}
-      <div ref={containerRef} className={`relative order-3 flex-1 ${canvasMinHeight}`}>
+      {stageId === 'ch3' && conflict && conflict.resolvedChoice !== 'none' && (
+        <div className="mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="resolved-preview">
+          <div className="rounded-xl border border-[#22A882] bg-[#E0F4E9] px-3 py-2">
+            <h2 className="break-keep text-sm font-bold text-[#115843]">해결한 최종 파일 내용이에요</h2>
+            <p className="mt-1 break-keep text-xs text-[#2D5E4A]">
+              버튼을 누르기 전에 이 내용을 확인하세요. 커밋하면 이 내용이 기록돼요.
+            </p>
+            <pre className="font-mono-code mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[#FFFDF8] px-2 py-1.5 text-xs text-[#2F241D]">
+              {sim.files.find((file) => file.name === conflict.file)?.content ?? ''}
+            </pre>
+            <p className="mt-1 break-keep text-xs text-[#2D5E4A]">
+              실제 Git에서는 이 파일에 남은 충돌 표시(&lt;&lt;&lt;&lt;&lt;&lt;&lt;)를 직접 지운 뒤 git add로 해결을 표시해요.
+            </p>
+          </div>
+        </div>
+      )}
+      {stageId === 'ch5' && sim.completedActions.includes('RUN_WATCH') && (
+        <div className="mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="ci-target">
+          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] px-3 py-2">
+            <h2 className="break-keep text-sm font-bold text-[#2F241D]">이번에 지켜본 자동 검사 대상</h2>
+            <ul className="mt-1 space-y-0.5 break-keep text-xs text-[#59483B]">
+              <li>· 브랜치: feat/darkmode</li>
+              <li>· 변경 파일: darkmode.css (다크 모드 색상 설정)</li>
+              <li>· 실행 workflow: CI Build &amp; Test — 코드 가져오기 → 설치·형식 검사 → 단위 테스트</li>
+            </ul>
+          </div>
+        </div>
+      )}
+      {stageId === 'ch7' && (
+        <div className="mx-auto mt-3 grid w-full max-w-3xl gap-2 px-3 sm:px-6" data-testid="ghes-status">
+          {sim.ghes.mode === 'cloud' && (
+            <div className="rounded-xl border border-[#3292CE] bg-[#F0F8FE] px-3 py-2">
+              <h2 className="break-keep text-sm font-bold text-[#174669]">공용 클라우드와 사내 GHES 비교</h2>
+              <ul className="mt-1 space-y-0.5 break-keep text-xs text-[#2F4B63]">
+                <li>· GitHub.com(클라우드): 주소 github.com · API api.github.com · GitHub-hosted runner</li>
+                <li>· 사내 GHES: 주소 {sim.ghes.host} · API /api/v3 · 사내 Private Runner</li>
+              </ul>
+            </div>
+          )}
+          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] px-3 py-2">
+            <h2 className="break-keep text-sm font-bold text-[#2F241D]">사내 보안 로그 (최근 기록)</h2>
+            <ul className="font-mono-code mt-1 space-y-0.5 break-keep text-[11px] text-[#59483B]">
+              {sim.ghes.auditLogs.slice(-3).map((log, index) => <li key={index}>· {log}</li>)}
+            </ul>
+          </div>
+        </div>
+      )}
+      {stageId === 'ch8' && sim.ai.codeWritten && (
+        <div className="mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="ai-diff">
+          <div className="rounded-xl border border-[#8BB9D9] bg-[#EEF7FD] px-3 py-2">
+            <h2 className="break-keep text-sm font-bold text-[#174669]">사람이 검토할 코드 변경</h2>
+            <p className="mt-1 break-keep text-xs text-[#2F4B63]">버그: 2 + 3을 -1로 계산했어요. AI가 아래처럼 고쳤어요.</p>
+            <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+              <div className="rounded-md border border-[#E08A95] bg-[#FDE9E8] px-2 py-1.5">
+                <p className="text-xs font-semibold text-[#8C2630]">고치기 전 (main)</p>
+                <code className="font-mono-code mt-0.5 block whitespace-pre-wrap text-xs text-[#2F241D]">
+                  {sim.commits.find((commit) => commit.id === sim.branches.main)?.tree['buggy.ts'] ?? 'export const sum = (a, b) => a - b;'}
+                </code>
+              </div>
+              <div className="rounded-md border border-[#22A882] bg-[#E0F4E9] px-2 py-1.5">
+                <p className="text-xs font-semibold text-[#115843]">고친 후 ({sim.ai.worktreeBranch})</p>
+                <code className="font-mono-code mt-0.5 block whitespace-pre-wrap text-xs text-[#2F241D]">
+                  {sim.commits.find((commit) => commit.id === sim.branches[sim.ai.worktreeBranch])?.tree['buggy.ts'] ?? ''}
+                </code>
+              </div>
+            </div>
+            <p className="mt-1 break-keep text-xs text-[#2F4B63]">터미널에서 git diff main {sim.ai.worktreeBranch}로 같은 변경을 직접 비교할 수 있어요.</p>
+          </div>
+        </div>
+      )}
+      {stageId === 'ch6' && (
+        <div className="mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="token-scopes">
+          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] p-3">
+            <h2 className="break-keep text-sm font-bold text-[#2F241D]">지금 토큰에 준 권한</h2>
+            <p className="mt-1 break-keep text-xs leading-relaxed text-[#59483B]">
+              {sim.token.mode === 'fine-grained'
+                ? 'Fine-grained 토큰은 고른 저장소에만 필요한 권한을 줘요.'
+                : 'Classic 토큰은 계정에 넓은 권한을 줘요. 저장소 삭제 권한도 포함될 수 있어요.'}
+            </p>
+            <ul className="mt-2 space-y-1 break-keep text-xs leading-relaxed text-[#59483B]">
+              {sim.token.scopes.map((scope) => (
+                <li key={scope}>· {scope}{SCOPE_LABELS[scope] ? ` — ${SCOPE_LABELS[scope]}` : ''}</li>
+              ))}
+            </ul>
+            {sim.token.expires && (
+              <p className="mt-1 break-keep text-xs text-[#59483B]">· 만료: {sim.token.expires} (권한이 아니라 토큰 속성이에요)</p>
+            )}
+            <div className="mt-2">
+              <p className="break-keep text-xs font-semibold text-[#59483B]">
+                위험도 {sim.token.riskScore}/100 {sim.token.riskScore < 30 ? '— 안전한 최소 권한' : '— 넓은 권한'}
+              </p>
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#E7DCCB]">
+                <div
+                  className={`h-full ${sim.token.riskScore < 30 ? 'bg-[#22A882]' : 'bg-[#E05666]'}`}
+                  style={{ width: `${sim.token.riskScore}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {stageId === 'ch8' && sim.ai.codeWritten && (
+        <div className="mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="ai-tests">
+          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] p-3">
+            <h2 className="break-keep text-sm font-bold text-[#2F241D]">자동 테스트 결과</h2>
+            <p className="mt-1 break-keep text-xs leading-relaxed text-[#59483B]">2와 3을 더한 결과가 5인지 자동으로 확인했고, 통과했어요.</p>
+            <ul className="font-mono-code mt-2 space-y-1 text-xs text-[#147A5B]">
+              <li>✓ unit test: sum(2, 3) === 5 PASS</li>
+              {sim.ai.prNumber !== null && <li>✓ PR #{sim.ai.prNumber} 자동 검사: 코드 형식(Lint) · 단위 테스트(Unit Test) · 비밀키 검사(Secret Scan) 통과</li>}
+            </ul>
+            <p className="mt-2 break-keep text-xs leading-relaxed text-[#59483B]">buggy.ts 변경: a - b → a + b (빼기를 더하기로 고침)</p>
+          </div>
+        </div>
+      )}
+      {visibleHistory && (
+        <ol aria-label="최근 커밋" className="mx-auto mt-3 flex w-full max-w-5xl flex-wrap justify-center gap-2 px-3 pb-2 text-sm">
+          {visibleHistory.map(({ commit, rewound }) => (
+            <li key={commit.id} className="max-w-full rounded-md border border-[#D8C9B0] bg-[#FFFDF8] px-2.5 py-1.5 [overflow-wrap:anywhere]">
+              {commit.id === head && <strong className="mr-2 text-[#79521D]">HEAD · {sim.headBranch}</strong>}
+              <code className="mr-2 text-xs text-[#14694F]">{commit.hash}</code>
+              {commit.message}
+              {rewound && <span className="ml-2 text-xs text-[#715A43]">되감기 전 기록</span>}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <div ref={containerRef} className={`relative flex-1 ${canvasMinHeight}`}>
         <canvas
           ref={canvasRef}
           data-testid="pixel-stage-canvas"
@@ -433,7 +560,7 @@ export function PixelStageCanvas() {
         <section
           aria-label="현재 파일 상태"
           data-testid="stage-files-card"
-          className="order-4 mx-auto w-full max-w-5xl px-3 pb-2.5 pt-1 sm:px-6"
+          className="mx-auto w-full max-w-5xl px-3 pb-2.5 pt-1 sm:px-6"
         >
           <div className="rounded-lg border border-[#D8C9B0] bg-[#FFFDF8] px-3 py-2">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
@@ -552,132 +679,6 @@ export function PixelStageCanvas() {
             )}
           </div>
         </section>
-      )}
-      {stageId === 'ch3' && conflict && conflict.resolvedChoice !== 'none' && (
-        <div className="order-2 mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="resolved-preview">
-          <div className="rounded-xl border border-[#22A882] bg-[#E0F4E9] px-3 py-2">
-            <h2 className="break-keep text-sm font-bold text-[#115843]">해결한 최종 파일 내용이에요</h2>
-            <p className="mt-1 break-keep text-xs text-[#2D5E4A]">
-              버튼을 누르기 전에 이 내용을 확인하세요. 커밋하면 이 내용이 기록돼요.
-            </p>
-            <pre className="font-mono-code mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[#FFFDF8] px-2 py-1.5 text-xs text-[#2F241D]">
-              {sim.files.find((file) => file.name === conflict.file)?.content ?? ''}
-            </pre>
-            <p className="mt-1 break-keep text-xs text-[#2D5E4A]">
-              실제 Git에서는 이 파일에 남은 충돌 표시(&lt;&lt;&lt;&lt;&lt;&lt;&lt;)를 직접 지운 뒤 git add로 해결을 표시해요.
-            </p>
-          </div>
-        </div>
-      )}
-      {stageId === 'ch5' && sim.completedActions.includes('RUN_WATCH') && (
-        <div className="order-2 mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="ci-target">
-          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] px-3 py-2">
-            <h2 className="break-keep text-sm font-bold text-[#2F241D]">이번에 지켜본 자동 검사 대상</h2>
-            <ul className="mt-1 space-y-0.5 break-keep text-xs text-[#59483B]">
-              <li>· 브랜치: feat/darkmode</li>
-              <li>· 변경 파일: darkmode.css (다크 모드 색상 설정)</li>
-              <li>· 실행 workflow: CI Build &amp; Test — 코드 가져오기 → 설치·형식 검사 → 단위 테스트</li>
-            </ul>
-          </div>
-        </div>
-      )}
-      {stageId === 'ch7' && (
-        <div className="order-2 mx-auto mt-3 grid w-full max-w-3xl gap-2 px-3 sm:px-6" data-testid="ghes-status">
-          {sim.ghes.mode === 'cloud' && (
-            <div className="rounded-xl border border-[#3292CE] bg-[#F0F8FE] px-3 py-2">
-              <h2 className="break-keep text-sm font-bold text-[#174669]">공용 클라우드와 사내 GHES 비교</h2>
-              <ul className="mt-1 space-y-0.5 break-keep text-xs text-[#2F4B63]">
-                <li>· GitHub.com(클라우드): 주소 github.com · API api.github.com · GitHub-hosted runner</li>
-                <li>· 사내 GHES: 주소 {sim.ghes.host} · API /api/v3 · 사내 Private Runner</li>
-              </ul>
-            </div>
-          )}
-          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] px-3 py-2">
-            <h2 className="break-keep text-sm font-bold text-[#2F241D]">사내 보안 로그 (최근 기록)</h2>
-            <ul className="font-mono-code mt-1 space-y-0.5 break-keep text-[11px] text-[#59483B]">
-              {sim.ghes.auditLogs.slice(-3).map((log, index) => <li key={index}>· {log}</li>)}
-            </ul>
-          </div>
-        </div>
-      )}
-      {stageId === 'ch8' && sim.ai.codeWritten && (
-        <div className="order-2 mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="ai-diff">
-          <div className="rounded-xl border border-[#8BB9D9] bg-[#EEF7FD] px-3 py-2">
-            <h2 className="break-keep text-sm font-bold text-[#174669]">사람이 검토할 코드 변경</h2>
-            <p className="mt-1 break-keep text-xs text-[#2F4B63]">버그: 2 + 3을 -1로 계산했어요. AI가 아래처럼 고쳤어요.</p>
-            <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
-              <div className="rounded-md border border-[#E08A95] bg-[#FDE9E8] px-2 py-1.5">
-                <p className="text-xs font-semibold text-[#8C2630]">고치기 전 (main)</p>
-                <code className="font-mono-code mt-0.5 block whitespace-pre-wrap text-xs text-[#2F241D]">
-                  {sim.commits.find((commit) => commit.id === sim.branches.main)?.tree['buggy.ts'] ?? 'export const sum = (a, b) => a - b;'}
-                </code>
-              </div>
-              <div className="rounded-md border border-[#22A882] bg-[#E0F4E9] px-2 py-1.5">
-                <p className="text-xs font-semibold text-[#115843]">고친 후 ({sim.ai.worktreeBranch})</p>
-                <code className="font-mono-code mt-0.5 block whitespace-pre-wrap text-xs text-[#2F241D]">
-                  {sim.commits.find((commit) => commit.id === sim.branches[sim.ai.worktreeBranch])?.tree['buggy.ts'] ?? ''}
-                </code>
-              </div>
-            </div>
-            <p className="mt-1 break-keep text-xs text-[#2F4B63]">터미널에서 git diff main {sim.ai.worktreeBranch}로 같은 변경을 직접 비교할 수 있어요.</p>
-          </div>
-        </div>
-      )}
-      {stageId === 'ch6' && (
-        <div className="order-2 mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="token-scopes">
-          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] p-3">
-            <h2 className="break-keep text-sm font-bold text-[#2F241D]">지금 토큰에 준 권한</h2>
-            <p className="mt-1 break-keep text-xs leading-relaxed text-[#59483B]">
-              {sim.token.mode === 'fine-grained'
-                ? 'Fine-grained 토큰은 고른 저장소에만 필요한 권한을 줘요.'
-                : 'Classic 토큰은 계정에 넓은 권한을 줘요. 저장소 삭제 권한도 포함될 수 있어요.'}
-            </p>
-            <ul className="mt-2 space-y-1 break-keep text-xs leading-relaxed text-[#59483B]">
-              {sim.token.scopes.map((scope) => (
-                <li key={scope}>· {scope}{SCOPE_LABELS[scope] ? ` — ${SCOPE_LABELS[scope]}` : ''}</li>
-              ))}
-            </ul>
-            {sim.token.expires && (
-              <p className="mt-1 break-keep text-xs text-[#59483B]">· 만료: {sim.token.expires} (권한이 아니라 토큰 속성이에요)</p>
-            )}
-            <div className="mt-2">
-              <p className="break-keep text-xs font-semibold text-[#59483B]">
-                위험도 {sim.token.riskScore}/100 {sim.token.riskScore < 30 ? '— 안전한 최소 권한' : '— 넓은 권한'}
-              </p>
-              <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#E7DCCB]">
-                <div
-                  className={`h-full ${sim.token.riskScore < 30 ? 'bg-[#22A882]' : 'bg-[#E05666]'}`}
-                  style={{ width: `${sim.token.riskScore}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {stageId === 'ch8' && sim.ai.codeWritten && (
-        <div className="order-2 mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="ai-tests">
-          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] p-3">
-            <h2 className="break-keep text-sm font-bold text-[#2F241D]">자동 테스트 결과</h2>
-            <p className="mt-1 break-keep text-xs leading-relaxed text-[#59483B]">2와 3을 더한 결과가 5인지 자동으로 확인했고, 통과했어요.</p>
-            <ul className="font-mono-code mt-2 space-y-1 text-xs text-[#147A5B]">
-              <li>✓ unit test: sum(2, 3) === 5 PASS</li>
-              {sim.ai.prNumber !== null && <li>✓ PR #{sim.ai.prNumber} 자동 검사: 코드 형식(Lint) · 단위 테스트(Unit Test) · 비밀키 검사(Secret Scan) 통과</li>}
-            </ul>
-            <p className="mt-2 break-keep text-xs leading-relaxed text-[#59483B]">buggy.ts 변경: a - b → a + b (빼기를 더하기로 고침)</p>
-          </div>
-        </div>
-      )}
-      {visibleHistory && (
-        <ol aria-label="최근 커밋" className="order-2 mx-auto mt-3 flex w-full max-w-5xl flex-wrap justify-center gap-2 px-3 pb-2 text-sm">
-          {visibleHistory.map(({ commit, rewound }) => (
-            <li key={commit.id} className="max-w-full rounded-md border border-[#D8C9B0] bg-[#FFFDF8] px-2.5 py-1.5 [overflow-wrap:anywhere]">
-              {commit.id === head && <strong className="mr-2 text-[#79521D]">HEAD · {sim.headBranch}</strong>}
-              <code className="mr-2 text-xs text-[#14694F]">{commit.hash}</code>
-              {commit.message}
-              {rewound && <span className="ml-2 text-xs text-[#715A43]">되감기 전 기록</span>}
-            </li>
-          ))}
-        </ol>
       )}
     </div>
   );

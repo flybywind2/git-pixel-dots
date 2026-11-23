@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStageState, getNextPendingStep, savePracticeDocument } from '../engine';
 import {
   EXAMPLE_DOCUMENT, getDocumentComparisonLabels, getDocumentWorkingText, ORIGINAL_DOCUMENT,
 } from '../engine/documentDiff';
 import { DOCUMENT_PATH } from '../engine/documentDiff';
+import { flushPracticeSaves } from './practiceStorage';
 import type { PixelSimState, StageId } from '../types/sim';
 import { usePixelStore } from './usePixelStore';
 
@@ -114,6 +115,37 @@ describe('practice store external tab adoption', () => {
     usePixelStore.getState().adoptExternalSession('ch1', sessionFor(external));
 
     expect(usePixelStore.getState().documentDraft).toBe(`${ORIGINAL_DOCUMENT}내 초안\n`);
+  });
+
+  it('re-saves this tab draft when external progress arrives during the debounce window', () => {
+    const saved = new Map<string, string>();
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (key: string) => saved.get(key) ?? null,
+        setItem: (key: string, value: string) => { saved.set(key, value); },
+        removeItem: (key: string) => { saved.delete(key); },
+        clear: () => { saved.clear(); },
+        key: (index: number) => [...saved.keys()][index] ?? null,
+        get length() { return saved.size; },
+      },
+      setTimeout: (callback: () => void, ms: number) => setTimeout(callback, ms),
+      clearTimeout: (id: number) => clearTimeout(id),
+    });
+    seed('docs');
+    const draftB = `${ORIGINAL_DOCUMENT}탭 B 미저장 초안\n`;
+    usePixelStore.getState().setDocumentDraft(draftB);
+    // 지연 저장이 아직 실행되기 전이에요.
+    expect(saved.has('gitdots.practice.v4.docs')).toBe(false);
+
+    const external = savePracticeDocument(createStageState('docs'), EXAMPLE_DOCUMENT);
+    usePixelStore.getState().adoptExternalSession('docs', { sim: external, documentDraft: null });
+    flushPracticeSaves();
+
+    const raw = saved.get('gitdots.practice.v4.docs');
+    expect(raw).toBeTruthy();
+    expect(JSON.parse(raw as string).documentDraft).toBe(draftB);
+    expect(getDocumentWorkingText(usePixelStore.getState().sim)).toBe(EXAMPLE_DOCUMENT);
+    vi.unstubAllGlobals();
   });
 });
 
