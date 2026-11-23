@@ -26,6 +26,36 @@ export function shouldFocusTerminalOnExpand(open: boolean, wasOpen: boolean, fin
   return open && !wasOpen && finePointer;
 }
 
+/**
+ * 다음 단계 예시 명령을 placeholder 안내 문구로 바꿔요.
+ * "예: " 접두어는 화면용일 뿐이고, 실제 자동 완성에는 순수 명령만 써요.
+ */
+export function examplePlaceholder(command: string | null | undefined): string {
+  return command ? `예: ${command} (Tab 완성)` : '명령어를 입력하세요';
+}
+
+/**
+ * Tab을 눌렀을 때 입력창에 채울 값을 정해요.
+ * - 빈 입력창: 다음 단계 예시 명령이 있으면 그대로 채워요.
+ * - 입력 중: 기존 자동완성 후보가 있으면 기존 순환 동작에 맡기고,
+ *   후보가 없더라도 현재 입력이 예시 명령의 접두어면 예시 명령으로 완성해요.
+ * - Shift+Tab, 채울 것이 없을 때: null을 돌려 기본 포커스 이동을 유지해요.
+ */
+export function resolveTabCompletion(
+  value: string,
+  exampleCommand: string | null | undefined,
+  suggestions: readonly { cmd: string }[],
+  shiftKey = false,
+): string | null {
+  if (shiftKey) return null;
+  const typed = value.trim();
+  const example = exampleCommand?.trim();
+  if (!typed) return example || null;
+  if (suggestions.length > 0) return null;
+  if (!example || typed === example) return null;
+  return example.toLowerCase().startsWith(typed.toLowerCase()) ? example : null;
+}
+
 export function TerminalDock() {
   const sim = usePixelStore((state) => state.sim);
   const history = usePixelStore((state) => state.history);
@@ -46,6 +76,7 @@ export function TerminalDock() {
   const scenario = STAGE_MAP[sim.stageId];
   const next = scenario.steps.find((step) => !isStepCompleted(sim, step));
   const promptLabel = sim.headBranch;
+  const exampleCommand = next?.command ?? null;
   const promptTitle = sim.stageId === 'ch8' && sim.ai.worktreeActive
     ? `현재 브랜치: ${sim.headBranch} · AI 작업 폴더: ${sim.ai.worktreeDir ?? 'wt-ai'} (${sim.ai.worktreeBranch})`
     : `현재 브랜치: ${sim.headBranch}`;
@@ -118,6 +149,16 @@ export function TerminalDock() {
       const index = (from + direction + options.length) % options.length;
       setCycle({ options, index });
       setInput(options[index].cmd);
+      return;
+    }
+    if (event.key === 'Tab') {
+      const completion = resolveTabCompletion(input, exampleCommand, options, event.shiftKey);
+      if (completion === null) return;
+      event.preventDefault();
+      setInput(completion);
+      setCycle(null);
+      setHistoryIndex(null);
+      setDismissed(true);
       return;
     }
     if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
@@ -281,10 +322,10 @@ export function TerminalDock() {
                 autoComplete="off"
                 autoCapitalize="off"
                 spellCheck={false}
-                placeholder={next?.command ?? '명령어를 입력하세요'}
+                placeholder={examplePlaceholder(exampleCommand)}
                 className="terminal-input font-mono-code min-h-10 min-w-0 flex-1 rounded-md border border-[#CBB38E] bg-[#FFFDF8] px-3 py-2 text-base text-[#2F241D] placeholder:text-[#8A7560] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#166447] sm:min-h-11 sm:px-3.5 sm:text-[15px]"
               />
-              <span id="terminal-keys" className="sr-only">Tab으로 추천 명령을 순환하고 Esc로 목록을 닫아요.</span>
+              <span id="terminal-keys" className="sr-only">입력창이 비어 있으면 Tab으로 예시 명령을 채우고, 입력 중에는 Tab으로 추천 명령을 순환해요. Shift+Tab은 다음 항목으로 이동하며 Esc로 목록을 닫아요.</span>
               <button
                 type="submit"
                 className="terminal-submit min-h-10 shrink-0 rounded-md border border-[#BF8B29] bg-[#F4B942] px-3.5 py-2 text-sm font-bold text-[#362711] hover:bg-[#F7C55D] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#166447] sm:min-h-11 sm:px-4"

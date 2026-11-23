@@ -998,6 +998,65 @@ async function cycleOneRegressions(browser, url) {
   await page.close();
 }
 
+async function terminalExampleTabCompletion(browser, url) {
+  // 빈 입력창에서 Tab을 누르면 placeholder로 보여 준 예시 명령이 순수 명령으로 채워져요.
+  for (const [width, height] of [[1366, 860], [390, 760]]) {
+    const page = await browser.newPage({ viewport: { width, height } });
+    page.setDefaultTimeout(9000);
+    const errors = trackErrors(page, new URL(url).origin);
+    await openChapter(page, url, 2);
+    const input = await openTerminal(page);
+    assert.equal(await input.getAttribute('placeholder'), '예: git add . (Tab 완성)',
+      `Example placeholder missing at ${width}x${height}`);
+    const emptyBox = await input.boundingBox();
+    await input.focus();
+    await input.press('Tab');
+    assert.equal(await input.inputValue(), 'git add .',
+      `Tab did not fill the example command at ${width}x${height}`);
+    const filledBox = await input.boundingBox();
+    assert(Math.abs(filledBox.width - emptyBox.width) <= 1,
+      `Input width changed after Tab completion at ${width}x${height}: ${emptyBox.width}px → ${filledBox.width}px`);
+    const inputOverflow = await input.evaluate((node) => node.scrollWidth - node.clientWidth);
+    assert(inputOverflow <= 1, `Completed example overflows the input at ${width}x${height}: ${inputOverflow}px`);
+    await input.press('Enter');
+    await expectProgress(page, 1, 3);
+    await checkViewport(page);
+    assert.deepEqual(errors, []);
+    await page.close();
+  }
+
+  // Shift+Tab, 이미 채워진 예시, 예시가 없는 단계에서는 Tab이 포커스를 가두지 않아요.
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  page.setDefaultTimeout(9000);
+  const errors = trackErrors(page, new URL(url).origin);
+  await openChapter(page, url, 2);
+  const input = await openTerminal(page);
+  const isFocused = () => input.evaluate((node) => node === document.activeElement);
+
+  await input.focus();
+  await input.press('Shift+Tab');
+  assert.equal(await input.inputValue(), '', 'Shift+Tab filled the example command');
+  assert.equal(await isFocused(), false, 'Shift+Tab was trapped inside the terminal input');
+
+  await input.focus();
+  await input.fill('git add .');
+  await input.press('Tab');
+  assert.equal(await input.inputValue(), 'git add .');
+  assert.equal(await isFocused(), false, 'Tab was trapped after the example was already filled');
+
+  await input.fill('git add .');
+  await input.press('Enter');
+  await clickGuided(page);
+  await clickGuided(page);
+  await expectProgress(page, 3, 3);
+  assert.equal(await input.getAttribute('placeholder'), '명령어를 입력하세요');
+  await input.focus();
+  await input.press('Tab');
+  assert.equal(await isFocused(), false, 'Tab was trapped when no example command exists');
+  assert.deepEqual(errors, []);
+  await page.close();
+}
+
 async function terminalSizingAndUsability(browser, url) {
   const cases = [
     { width: 1366, height: 860, minDock: 250, minLog: 110, minMain: 500, minTallDock: 560, minTallLog: 400, minInputWidth: 680, minFont: 15 },
@@ -1198,6 +1257,8 @@ async function main() {
     console.log('[QA] Cycle 1 fixes (stash index, main refspec guard, worktree branch, PR numbering/dedupe, pull overlap, CI wording) passed');
     await terminalSizingAndUsability(browser, url);
     console.log('[QA] Terminal expanded/tall sizing, input width, and responsive layout checks passed');
+    await terminalExampleTabCompletion(browser, url);
+    console.log('[QA] Empty-input Tab fills the example command and never traps keyboard focus');
     await compactTerminalToggle(browser, url);
     console.log('[QA] Compact (<420px) terminal tall toggle passed');
 
