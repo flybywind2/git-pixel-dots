@@ -850,6 +850,85 @@ async function reviewRegressions(browser, url) {
   await page.close();
 }
 
+async function terminalSizingAndUsability(browser, url) {
+  const cases = [
+    { width: 1366, height: 860, minDock: 340, minLog: 200, minTallDock: 560, minTallLog: 400, minInputWidth: 680, minFont: 15 },
+    { width: 1024, height: 768, minDock: 320, minLog: 175, minTallDock: 500, minTallLog: 340, minInputWidth: 560, minFont: 15 },
+    { width: 390, height: 760, minDock: 300, minLog: 150, minTallDock: 480, minTallLog: 320, minInputWidth: 240, minFont: 16 },
+    { width: 320, height: 568, minDock: 240, minLog: 95, minTallDock: 370, minTallLog: 215, minInputWidth: 185, minFont: 16 },
+  ];
+  for (const spec of cases) {
+    const page = await browser.newPage({ viewport: { width: spec.width, height: spec.height } });
+    page.setDefaultTimeout(9000);
+    const errors = trackErrors(page, new URL(url).origin);
+    await openChapter(page, url, 4);
+
+    const dock = page.getByRole('region', { name: '실습 터미널', exact: true });
+    const collapsedBox = await dock.boundingBox();
+    assert(collapsedBox.height <= 56, `Collapsed terminal too tall at ${spec.width}x${spec.height}: ${collapsedBox.height}px`);
+
+    const input = await openTerminal(page);
+    await runCommand(page, 'git switch -c feat/very-long-branch-name-for-terminal-layout-check');
+    await runCommand(page, 'git log');
+
+    const log = page.getByRole('log', { name: '명령 실행 결과', exact: true });
+    const submitBtn = dock.getByRole('button', { name: '실행', exact: true });
+    const sizeBtn = page.getByTestId('terminal-size-toggle');
+
+    const defaultDockBox = await dock.boundingBox();
+    const defaultLogBox = await log.boundingBox();
+    const inputBox = await input.boundingBox();
+    const submitBox = await submitBtn.boundingBox();
+    const sizeBtnBox = await sizeBtn.boundingBox();
+    const inputFont = await input.evaluate((node) => parseFloat(getComputedStyle(node).fontSize));
+
+    assert(defaultDockBox.height >= spec.minDock, `Default dock too short at ${spec.width}x${spec.height}: ${defaultDockBox.height}px`);
+    assert(defaultLogBox.height >= spec.minLog, `Default log too short at ${spec.width}x${spec.height}: ${defaultLogBox.height}px`);
+    assert(inputBox.width >= spec.minInputWidth, `Input too narrow at ${spec.width}x${spec.height}: ${inputBox.width}px`);
+    assert(inputBox.height >= 38, `Input too short at ${spec.width}x${spec.height}: ${inputBox.height}px`);
+    assert(inputFont >= spec.minFont, `Input font too small at ${spec.width}x${spec.height}: ${inputFont}px`);
+    assert(submitBox.x + submitBox.width <= spec.width + 1, `Submit button clipped at ${spec.width}x${spec.height}`);
+    assert(sizeBtnBox.x + sizeBtnBox.width <= spec.width + 1, `Size toggle button clipped at ${spec.width}x${spec.height}`);
+    assert(defaultDockBox.y + defaultDockBox.height <= spec.height + 1, `Default dock overflows viewport vertically at ${spec.width}x${spec.height}`);
+    await checkViewport(page);
+
+    // 크게 보기 토글: 높이가 충분히 커지고 포커스·뷰포트 경계·가로 오버플로가 유지돼요.
+    assert.equal(await sizeBtn.innerText(), '크게 보기');
+    assert.equal(await sizeBtn.getAttribute('aria-pressed'), 'false');
+    await sizeBtn.click();
+    assert.equal(await sizeBtn.innerText(), '기본 크기');
+    assert.equal(await sizeBtn.getAttribute('aria-pressed'), 'true');
+    assert(await sizeBtn.evaluate((node) => node === document.activeElement),
+      `Size toggle lost focus at ${spec.width}x${spec.height}`);
+
+    const tallDockBox = await dock.boundingBox();
+    const tallLogBox = await log.boundingBox();
+    const tallInputBox = await input.boundingBox();
+    assert(tallDockBox.height >= spec.minTallDock, `Tall dock too short at ${spec.width}x${spec.height}: ${tallDockBox.height}px`);
+    assert(tallLogBox.height >= spec.minTallLog, `Tall log too short at ${spec.width}x${spec.height}: ${tallLogBox.height}px`);
+    assert(tallDockBox.height >= defaultDockBox.height + 100, `Tall dock did not grow enough at ${spec.width}x${spec.height}`);
+    assert(tallDockBox.y + tallDockBox.height <= spec.height + 1, `Tall dock overflows viewport vertically at ${spec.width}x${spec.height}`);
+    assert(tallInputBox.y + tallInputBox.height <= spec.height + 1, `Input overflows viewport in tall mode at ${spec.width}x${spec.height}`);
+    const dockOverflow = await dock.evaluate((node) => node.scrollWidth - node.clientWidth);
+    assert(dockOverflow <= 1, `Terminal dock overflows horizontally by ${dockOverflow}px at ${spec.width}x${spec.height}`);
+    await checkViewport(page);
+
+    // 기본 크기로 복원 후 접으면 다시 컴팩트한 바가 돼요.
+    await sizeBtn.click();
+    assert.equal(await sizeBtn.innerText(), '크게 보기');
+    assert.equal(await sizeBtn.getAttribute('aria-pressed'), 'false');
+    const restoredDockBox = await dock.boundingBox();
+    assert(Math.abs(restoredDockBox.height - defaultDockBox.height) <= 2,
+      `Dock did not return to default height at ${spec.width}x${spec.height}`);
+
+    await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
+    const recollapsedBox = await dock.boundingBox();
+    assert(recollapsedBox.height <= 56, `Recollapsed terminal too tall at ${spec.width}x${spec.height}: ${recollapsedBox.height}px`);
+    assert.deepEqual(errors, []);
+    await page.close();
+  }
+}
+
 async function main() {
   fs.mkdirSync(out, { recursive: true });
   const local = publicUrl ? undefined : await startServer();
@@ -907,6 +986,8 @@ async function main() {
     console.log('[QA] Draft-safe undo, staged-plus-working cards, multi-stash cards and remote share status passed');
     await reviewRegressions(browser, url);
     console.log('[QA] Ordering guards (PR/main, conflict markers, GHES login, AI PR, ahead status) passed');
+    await terminalSizingAndUsability(browser, url);
+    console.log('[QA] Terminal expanded/tall sizing, input width, and responsive layout checks passed');
 
     const link = await browser.newPage();
     await link.goto(url + 'docs/deeper/');
