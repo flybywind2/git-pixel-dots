@@ -92,7 +92,7 @@ export function TopStageBar() {
         GitDots
       </a>
 
-      <div className="col-span-full row-start-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 lg:col-start-2 lg:row-start-2">
+      <div className="relative col-span-full row-start-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 lg:col-start-2 lg:row-start-2">
         <span role="img" aria-label={`잔디 진행: ${completedCount}/${totalCount}장 완료`} className="flex items-center gap-1">
           {grass.map(({ lesson, done, complete }) => (
             <span
@@ -112,7 +112,7 @@ export function TopStageBar() {
         <span id="undo-refresh-note" className="sr-only sm:not-sr-only sm:text-[11px] sm:text-[#715A43]">
           새로고침하면 이전 단계 기록이 사라져요
         </span>
-        <div ref={undoInfoRef} className="relative flex items-center sm:hidden">
+        <div ref={undoInfoRef} className="contents sm:hidden">
           <button
             type="button"
             data-testid="undo-refresh-info-btn"
@@ -129,7 +129,7 @@ export function TopStageBar() {
             <div
               id="undo-refresh-popover"
               role="note"
-              className="absolute right-0 top-full z-30 mt-1.5 w-60 rounded-lg border border-[#C7B497] bg-[#FFFDF8] p-2.5 text-left text-xs leading-relaxed text-[#59483B] shadow-md"
+              className="absolute right-0 top-full z-30 mt-1.5 w-60 max-w-full rounded-lg border border-[#C7B497] bg-[#FFFDF8] p-2.5 text-left text-xs leading-relaxed text-[#59483B] shadow-md"
             >
               상단 <strong>이전 단계</strong> 기록은 새로고침하면 사라져요. 진행 상태와 문서는 자동 저장돼요.
             </div>

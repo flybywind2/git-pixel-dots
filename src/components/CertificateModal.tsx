@@ -29,12 +29,17 @@ export function CertificateModal({ open, onClose, completed, allComplete }: Cert
       dialog.focus();
       const meta = readCertificateMeta();
       setName(meta.name);
-      const at = (allComplete ? meta.allAt : meta.basicAt) ?? new Date().toISOString();
-      setDateLabel(new Date(at).toLocaleDateString('ko-KR'));
     } else if (!open && dialog.open) {
       dialog.close();
       openerRef.current?.focus();
     }
+  }, [open, allComplete]);
+
+  useEffect(() => {
+    if (!open) return;
+    const meta = readCertificateMeta();
+    const at = (allComplete ? meta.allAt : meta.basicAt) ?? new Date().toISOString();
+    setDateLabel(new Date(at).toLocaleDateString('ko-KR'));
   }, [open, allComplete]);
 
   useEffect(() => {
@@ -87,7 +92,7 @@ export function CertificateModal({ open, onClose, completed, allComplete }: Cert
             setName(event.target.value);
             writeCertificateMeta({ name: event.target.value });
           }}
-          className="mt-1 w-full rounded-md border border-[#CDBCA3] bg-white px-2 py-1 text-base font-normal text-[#2F241D] sm:text-sm"
+          className="mt-1 w-full rounded-md border border-[#CDBCA3] bg-white px-2 py-1 text-base font-normal text-[#2F241D] sm:pointer-fine:text-sm"
         />
       </label>
       <canvas

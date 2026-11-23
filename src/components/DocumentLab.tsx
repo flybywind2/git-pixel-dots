@@ -22,6 +22,7 @@ const DIFF_STYLES = {
 } as const;
 
 export function DocumentLab() {
+  const notice = usePixelStore((state) => state.notice);
   const sim = usePixelStore((s) => s.sim);
   const draft = usePixelStore((s) => s.documentDraft);
   const setDraft = usePixelStore((s) => s.setDocumentDraft);
@@ -230,6 +231,7 @@ export function DocumentLab() {
           </footer>
         </form>
 
+        {notice?.startsWith('다른 탭에서') && <p role="status" className="rounded-md border border-[#DDBE8A] bg-[#FFF2D7] p-2 text-sm text-[#73450E]">{notice}</p>}
         <section
           id="document-comparison"
           tabIndex={-1}

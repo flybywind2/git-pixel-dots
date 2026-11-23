@@ -1,4 +1,5 @@
 import { resumePracticeBubbles, STAGE_MAP } from '../engine';
+import { getDocumentWorkingText } from '../engine/documentDiff';
 import {
   ALL_STAGE_IDS, LESSON_ACTIONS,
   type AiWorldState, type BubbleAction, type DocumentPracticeState, type GhesWorldState,
@@ -11,6 +12,24 @@ import {
 const SESSION_KEY = 'gitdots.practice.v4';
 const LEGACY_KEYS = ['gitdots.practice.v3', 'gitdots.practice.v2', 'gitdots.practice.v1'] as const;
 const DRAFT_SAVE_DELAY_MS = 250;
+const TAB_DRAFT_KEY = 'gitdots.tab-draft';
+
+export function saveTabDraft(session: PracticeSession) {
+  if (session.sim.stageId !== 'docs' || typeof window === 'undefined') return;
+  try {
+    const old = JSON.parse(window.sessionStorage.getItem(TAB_DRAFT_KEY) ?? 'null');
+    const base = session.documentDraft !== null && old?.text !== null && typeof old?.base === 'string'
+      ? old.base : getDocumentWorkingText(session.sim);
+    window.sessionStorage.setItem(TAB_DRAFT_KEY, JSON.stringify({ text: session.documentDraft, base }));
+  } catch { /* browser storage may be unavailable */ }
+}
+
+export function readTabDraft(): { text: string | null; base: string } | null {
+  try {
+    const item = JSON.parse(window.sessionStorage.getItem(TAB_DRAFT_KEY) ?? 'null');
+    return item && (item.text === null || typeof item.text === 'string') && typeof item.base === 'string' ? item : null;
+  } catch { return null; }
+}
 type LegacyVersion = 'v3' | 'v2' | 'v1';
 // v3→v4에서는 3장 보관과 취소 예제에 비밀 메모 빼기 미션이 추가됐어요. v2→v4는 4장 협업 예제와 5장 브랜치 이름(feat/ui) 변경, v1→v4는 이전 회의록 전환까지 포함해요.
 const replacedExamples: Record<LegacyVersion, ReadonlySet<StageId>> = {
@@ -205,7 +224,8 @@ export function readPracticeSessions() {
       } else if (staleExample || staleCh5 || (legacyVersion !== null && replacedExamples[legacyVersion].has(id))) {
         issues[id] = 'example-updated';
       } else {
-        sessions[id] = session;
+        const tabDraft = id === 'docs' ? readTabDraft() : null;
+        sessions[id] = tabDraft ? { ...session, documentDraft: tabDraft.text } : session;
         if (legacyVersion !== null && writeNow(session)) clearLegacyPracticeSessions(id);
       }
     } catch {
@@ -300,6 +320,7 @@ const pendingSaves = new Map<StageId, { timer: number; session: PracticeSession 
 
 export function writePracticeSession(session: PracticeSession, defer = false) {
   if (typeof window === 'undefined') return;
+  saveTabDraft(session);
   const id = session.sim.stageId;
   const pending = pendingSaves.get(id);
   if (pending) {

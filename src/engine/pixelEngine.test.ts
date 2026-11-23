@@ -88,6 +88,29 @@ describe('GitDots scenarios & initial stage presets', () => {
 });
 
 describe('Full stage walkthroughs', () => {
+  it('credits only the requested remote branch and reports the actual CI target', () => {
+    let s = runSequence('ch2', [`git restore --staged ${SECRET_NOTE_PATH}`, 'git stash', 'git revert 7e8f9a0', 'git stash pop', 'git push origin HEAD:practice']);
+    expect(isStepCompleted(s, STAGE_MAP.ch2.steps[4])).toBe(false);
+    s = executePixelCommand(s, 'git push origin main');
+    expect(isStepCompleted(s, STAGE_MAP.ch2.steps[4])).toBe(true);
+    let pr = createStageState('ch4');
+    for (const step of STAGE_MAP.ch4.steps.slice(0, 8)) pr = executePixelCommand(pr, step.command);
+    pr = executePixelCommand(pr, `git pull origin ${MEETING_PR_BRANCH}`);
+    expect(isStepCompleted(pr, STAGE_MAP.ch4.steps[8])).toBe(false);
+    pr = executePixelCommand(pr, 'git pull origin main');
+    expect(isStepCompleted(pr, STAGE_MAP.ch4.steps[8])).toBe(true);
+    const ci = runSequence('ch5', ['git switch main', 'gh run watch']);
+    expect(JSON.stringify(ci.terminal.at(-1))).toContain('feat/darkmode(e33f44a)');
+  });
+
+  it('unstages a deletion and reports the remaining working-tree deletion', () => {
+    let s = runSequence('ch2', [`git restore --staged ${SECRET_NOTE_PATH}`, 'git stash', 'git revert --no-commit HEAD']);
+    expect(s.staged).toContain(MISTAKEN_NOTICE_PATH);
+    s = executePixelCommand(s, `git restore --staged ${MISTAKEN_NOTICE_PATH}`);
+    expect(s.staged).not.toContain(MISTAKEN_NOTICE_PATH);
+    s = executePixelCommand(s, 'git status');
+    expect(JSON.stringify(s.terminal.at(-1))).toContain(`삭제됨(Deleted): ${MISTAKEN_NOTICE_PATH}`);
+  });
   it.each(STAGE_SCENARIOS)('advances one goal per guided command in $id', (lesson) => {
     let state = createStageState(lesson.id);
     for (const [index, step] of lesson.steps.entries()) {

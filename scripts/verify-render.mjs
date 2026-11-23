@@ -275,6 +275,7 @@ async function terminalAndScenes(page, url) {
   const still = await canvas.evaluate((element) => element.toDataURL());
   await new Promise((resolve) => setTimeout(resolve, 150));
   assert.equal(await canvas.evaluate((element) => element.toDataURL()), still, 'Canvas moves with reduced motion enabled');
+  assert.equal(await page.getByRole('button', { name: '지난 애니메이션 다시 보기' }).isVisible(), false);
   await checkViewport(page);
 }
 
@@ -615,6 +616,52 @@ async function crossTabDraftRace(browser, url) {
   await context.close();
 }
 
+async function reviewDraftAndKeyboard(browser, url) {
+  const context = await browser.newContext({ viewport: { width: 320, height: 568 }, hasTouch: true });
+  const a = await context.newPage();
+  const b = await context.newPage();
+  await openChapter(a, url, 1);
+  await openChapter(b, url, 1);
+  const editorA = a.getByRole('textbox', { name: '회의록.md', exact: true });
+  const editorB = b.getByRole('textbox', { name: '회의록.md', exact: true });
+  const draft = (await editorA.inputValue()) + '\nA의 자동 저장된 초안';
+  await editorA.fill(draft);
+  await a.waitForFunction((expected) => JSON.parse(localStorage.getItem('gitdots.practice.v4.docs') ?? '{}').documentDraft === expected, draft);
+  await editorB.fill((await editorB.inputValue()) + '\nB가 저장한 문서');
+  await clickGuided(b);
+  await a.getByText('다른 탭에서 작업 파일이 바뀌었어요.', { exact: false }).first().waitFor();
+  await a.reload();
+  assert.equal(await editorA.inputValue(), draft, 'Debounced draft was lost after another tab saved and reload');
+  assert(await a.getByText('다른 탭에서 작업 파일이 바뀌었어요.', { exact: false }).count());
+  await a.getByRole('combobox', { name: '학습할 장 선택' }).selectOption('ch1');
+  await editorB.fill((await editorB.inputValue()) + '\n두 번째 저장');
+  await clickGuided(b);
+  await a.waitForTimeout(100);
+  await a.getByRole('combobox', { name: '학습할 장 선택' }).selectOption('docs');
+  assert.equal(await editorA.inputValue(), draft, 'Inactive chapter lost its tab draft');
+  await context.close();
+
+  const page = await browser.newPage({ viewport: { width: 320, height: 568 } });
+  await openChapter(page, url, 1);
+  await page.getByRole('textbox', { name: '회의록.md', exact: true }).fill('비교할 새 문장');
+  await clickGuided(page);
+  await clickGuided(page);
+  const comparison = page.locator('#document-comparison');
+  assert(await comparison.evaluate((element) => element === document.activeElement), 'Comparison did not receive focus');
+  const comparisonBox = await comparison.boundingBox();
+  assert(comparisonBox.y >= 0 && comparisonBox.y < 568, 'Comparison is outside the mobile viewport');
+  await openChapter(page, url, 3);
+  const guided = page.getByTestId('guided-command');
+  await guided.focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'prediction-choice-0');
+  await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'guided-command');
+  await page.keyboard.press('Enter');
+  await expectProgress(page, 1, 5);
+  await page.close();
+}
+
 async function advancedVisualCards(browser, url) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const guide = page.getByTestId('guided-command');
@@ -723,7 +770,7 @@ async function mobileLessonLayout(browser, url) {
     assert.match(await stepTerms.innerText(), /회의록.md/);
     assert.doesNotMatch(await stepTerms.innerText(), /HEAD/);
     // 비교를 실행하기 전에는 결과 한 줄이 보이지 않아요.
-    assert.equal(await page.getByText('비교 결과:', { exact: false }).count(), 0);
+    assert.equal(await page.getByText('비교 결과 ·', { exact: false }).count(), 0);
     // 퀴즈가 열린 동안에도 버튼이 스크롤 없이 보여요(자동 스크롤 없이 측정).
     await openChapter(page, url, 3);
     await page.getByTestId('guided-command').click();
@@ -847,6 +894,10 @@ async function basicCertificate(browser, url) {
   await dialog.getByRole('button', { name: '닫기', exact: true }).click();
   assert(await topTrigger.evaluate((element) => element === document.activeElement),
     'Certificate dialog did not restore focus to top bar trigger');
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.getByTestId('undo-refresh-info-btn').click();
+  const popover = await page.locator('#undo-refresh-popover').boundingBox();
+  assert(popover.x >= 0 && popover.x + popover.width <= 320, 'Completed-course popover is clipped');
   await page.close();
 }
 
@@ -1473,6 +1524,7 @@ async function main() {
     await warningPage.close();
     await crossTabSync(browser, url);
     await crossTabDraftRace(browser, url);
+    await reviewDraftAndKeyboard(browser, url);
     console.log('[QA] Storage failure warning, cross-tab sync, and pending-draft race passed');
     await advancedVisualCards(browser, url);
     console.log('[QA] Token scope and AI test result cards passed');

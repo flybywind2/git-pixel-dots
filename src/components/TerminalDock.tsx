@@ -455,7 +455,7 @@ export function TerminalDock() {
                 autoCapitalize="off"
                 spellCheck={false}
                 placeholder={examplePlaceholder(exampleCommand, showTabHint)}
-                className="terminal-input font-mono-code min-h-10 min-w-0 flex-1 rounded-md border border-[#CBB38E] bg-[#FFFDF8] px-3 py-2 text-base text-[#2F241D] placeholder:text-[#715D49] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#166447] sm:min-h-11 sm:px-3.5 sm:text-[15px]"
+                className="terminal-input font-mono-code min-h-10 min-w-0 flex-1 rounded-md border border-[#CBB38E] bg-[#FFFDF8] px-3 py-2 text-base text-[#2F241D] placeholder:text-[#715D49] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#166447] sm:min-h-11 sm:px-3.5 sm:pointer-fine:text-[15px]"
               />
               <span id="terminal-keys" className="sr-only">입력창이 비어 있으면 Tab으로 예시 명령을 채우고, 입력 중에는 Tab으로 추천 명령을 순환해요. Shift+Tab은 이전 항목으로 이동하며 Esc로 목록을 닫아요.</span>
               <button

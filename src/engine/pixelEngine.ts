@@ -907,7 +907,7 @@ function recordRevert(state: PixelSimState, draft: PixelSimState, target: PixelC
         52,
         '잘못 올린 임시 안내 커밋이 아니에요',
         `방금 취소한 커밋은 “${target.message}”이고, ${MISTAKEN_NOTICE_PATH}를 올린 커밋을 취소해야 해요.`,
-        '이전 단계로 되돌린 뒤 잘못 올린 임시 안내(c3)를 취소해 보세요.',
+        '이전 단계로 되돌린 뒤 잘못 올린 임시 안내(7e8f9a0)를 취소해 보세요.',
       )
       : makeBubble(`revert-${seq}`, 'buddy', 48, 52, '지난 변경을 취소하는 커밋을 만들었어요', description),
   );
@@ -2088,6 +2088,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
     if (sub === 'status') {
       const stagedFiles = state.staged;
       const modifiedFiles = state.files.filter((f) => f.status === 'modified');
+      const deletedFiles = Object.keys(state.index).filter((path) => treeEntry(workingTree(state), path) === undefined);
       const untrackedFiles = state.files.filter((f) => f.status === 'untracked');
       const conflictFiles = state.files.filter((f) => f.status === 'conflict');
 
@@ -2119,6 +2120,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           tone: 'amber',
         });
       }
+      if (deletedFiles.length > 0) lines.push({ text: `삭제됨(Deleted): ${deletedFiles.join(', ')}`, tone: 'amber' });
       if (untrackedFiles.length > 0) {
         lines.push({
           text: `🆕 새 파일(Untracked): ${untrackedFiles.map((f) => f.name).join(', ')}`,
@@ -2129,6 +2131,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         conflictFiles.length === 0 &&
         stagedFiles.length === 0 &&
         modifiedFiles.length === 0 &&
+        deletedFiles.length === 0 &&
         untrackedFiles.length === 0
       ) {
         lines.push({ text: '커밋할 변경이 없어요 (nothing to commit, working tree clean — 작업 폴더가 깨끗해요)', tone: 'mint' });
@@ -2146,8 +2149,8 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           ? `충돌 난 파일이 ${conflictFiles.length}개 있어요! 먼저 해결해 볼까요?`
           : stagedFiles.length > 0
             ? `스테이징 영역에 ${stagedFiles.length}개 파일이 담겨 있어요. 이제 기록을 남길 차례예요.`
-            : modifiedFiles.length + untrackedFiles.length > 0
-              ? `아직 스테이징하지 않은 파일이 ${modifiedFiles.length + untrackedFiles.length}개 있어요.`
+            : modifiedFiles.length + untrackedFiles.length + deletedFiles.length > 0
+              ? `아직 스테이징하지 않은 파일이 ${modifiedFiles.length + untrackedFiles.length + deletedFiles.length}개 있어요.`
               : relation === 'ahead'
                 ? `작업 폴더는 깨끗하지만, 아직 팀에 공유하지 않은 커밋이 ${aheadCount}개 있어요. git push로 올려 보세요.`
                 : '커밋할 변경이 없어요.';
@@ -2602,7 +2605,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       }
       if (reachableCommits(state, local.id).has(remote.id)) {
         // 합친 뒤 main이 이미 최신이어도 마무리 단계는 완료로 인정해요.
-        if (state.headBranch === 'main' && state.completedActions.includes('PR_MERGE')) {
+        if (branch === 'main' && state.headBranch === 'main' && state.completedActions.includes('PR_MERGE') && reachableCommits(state, local.id).has(state.remoteBranches.main)) {
           const draft = { ...state, completedActions: withCompletedAction(state.completedActions, 'SYNC_MAIN') };
           return finalizeTransition(
             state, draft, 'PULL', '원격 변경 적용', `origin/${branch}`, cmd,
@@ -2626,7 +2629,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         parents: [local.id, remote.id], tree: merged.tree, isMerge: true,
       };
       // 합친 내용을 내 컴퓨터의 main에 가져올 때만 마무리 단계로 인정해요.
-      const syncingMain = state.headBranch === 'main' && state.completedActions.includes('PR_MERGE');
+      const syncingMain = branch === 'main' && state.headBranch === 'main' && state.completedActions.includes('PR_MERGE');
       const draft = updateWorkspace({
         ...state,
         commits: fastForward ? state.commits : [...state.commits, commit],
@@ -2871,7 +2874,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       const matches = new Set<string>();
       for (const arg of args) {
         const target = arg.replace(/^\.\//, '').replace(/\/$/, '');
-        const selected = Object.keys(state.index).filter((path) => target === '.' || path === target || path.startsWith(target + '/'));
+        const selected = [...new Set([...Object.keys(state.index), ...Object.keys(head)])].filter((path) => target === '.' || path === target || path.startsWith(target + '/'));
         if (selected.length === 0 && target !== '.') {
           // 3장에서 stash를 먼저 해 이미 장바구니 밖(untracked)이 된 경우에도 막히지 않게 해요.
           if (state.stageId === 'ch2' && target === SECRET_NOTE_PATH && treeEntry(workingTree(state), target) !== undefined) {
@@ -3049,6 +3052,10 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
       const target = revisions.length === 1 ? resolveRevision(state, revision) : undefined;
       if (!target || !headCommit(state)) {
         return commandNotice(state, cmd, '취소할 커밋을 확인하세요', 'git revert HEAD 또는 git revert 뒤에 취소할 커밋 ID 하나를 적으세요.', 'amber');
+      }
+      if (state.stageId === 'ch2' && revision === '7e8f9a0' && !reachableCommits(state, state.branches[state.headBranch]).has(target.id)) {
+        return commandNotice(state, cmd, '잘못 올린 기록이 현재 이력에 없어요',
+          '현재 장을 초기화하거나 원격 기록을 복원한 뒤 지난 변경을 취소해 보세요.', 'amber');
       }
       if (target.parents.length === 0) {
         return commandNotice(state, cmd, '첫 기록은 취소할 수 없어요',
@@ -4256,8 +4263,8 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         return commandNotice(state, cmd, '이 실습에서는 gh run watch를 써요',
           'gh run list로 목록을 보거나, gh run watch로 검사를 지켜볼 수 있어요.', 'muted');
       }
-      const targetBranch = state.headBranch;
-      const targetCommit = commitById(state, state.branches[targetBranch]);
+      const targetBranch = state.stageId === 'ch5' ? 'feat/darkmode' : state.headBranch;
+      const targetCommit = commitById(state, state.stageId === 'ch5' ? state.remoteBranches[targetBranch] : state.branches[targetBranch]);
       const draft: PixelSimState = {
         ...state,
         completedActions: withCompletedAction(state.completedActions, 'RUN_WATCH'),

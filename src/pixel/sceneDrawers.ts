@@ -1,6 +1,6 @@
 import type { PixelAnimKind, PixelSimState } from '../types/sim';
 import { SECRET_NOTE_PATH } from '../engine/meetingExample';
-import { commitById, reachableCommits, remoteHasRevertCommit, remoteRelation } from '../engine/repoVersions';
+import { changedPaths, commitById, reachableCommits, remoteHasRevertCommit, remoteRelation, workingTree } from '../engine/repoVersions';
 import { PALETTE, withAlpha } from './palette';
 import {
   AI_BOT,
@@ -190,7 +190,7 @@ function drawCh1Scene(
           ? 3
           : 0;
 
-  const workingCount = sim.files.filter((f) => f.status === 'modified' || f.status === 'untracked').length;
+  const workingCount = changedPaths(sim.index, workingTree(sim)).length;
   const remoteHead = sim.remoteBranches[sim.headBranch];
   const shared = Boolean(remoteHead && remoteHead === sim.branches[sim.headBranch]);
 
@@ -416,7 +416,7 @@ function drawCh2Scene(
   const synced = relation === 'synced';
   const remoteBehind = relation === 'behind' || relation === 'diverged';
   // 원격 브랜치에서 실제로 도달 가능한 되돌림 커밋일 때만 민트 보석을 보여 줘요.
-  const remoteRevert = remoteHasRevertCommit(sim);
+  const remoteRevert = remoteHasRevertCommit(sim, 'main');
   const shareLabel = relation === 'none' ? '공유 전'
     : relation === 'ahead' ? '공유 대기'
       : relation === 'behind' ? '원격이 앞섬'
@@ -517,7 +517,7 @@ function drawCh2Scene(
   );
 
   // Bottom-left: Working folder (where uncommitted edits live)
-  const localChange = sim.files.some((file) => file.status === 'modified' || file.status === 'untracked');
+  const localChange = changedPaths(sim.index, workingTree(sim)).length > 0;
   drawZonePad(
     ctx,
     workX,

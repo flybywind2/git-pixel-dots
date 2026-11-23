@@ -4,7 +4,7 @@ import { createStageState, executePixelCommand, pendingHardReset, savePracticeDo
 import { EXAMPLE_DOCUMENT, getDocumentWorkingText } from '../engine/documentDiff';
 import {
   cancelPendingPracticeSave, clearLegacyPracticeSessions, flushPracticeSaves, hasPendingPracticeSave,
-  practiceProgressSignature, practiceStorageAvailable, readPracticeSessions, setPracticeStorageFailureListener,
+  practiceProgressSignature, practiceStorageAvailable, readPracticeSessions, readTabDraft, setPracticeStorageFailureListener,
   writePracticeSession, type PracticeSaveIssue, type PracticeSession,
 } from './practiceStorage';
 
@@ -93,7 +93,10 @@ function applySession(state: PixelStore, sim: PixelSimState, documentDraft: stri
   const sessions = { ...state.sessions, [sim.stageId]: current };
   const saveIssues = state.saveIssues[sim.stageId] ? { ...state.saveIssues, [sim.stageId]: undefined } : state.saveIssues;
   writePracticeSession(current, defer);
-  return { ...current, sessions, saveIssues, notice: null, confirmation: null };
+  const tabDraft = sim.stageId === 'docs' ? readTabDraft() : null;
+  const notice = documentDraft !== null && tabDraft && tabDraft.base !== getDocumentWorkingText(sim)
+    ? '다른 탭에서 작업 파일이 바뀌었어요. 내 초안을 확인한 뒤 저장하세요.' : null;
+  return { ...current, sessions, saveIssues, notice, confirmation: null };
 }
 
 function applyDocumentDraft(state: PixelStore, text: string, defer = false) {
@@ -168,7 +171,8 @@ export const usePixelStore = create<PixelStore>((set) => ({
   helpOpen: false,
   certificateOpen: false,
   confirmation: null,
-  notice: null,
+  notice: initialStage === 'docs' && readTabDraft()?.text != null && readTabDraft()?.base !== getDocumentWorkingText((sessions[initialStage] ?? freshSession(initialStage)).sim)
+    ? '다른 탭에서 작업 파일이 바뀌었어요. 보관된 내 초안과 문서를 비교한 뒤 저장하세요.' : null,
   storageWarning: !practiceStorageAvailable(),
 
   setStage: (id) => {
@@ -177,10 +181,13 @@ export const usePixelStore = create<PixelStore>((set) => ({
     set((state) => {
       if (state.stageId === id) return state;
       flushPracticeSaves();
+      const next = state.sessions[id] ?? freshSession(id);
+      const tabDraft = id === 'docs' ? readTabDraft() : null;
       return {
-        ...(state.sessions[id] ?? freshSession(id)),
+        ...next,
         stageId: id,
-        notice: null,
+        notice: next.documentDraft !== null && tabDraft && tabDraft.base !== getDocumentWorkingText(next.sim)
+          ? '다른 탭에서 작업 파일이 바뀌었어요. 내 초안을 확인한 뒤 저장하세요.' : null,
         confirmation: null,
       };
     });
@@ -290,7 +297,11 @@ export const usePixelStore = create<PixelStore>((set) => ({
       // 현재 장과 비활성 장 모두 되돌리기 기록을 비워 다른 탭의 최신 저장본을 지키게 해요.
       const undoStacks = state.undoStacks[id]?.length
         ? { ...state.undoStacks, [id]: [] } : state.undoStacks;
-      if (id !== state.stageId) return { sessions, saveIssues, undoStacks };
+      if (id !== state.stageId) {
+        const localDraft = id === 'docs' ? readTabDraft() : null;
+        if (localDraft) sessions[id] = { ...session, documentDraft: localDraft.text };
+        return { sessions, saveIssues, undoStacks };
+      }
       // 다른 탭의 진행 상태를 받더라도 이 탭에서 입력 중인 초안은 지우지 않아요.
       const documentDraft = state.documentDraft !== null ? state.documentDraft : session.documentDraft;
       // 원래 M4 경합: 예약 저장이 취소된 동안 진행 상태가 바뀌었을 때만 이 탭의 초안을
@@ -310,7 +321,8 @@ export const usePixelStore = create<PixelStore>((set) => ({
         sessions: { ...sessions, [id]: { sim: session.sim, documentDraft } },
         saveIssues,
         undoStacks,
-        notice: null,
+        notice: state.documentDraft !== null && getDocumentWorkingText(state.sim) !== getDocumentWorkingText(session.sim)
+          ? '다른 탭에서 작업 파일이 바뀌었어요. 내 초안을 확인한 뒤 저장하세요.' : null,
         confirmation: null,
       };
     });

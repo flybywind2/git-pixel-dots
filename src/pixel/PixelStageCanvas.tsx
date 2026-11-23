@@ -448,6 +448,7 @@ export function PixelStageCanvas() {
             <h2 className="break-keep text-sm font-bold text-[#2F241D]">이번에 지켜본 자동 검사 대상</h2>
             <ul className="mt-1 space-y-0.5 break-keep text-xs text-[#59483B]">
               <li>· 브랜치: feat/darkmode</li>
+              <li>· 커밋: {sim.commits.find((commit) => commit.id === sim.remoteBranches['feat/darkmode'])?.hash}</li>
               <li>· 변경 파일: darkmode.css (다크 모드 색상 설정)</li>
               <li>· 실행 workflow: CI Build &amp; Test — 코드 가져오기 → 설치·형식 검사 → 단위 테스트</li>
             </ul>
@@ -577,7 +578,7 @@ export function PixelStageCanvas() {
             type="button"
             onClick={() => { replayNonce.current += 1; queueDraw.current?.(); }}
             aria-label="지난 애니메이션 다시 보기"
-            className="pixel-btn absolute right-2 top-2 z-10 cursor-pointer rounded-md border border-[#CDBCA3] bg-[#FFFDF8]/90 px-2 py-1 text-xs font-semibold text-[#59483B] hover:bg-[#F0E5CF]"
+            className="pixel-btn absolute right-2 top-2 z-10 cursor-pointer rounded-md border border-[#CDBCA3] bg-[#FFFDF8]/90 px-2 py-1 text-xs font-semibold text-[#59483B] hover:bg-[#F0E5CF] motion-reduce:hidden"
           >
             다시 보기
           </button>

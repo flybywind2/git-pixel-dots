@@ -6,6 +6,11 @@ import { remoteHasRevertCommit, remoteRelation } from '../engine/repoVersions';
 import { buildStageFileItems } from './stageFileItems';
 
 describe('stage file cards', () => {
+  it('shows a deletion that is no longer staged', () => {
+    let state = createStageState('ch2');
+    for (const cmd of [`git restore --staged ${SECRET_NOTE_PATH}`, 'git stash', 'git revert --no-commit HEAD', 'git restore --staged 임시안내.md']) state = executePixelCommand(state, cmd);
+    expect(buildStageFileItems(state, 'ch2').find((item) => item.name === '임시안내.md')?.badges).toEqual(['deleted']);
+  });
   it('keeps the staged copy visible beside a newer working edit', () => {
     let state = createStageState('ch1');
     state = executePixelCommand(state, 'git add .');

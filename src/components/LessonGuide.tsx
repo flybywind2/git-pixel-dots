@@ -21,6 +21,12 @@ export function LessonGuide() {
   const [introExpanded, setIntroExpanded] = useState(false);
   const [introClamped, setIntroClamped] = useState(false);
   const introRef = useRef<HTMLParagraphElement>(null);
+  const firstChoiceRef = useRef<HTMLButtonElement>(null);
+  const guidedRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (quiz?.picked === null) firstChoiceRef.current?.focus();
+    else if (quiz) guidedRef.current?.focus();
+  }, [quiz]);
   const nextStepId = nextStep?.id;
   useEffect(() => {
     setQuiz((current) => (current && current.stepId !== nextStepId ? null : current));
@@ -96,7 +102,7 @@ export function LessonGuide() {
       runCommand(nextStep.command);
       if (lesson.id === 'docs' && nextStep.command.startsWith('git diff ') && !usePixelStore.getState().notice) {
         // 비교 영역으로 스크롤을 끌어내리지 않아 안내 카드가 화면 밖에 사라지지 않게 해요.
-        document.getElementById('document-comparison')?.focus({ preventScroll: true });
+        document.getElementById('document-comparison')?.focus();
       }
     }
   }
@@ -212,13 +218,15 @@ export function LessonGuide() {
               {nextStep?.prediction && quiz && quiz.stepId === nextStep.id && (
                 <div data-testid="prediction-quiz" className="mt-1.5 rounded-md border border-[#C9B8E8] bg-[#F5F0FB] px-2.5 py-1.5 text-xs leading-normal text-[#4A3670] sm:mt-2">
                   <p className="font-semibold text-[#5B3E9E]">잠깐! 실행 전에 예측해 봐요</p>
-                  <p className="mt-0.5 break-keep">{nextStep.prediction.question}</p>
+                  <p id="prediction-question" className="mt-0.5 break-keep">{nextStep.prediction.question}</p>
                   {quiz.picked === null ? (
                     <div className="mt-1 flex flex-col items-start gap-1">
                       {nextStep.prediction.choices.map((choice, index) => (
                         <button
                           key={choice}
+                          ref={index === 0 ? firstChoiceRef : undefined}
                           type="button"
+                          aria-describedby="prediction-question"
                           data-testid={`prediction-choice-${index}`}
                           onClick={() => setQuiz({ stepId: nextStep.id, picked: index as 0 | 1 })}
                           className="pixel-btn max-w-full rounded-md border-[#B9A6E8] bg-[#FFFDF8] px-2.5 py-0.5 text-left font-semibold hover:bg-[#F1EAF9]"
@@ -241,6 +249,7 @@ export function LessonGuide() {
                 </div>
               )}
               <button
+                ref={guidedRef}
                 type="button"
                 data-testid="guided-command"
                 onClick={runGuidedStep}

@@ -1,7 +1,7 @@
 import { ALL_STAGE_IDS, type CommandChip, type PixelSimState, type StageId, type StageScenario } from '../types/sim';
 import { DOCUMENT_COMPARISONS, DOCUMENT_REVERT } from './documentDiff';
 import { ATTENDANCE_PATH, MEETING_PR_BRANCH, MEETING_PR_TITLE, MISTAKEN_NOTICE_PATH, SECRET_NOTE_PATH } from './meetingExample';
-import { headTree, treeEntry } from './repoVersions';
+import { commitById, headTree, reachableCommits, remoteHasRevertCommit, treeEntry } from './repoVersions';
 import { term } from './terms';
 
 const hasCh4BranchCommit = (sim: PixelSimState): boolean =>
@@ -186,7 +186,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         id: 'ch2-revert',
         label: '지난 변경 취소하기',
         goal: '잘못 올린 임시안내.md를 취소하는 커밋 만들기',
-        command: 'git revert HEAD',
+        command: 'git revert 7e8f9a0',
         doneAction: 'REVERT',
         isDone: (sim) =>
           treeEntry(headTree(sim), MISTAKEN_NOTICE_PATH) === undefined
@@ -215,6 +215,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         goal: '취소 커밋을 GitHub에 올리기',
         command: 'git push',
         doneAction: 'PUSH',
+        isDone: (sim) => remoteHasRevertCommit(sim, 'main') && treeEntry(commitById(sim, sim.remoteBranches.main)?.tree ?? {}, MISTAKEN_NOTICE_PATH) === undefined,
         terms: ['원격 저장소'],
         commandNote: '복원한 준비물 수정은 커밋 전이라 내 컴퓨터에만 남아요.',
       },
@@ -357,6 +358,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         label: '합친 내용 가져오기',
         goal: 'GitHub에서 합친 변경을 내 컴퓨터의 main에 반영하기',
         command: 'git pull origin main',
+        isDone: (sim) => sim.headBranch === 'main' && !!sim.remoteBranches.main && reachableCommits(sim, sim.branches.main).has(sim.remoteBranches.main),
         doneAction: 'SYNC_MAIN',
         terms: ['원격 저장소', 'origin'],
         commandNote: 'origin main은 GitHub(origin)의 main을 가져온다는 뜻이에요. 팀원의 참석 안내도 함께 들어와요.',
