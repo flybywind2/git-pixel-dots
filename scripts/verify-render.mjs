@@ -124,7 +124,13 @@ async function documentLesson(page, url, capture) {
   const editorFont = await editor.evaluate((node) => getComputedStyle(node).fontSize);
   assert.equal(editorFont, page.viewportSize().width < 640 ? '16px' : '14px');
 
-  assert.equal(await page.getByTestId('terminal-input').isVisible(), false);
+  assert.equal(await page.getByTestId('terminal-input').isVisible(), true, 'Terminal should start expanded by default');
+  assert.equal(await page.getByRole('button', { name: '터미널 접기', exact: true }).getAttribute('aria-expanded'), 'true');
+  await checkViewport(page);
+  await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
+  assert.equal(await page.getByTestId('terminal-input').isVisible(), false, 'Terminal should hide after clicking collapse');
+  await page.getByRole('button', { name: '직접 입력해 보기', exact: true }).click();
+  assert.equal(await page.getByTestId('terminal-input').isVisible(), true, 'Terminal should reopen after clicking expand');
   await clickGuided(page);
   assert(await editor.evaluate((node) => node === document.activeElement));
   const edited = original.replace('금요일 저녁 7시', '수요일 오후 2시');
@@ -584,9 +590,11 @@ async function mobileLessonLayout(browser, url) {
     const buttonBox = await page.getByTestId('guided-command').boundingBox();
     const termsBox = await allTerms.boundingBox();
     assert(buttonBox.y < termsBox.y, 'Guided button sits below the full terms list on mobile');
-    // 다음 단계 버튼이 스크롤 없이 첫 화면에 보여요.
-    assert(buttonBox.y >= 0 && buttonBox.y + buttonBox.height <= height,
-      `Guided button not visible without scrolling at ${width}x${height}`);
+    // 다음 단계 버튼이 기본 펼침 터미널 위 첫 화면에 스크롤 없이 보여요.
+    const dockBox = await page.getByRole('region', { name: '실습 터미널', exact: true }).boundingBox();
+    assert(buttonBox.y >= 0 && buttonBox.y + buttonBox.height <= dockBox.y + 1,
+      `Guided button overlaps or sits below default-open terminal at ${width}x${height}`);
+    await checkViewport(page);
     // 지금 단계에서 쓰는 용어만 보여 줘요.
     const stepTerms = page.getByTestId('step-terms');
     await stepTerms.waitFor();
@@ -852,22 +860,43 @@ async function reviewRegressions(browser, url) {
 
 async function terminalSizingAndUsability(browser, url) {
   const cases = [
-    { width: 1366, height: 860, minDock: 340, minLog: 200, minTallDock: 560, minTallLog: 400, minInputWidth: 680, minFont: 15 },
-    { width: 1024, height: 768, minDock: 320, minLog: 175, minTallDock: 500, minTallLog: 340, minInputWidth: 560, minFont: 15 },
-    { width: 390, height: 760, minDock: 300, minLog: 150, minTallDock: 480, minTallLog: 320, minInputWidth: 240, minFont: 16 },
-    { width: 320, height: 568, minDock: 240, minLog: 95, minTallDock: 370, minTallLog: 215, minInputWidth: 185, minFont: 16 },
+    { width: 1366, height: 860, minDock: 250, minLog: 110, minMain: 500, minTallDock: 560, minTallLog: 400, minInputWidth: 680, minFont: 15 },
+    { width: 1024, height: 768, minDock: 225, minLog: 85, minMain: 430, minTallDock: 500, minTallLog: 340, minInputWidth: 560, minFont: 15 },
+    { width: 390, height: 760, minDock: 230, minLog: 90, minMain: 390, minTallDock: 480, minTallLog: 320, minInputWidth: 240, minFont: 16 },
+    { width: 320, height: 568, minDock: 195, minLog: 58, minMain: 240, minTallDock: 370, minTallLog: 215, minInputWidth: 185, minFont: 16 },
   ];
   for (const spec of cases) {
     const page = await browser.newPage({ viewport: { width: spec.width, height: spec.height } });
     page.setDefaultTimeout(9000);
     const errors = trackErrors(page, new URL(url).origin);
-    await openChapter(page, url, 4);
 
+    // 1장 첫 진입: 터미널이 기본 펼침이면서 데스크톱에서는 편집기가 함께 보이고, 모든 뷰포트에서 상단 가이드 버튼과 공존해요.
+    await openChapter(page, url, 1);
     const dock = page.getByRole('region', { name: '실습 터미널', exact: true });
-    const collapsedBox = await dock.boundingBox();
-    assert(collapsedBox.height <= 56, `Collapsed terminal too tall at ${spec.width}x${spec.height}: ${collapsedBox.height}px`);
+    const input = page.getByTestId('terminal-input');
+    assert.equal(await dock.getAttribute('data-expanded'), 'true', `Terminal not expanded by default at ${spec.width}x${spec.height}`);
+    assert.equal(await dock.getAttribute('data-size'), 'default', `Terminal not in default size on load at ${spec.width}x${spec.height}`);
+    assert.equal(await input.isVisible(), true, `Terminal input hidden on initial load at ${spec.width}x${spec.height}`);
+    const ch1DockBox = await dock.boundingBox();
+    const ch1GuidedBox = await page.getByTestId('guided-command').boundingBox();
+    const ch1MainBox = await page.locator('main').boundingBox();
+    assert(ch1MainBox.height >= spec.minMain, `Main area too small on ch1 at ${spec.width}x${spec.height}: ${ch1MainBox.height}px`);
+    assert(ch1GuidedBox.y + ch1GuidedBox.height <= ch1DockBox.y + 1,
+      `Ch1 guided button hidden behind default-open terminal at ${spec.width}x${spec.height}`);
+    if (spec.width >= 1024) {
+      const editorBox = await page.getByRole('textbox', { name: '회의록.md', exact: true }).boundingBox();
+      assert(editorBox.y < ch1DockBox.y - 24, `Ch1 editor not visible above terminal at ${spec.width}x${spec.height}`);
+    }
+    await checkViewport(page);
 
-    const input = await openTerminal(page);
+    // 4장 첫 진입: 2~9장 캔버스 화면에서도 기본 펼침으로 열리고 상단 가이드 버튼과 공존해요.
+    await openChapter(page, url, 4);
+    assert.equal(await input.isVisible(), true, `Terminal input should stay open on ch4 at ${spec.width}x${spec.height}`);
+    const ch4DockBox = await dock.boundingBox();
+    const ch4GuidedBox = await page.getByTestId('guided-command').boundingBox();
+    assert(ch4GuidedBox.y + ch4GuidedBox.height <= ch4DockBox.y + 1,
+      `Ch4 guided button hidden behind default-open terminal at ${spec.width}x${spec.height}`);
+
     await runCommand(page, 'git switch -c feat/very-long-branch-name-for-terminal-layout-check');
     await runCommand(page, 'git log');
 
@@ -913,7 +942,7 @@ async function terminalSizingAndUsability(browser, url) {
     assert(dockOverflow <= 1, `Terminal dock overflows horizontally by ${dockOverflow}px at ${spec.width}x${spec.height}`);
     await checkViewport(page);
 
-    // 기본 크기로 복원 후 접으면 다시 컴팩트한 바가 돼요.
+    // 기본 크기로 복원 후 접으면 컴팩트한 바가 되고, 다시 펼치면 기본 크기로 돌아와요.
     await sizeBtn.click();
     assert.equal(await sizeBtn.innerText(), '크게 보기');
     assert.equal(await sizeBtn.getAttribute('aria-pressed'), 'false');
@@ -922,8 +951,17 @@ async function terminalSizingAndUsability(browser, url) {
       `Dock did not return to default height at ${spec.width}x${spec.height}`);
 
     await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
+    assert.equal(await dock.getAttribute('data-size'), 'closed');
+    assert.equal(await input.isVisible(), false, `Input still visible after collapse at ${spec.width}x${spec.height}`);
     const recollapsedBox = await dock.boundingBox();
     assert(recollapsedBox.height <= 56, `Recollapsed terminal too tall at ${spec.width}x${spec.height}: ${recollapsedBox.height}px`);
+
+    await page.getByRole('button', { name: '직접 입력해 보기', exact: true }).click();
+    assert.equal(await dock.getAttribute('data-size'), 'default');
+    assert.equal(await input.isVisible(), true, `Input did not reopen at ${spec.width}x${spec.height}`);
+    const reopenedDockBox = await dock.boundingBox();
+    assert(Math.abs(reopenedDockBox.height - defaultDockBox.height) <= 2,
+      `Dock did not reopen to default height at ${spec.width}x${spec.height}`);
     assert.deepEqual(errors, []);
     await page.close();
   }

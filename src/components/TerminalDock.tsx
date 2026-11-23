@@ -22,7 +22,7 @@ export function TerminalDock() {
   const history = usePixelStore((state) => state.history);
   const runCommand = usePixelStore((state) => state.runCommand);
   const notice = usePixelStore((state) => state.notice);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [tall, setTall] = useState(false);
   const [input, setInput] = useState('');
   const [focused, setFocused] = useState(false);
@@ -32,6 +32,7 @@ export function TerminalDock() {
   const [draftInput, setDraftInput] = useState('');
   const prompt = useRef<HTMLInputElement>(null);
   const log = useRef<HTMLDivElement>(null);
+  const wasOpen = useRef(open);
 
   const scenario = STAGE_MAP[sim.stageId];
   const next = scenario.steps.find((step) => !isStepCompleted(sim, step));
@@ -55,7 +56,10 @@ export function TerminalDock() {
   }, [sim.stageId]);
 
   useEffect(() => {
-    if (open && window.matchMedia('(pointer: fine)').matches) prompt.current?.focus({ preventScroll: true });
+    if (open && !wasOpen.current && window.matchMedia('(pointer: fine)').matches) {
+      prompt.current?.focus({ preventScroll: true });
+    }
+    wasOpen.current = open;
   }, [open]);
 
   useEffect(() => {
@@ -126,7 +130,7 @@ export function TerminalDock() {
         open
           ? tall
             ? 'h-[min(72%,40rem)] lg:h-[min(72%,44rem)]'
-            : 'h-[min(46%,22rem)] sm:h-[min(46%,24rem)] lg:h-[min(46%,25rem)]'
+            : 'h-[min(38%,15.5rem)] sm:h-[min(34%,17rem)] lg:h-[min(31%,17rem)]'
           : ''
       }`}
     >
@@ -137,7 +141,7 @@ export function TerminalDock() {
             aria-expanded={open}
             aria-controls="terminal-content"
             onClick={() => setOpen(!open)}
-            className={`terminal-toggle flex min-w-0 flex-1 items-center gap-2 px-3 text-left text-sm font-bold text-[#3A2D24] hover:bg-[#F4EADB] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#166447] sm:px-4 ${open ? 'min-h-10' : 'min-h-11'}`}
+            className={`terminal-toggle flex min-w-0 flex-1 items-center gap-2 px-3 text-left text-sm font-bold text-[#3A2D24] hover:bg-[#F4EADB] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#166447] sm:px-4 ${open ? 'min-h-9 sm:min-h-10' : 'min-h-11'}`}
           >
             <Terminal aria-hidden="true" className="h-4 w-4 shrink-0 text-[#126549]" />
             <span className="truncate">{open ? '터미널 접기' : '직접 입력해 보기'}</span>
@@ -160,7 +164,7 @@ export function TerminalDock() {
         </div>
         {notice && <p role="status" className="shrink-0 border-b border-[#DDBE8A] bg-[#FFF2D7] px-3 py-1 text-xs font-semibold text-[#73450E] sm:px-4">{notice}</p>}
         <div id="terminal-content" hidden={!open} className={open ? 'flex min-h-0 flex-1 flex-col' : undefined}>
-          <div role="group" aria-label="빠른 실행" className="terminal-quick-actions flex shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain border-y border-[#E3D5BE] bg-[#F6EDDE] px-3 py-1.5 sm:px-4">
+          <div role="group" aria-label="빠른 실행" className="terminal-quick-actions flex shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain border-y border-[#E3D5BE] bg-[#F6EDDE] px-3 py-1 sm:px-4 sm:py-1.5">
             <span className="mr-1 shrink-0 text-xs font-semibold text-[#715D49]">빠른 실행</span>
             {scenario.chips.map((chip) => {
               const step = chip.stepIndex === undefined ? undefined : scenario.steps[chip.stepIndex];
@@ -192,7 +196,7 @@ export function TerminalDock() {
             aria-label="명령 실행 결과"
             aria-live="polite"
             tabIndex={0}
-            className="terminal-log font-mono-code min-h-0 flex-1 space-y-2.5 overflow-y-auto bg-[#FFFDF8]/70 px-3 py-2.5 text-[13px] leading-relaxed focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#166447] sm:px-4 sm:py-3 sm:text-sm sm:leading-6"
+            className="terminal-log font-mono-code min-h-0 flex-1 space-y-2 overflow-y-auto bg-[#FFFDF8]/70 px-3 py-1.5 text-[13px] leading-snug focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#166447] sm:space-y-2.5 sm:px-4 sm:py-3 sm:text-sm sm:leading-6"
           >
             {sim.terminal.map((entry) => (
               <div key={entry.id}>
@@ -208,7 +212,7 @@ export function TerminalDock() {
           </div>
           <form
             onSubmit={(event) => { event.preventDefault(); submit(); }}
-            className="terminal-form relative shrink-0 border-t border-[#DFCEB3] bg-[#F1E8D8] px-3 py-2 sm:px-4 sm:py-2.5"
+            className="terminal-form relative shrink-0 border-t border-[#DFCEB3] bg-[#F1E8D8] px-3 py-1.5 sm:px-4 sm:py-2.5"
           >
             {showOptions && (
               <ul
@@ -233,7 +237,7 @@ export function TerminalDock() {
                 ))}
               </ul>
             )}
-            <div aria-hidden="true" title={promptTitle} className="terminal-prompt-meta mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-[#126549] sm:hidden">
+            <div aria-hidden="true" title={promptTitle} className="terminal-prompt-meta mb-0.5 flex items-center gap-1.5 text-[11px] font-semibold text-[#126549] sm:hidden">
               <span className="font-mono-code min-w-0 truncate rounded bg-[#E4F2EC] px-1.5 py-0.5 text-[#126549]">{promptLabel}</span>
             </div>
             <div className="flex items-center gap-2 sm:gap-2.5">
