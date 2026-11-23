@@ -27,11 +27,29 @@ export function shouldFocusTerminalOnExpand(open: boolean, wasOpen: boolean, fin
 }
 
 /**
+ * 저장된 사용자 설정이 없을 때 터미널 기본 펼침 여부를 정해요.
+ * 데스크톱(>=640px, 정밀 포인터)에서는 기본 펼침,
+ * 휴대폰(좁은 화면 <640px 또는 터치 기기)에서는 첫 화면에 그림/편집기가 보이도록 기본 접힘으로 시작해요.
+ */
+export function defaultTerminalOpen(viewportWidth: number, coarsePointer: boolean): boolean {
+  return viewportWidth >= 640 && !coarsePointer;
+}
+
+/**
+ * 입력창 placeholder에 "(Tab 완성)" 안내를 붙일지 결정해요.
+ * 터치 기기(pointer: coarse)나 좁은 화면(<640px)에서는 생략해 예시 명령이 잘리지 않게 해요.
+ */
+export function shouldShowTabHint(coarsePointer: boolean, viewportWidth: number): boolean {
+  return !coarsePointer && viewportWidth >= 640;
+}
+
+/**
  * 다음 단계 예시 명령을 placeholder 안내 문구로 바꿔요.
  * "예: " 접두어는 화면용일 뿐이고, 실제 자동 완성에는 순수 명령만 써요.
  */
-export function examplePlaceholder(command: string | null | undefined): string {
-  return command ? `예: ${command} (Tab 완성)` : '명령어를 입력하세요';
+export function examplePlaceholder(command: string | null | undefined, showTabHint = true): string {
+  if (!command) return '명령어를 입력하세요';
+  return showTabHint ? `예: ${command} (Tab 완성)` : `예: ${command}`;
 }
 
 /**
@@ -80,13 +98,30 @@ function writeStoredFlag(key: string, value: boolean): void {
   }
 }
 
+function isCoarsePointer(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(pointer: coarse)').matches;
+}
+
+function detectDefaultTerminalOpen(): boolean {
+  if (typeof window === 'undefined') return true;
+  return defaultTerminalOpen(window.innerWidth, isCoarsePointer());
+}
+
+function detectShowTabHint(): boolean {
+  if (typeof window === 'undefined') return true;
+  return shouldShowTabHint(isCoarsePointer(), window.innerWidth);
+}
+
 export function TerminalDock() {
   const sim = usePixelStore((state) => state.sim);
   const history = usePixelStore((state) => state.history);
   const runCommand = usePixelStore((state) => state.runCommand);
   const notice = usePixelStore((state) => state.notice);
-  const [open, setOpen] = useState(() => readStoredFlag(TERMINAL_OPEN_KEY, true));
+  const [open, setOpen] = useState(() => readStoredFlag(TERMINAL_OPEN_KEY, detectDefaultTerminalOpen()));
   const [tall, setTall] = useState(() => readStoredFlag(TERMINAL_TALL_KEY, false));
+  const [showTabHint, setShowTabHint] = useState(detectShowTabHint);
   const [input, setInput] = useState('');
   const [focused, setFocused] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -124,6 +159,18 @@ export function TerminalDock() {
     pinnedToBottom.current = true;
     setHasNewOutput(false);
   }, [sim.stageId]);
+
+  useEffect(() => {
+    const update = () => setShowTabHint(detectShowTabHint());
+    const coarse = window.matchMedia('(pointer: coarse)');
+    const wide = window.matchMedia('(min-width: 640px)');
+    coarse.addEventListener('change', update);
+    wide.addEventListener('change', update);
+    return () => {
+      coarse.removeEventListener('change', update);
+      wide.removeEventListener('change', update);
+    };
+  }, []);
 
   useEffect(() => {
     const finePointer = window.matchMedia('(pointer: fine)').matches;
@@ -407,10 +454,10 @@ export function TerminalDock() {
                 autoComplete="off"
                 autoCapitalize="off"
                 spellCheck={false}
-                placeholder={examplePlaceholder(exampleCommand)}
+                placeholder={examplePlaceholder(exampleCommand, showTabHint)}
                 className="terminal-input font-mono-code min-h-10 min-w-0 flex-1 rounded-md border border-[#CBB38E] bg-[#FFFDF8] px-3 py-2 text-base text-[#2F241D] placeholder:text-[#715D49] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#166447] sm:min-h-11 sm:px-3.5 sm:text-[15px]"
               />
-              <span id="terminal-keys" className="sr-only">입력창이 비어 있으면 Tab으로 예시 명령을 채우고, 입력 중에는 Tab으로 추천 명령을 순환해요. Shift+Tab은 다음 항목으로 이동하며 Esc로 목록을 닫아요.</span>
+              <span id="terminal-keys" className="sr-only">입력창이 비어 있으면 Tab으로 예시 명령을 채우고, 입력 중에는 Tab으로 추천 명령을 순환해요. Shift+Tab은 이전 항목으로 이동하며 Esc로 목록을 닫아요.</span>
               <button
                 type="submit"
                 className="terminal-submit min-h-10 shrink-0 rounded-md border border-[#BF8B29] bg-[#F4B942] px-3.5 py-2 text-sm font-bold text-[#362711] hover:bg-[#F7C55D] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#166447] sm:min-h-11 sm:px-4"

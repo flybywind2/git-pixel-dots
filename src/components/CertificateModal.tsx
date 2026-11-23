@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { STAGE_SCENARIOS } from '../engine';
+import { STAGE_SCENARIOS, STAGE_TRACKS } from '../engine';
 import { readCertificateMeta, writeCertificateMeta } from '../store/certificateMeta';
+
+const BASIC_COUNT = STAGE_TRACKS[0].lessons.length;
+const TOTAL_COUNT = STAGE_SCENARIOS.length;
 
 interface CertificateModalProps {
   open: boolean;
@@ -72,7 +75,7 @@ export function CertificateModal({ open, onClose, completed, allComplete }: Cert
     >
       <h2 id="certificate-title" className="text-lg font-bold">{allComplete ? '수료증' : '기본 과정 수료증'}</h2>
       <p className="mt-1 break-keep text-sm text-[#59483B]">
-        {allComplete ? '9장 실습을 모두 마쳤어요. 축하해요! 🎉' : '기본 과정 4장을 마쳤어요. 축하해요! 🎉 심화 5~9장은 선택이에요.'}
+        {allComplete ? `${TOTAL_COUNT}장 실습을 모두 마쳤어요. 축하해요! 🎉` : `기본 과정 ${BASIC_COUNT}장을 마쳤어요. 축하해요! 🎉`}
       </p>
       <label className="mt-2 block text-xs font-semibold text-[#715A43]">
         이름 (선택)
@@ -84,7 +87,7 @@ export function CertificateModal({ open, onClose, completed, allComplete }: Cert
             setName(event.target.value);
             writeCertificateMeta({ name: event.target.value });
           }}
-          className="mt-1 w-full rounded-md border border-[#CDBCA3] bg-white px-2 py-1 text-sm font-normal text-[#2F241D]"
+          className="mt-1 w-full rounded-md border border-[#CDBCA3] bg-white px-2 py-1 text-base font-normal text-[#2F241D] sm:text-sm"
         />
       </label>
       <canvas
@@ -92,7 +95,8 @@ export function CertificateModal({ open, onClose, completed, allComplete }: Cert
         width={720}
         height={480}
         role="img"
-        aria-label={`수료증 그림: ${allComplete ? '기본 4장과 심화 5장 완주' : '기본 과정 4장 완주'}, ${dateLabel}${name ? `, ${name}` : ''}`}
+        data-cells={allComplete ? TOTAL_COUNT : BASIC_COUNT}
+        aria-label={`수료증 그림: ${allComplete ? `기본 ${BASIC_COUNT}장과 심화 ${TOTAL_COUNT - BASIC_COUNT}장 완주` : `기본 과정 ${BASIC_COUNT}장 완주`}, ${dateLabel}${name ? `, ${name}` : ''}`}
         className="mt-3 w-full rounded-md border border-[#D7C7AE]"
       />
       <div className="mt-3 flex justify-end gap-2">
@@ -140,15 +144,22 @@ function drawCertificate(
   ctx.fillStyle = '#59483B';
   ctx.font = '20px system-ui, "Noto Sans KR", sans-serif';
   ctx.fillText('비개발자를 위한 브라우저 Git 실습', w / 2, 205);
-  ctx.fillText(allComplete ? '기본 4장 + 심화 5장 · 총 9장 완주' : '기본 과정 4장 완주 · 심화 5~9장은 선택이에요', w / 2, 235);
+  ctx.fillText(
+    allComplete
+      ? `기본 ${BASIC_COUNT}장 + 심화 ${TOTAL_COUNT - BASIC_COUNT}장 · 총 ${TOTAL_COUNT}장 완주`
+      : `기본 과정 ${BASIC_COUNT}장 완주`,
+    w / 2,
+    235,
+  );
+  const cellCount = allComplete ? TOTAL_COUNT : BASIC_COUNT;
   const cell = 26;
   const gap = 10;
-  let x = (w - (STAGE_SCENARIOS.length * cell + (STAGE_SCENARIOS.length - 1) * gap)) / 2;
-  STAGE_SCENARIOS.forEach((_, index) => {
+  let x = (w - (cellCount * cell + (cellCount - 1) * gap)) / 2;
+  for (let index = 0; index < cellCount; index += 1) {
     ctx.fillStyle = completed[index] ? (index % 2 === 0 ? '#198361' : '#22A882') : '#DED1B8';
     ctx.fillRect(x, 280, cell, cell);
     x += cell + gap;
-  });
+  }
   const trimmed = name.trim();
   if (trimmed) {
     ctx.fillStyle = '#2F241D';

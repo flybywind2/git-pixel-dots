@@ -1,6 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { TerminalDock, examplePlaceholder, resolveTabCompletion, shouldFocusTerminalOnExpand } from './TerminalDock';
+import {
+  TerminalDock,
+  defaultTerminalOpen,
+  examplePlaceholder,
+  resolveTabCompletion,
+  shouldFocusTerminalOnExpand,
+  shouldShowTabHint,
+} from './TerminalDock';
 
 describe('TerminalDock initial state', () => {
   it('renders expanded in default size by default with collapse and tall-view controls', () => {
@@ -21,12 +28,32 @@ describe('TerminalDock initial state', () => {
 
     expect(html).toContain('placeholder="예: edit 회의록.md (Tab 완성)"');
     expect(html).toContain('Tab으로 예시 명령을 채우고');
+    expect(html).toContain('Shift+Tab은 이전 항목으로 이동하며');
+    expect(html).not.toContain('Shift+Tab은 다음 항목으로 이동하며');
+  });
+});
+
+describe('terminal default open and Tab hint policy', () => {
+  it('starts expanded on desktop and collapsed on narrow or coarse-pointer screens', () => {
+    expect(defaultTerminalOpen(1366, false)).toBe(true);
+    expect(defaultTerminalOpen(640, false)).toBe(true);
+    expect(defaultTerminalOpen(390, false)).toBe(false);
+    expect(defaultTerminalOpen(320, true)).toBe(false);
+    expect(defaultTerminalOpen(844, true)).toBe(false);
+  });
+
+  it('omits the Tab hint on narrow or touch devices', () => {
+    expect(shouldShowTabHint(false, 1366)).toBe(true);
+    expect(shouldShowTabHint(false, 640)).toBe(true);
+    expect(shouldShowTabHint(false, 390)).toBe(false);
+    expect(shouldShowTabHint(true, 1024)).toBe(false);
   });
 });
 
 describe('terminal example placeholder', () => {
   it('prefixes the next command with a short hint and keeps the command pure', () => {
     expect(examplePlaceholder('git add .')).toBe('예: git add . (Tab 완성)');
+    expect(examplePlaceholder('git add .', false)).toBe('예: git add .');
   });
 
   it('falls back to a plain prompt when no example command exists', () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Pencil, Play, Save } from 'lucide-react';
 import { getNextPendingStep, isPracticeCommand, isStepCompleted, STAGE_MAP, STAGE_SCENARIOS, STAGE_TRACKS } from '../engine';
 import { diffDocumentLines, DOCUMENT_COMPARISONS, DOCUMENT_REVERT, getDocumentComparison } from '../engine/documentDiff';
@@ -19,6 +19,8 @@ export function LessonGuide() {
   const nextStep = getNextPendingStep(sim);
   const [quiz, setQuiz] = useState<{ stepId: string; picked: 0 | 1 | null } | null>(null);
   const [introExpanded, setIntroExpanded] = useState(false);
+  const [introClamped, setIntroClamped] = useState(false);
+  const introRef = useRef<HTMLParagraphElement>(null);
   const nextStepId = nextStep?.id;
   useEffect(() => {
     setQuiz((current) => (current && current.stepId !== nextStepId ? null : current));
@@ -41,7 +43,9 @@ export function LessonGuide() {
     const session = sessions[scenario.id];
     return session !== undefined && getNextPendingStep(session.sim) === null;
   });
-  const showCertificateCta = !nextStep && allComplete;
+  const showAllCertificateCta = !nextStep && allComplete;
+  const showBasicCertificateCta = finishedBasic && !allComplete;
+  const showCertificateCta = showAllCertificateCta || showBasicCertificateCta;
   const effectiveNote = nextStep?.id === 'docs-diff' && sim.staged.includes('회의록.md')
     ? '이미 장바구니에 담겨 있어서 바뀐 줄 탭은 비어 보여요. ‘담아 둔 변경’ 탭에서 방금 담은 줄을 확인해 보세요.'
     : nextStep?.commandNote;
@@ -112,6 +116,27 @@ export function LessonGuide() {
   const introText = nextStep ? lesson.tagline : finishedBasic
     ? '이제 팀 저장소의 문서를 고치고 변경을 기록한 뒤, GitHub에서 검토를 요청하고 합친 내용을 내 컴퓨터로 가져올 수 있어요. 기본 1~4장만으로도 팀 협업 시작은 충분해요. 5~9장은 선택 심화예요.'
     : lesson.takeaway;
+  const hasAdvancedNote = lesson.track === 'advanced';
+
+  useEffect(() => {
+    const element = introRef.current;
+    if (!element) return;
+    const measure = () => {
+      if (introExpanded) {
+        const lineHeight = parseFloat(getComputedStyle(element).lineHeight) || 20;
+        setIntroClamped(element.scrollHeight > lineHeight * 1.5);
+      } else {
+        setIntroClamped(element.scrollHeight > element.clientHeight + 1);
+      }
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [introText, introExpanded]);
+
+  const showIntroToggle = introClamped || hasAdvancedNote || introExpanded;
 
   return (
     <section aria-labelledby="lesson-title" className="shrink-0 border-b border-[#D7C7AE] bg-[#FFFDF8]">
@@ -120,25 +145,29 @@ export function LessonGuide() {
           <p className="mb-0.5 text-xs font-semibold text-[#80613B] sm:mb-1">{track.label} · {lesson.number}장</p>
           <h1 id="lesson-title" className="break-keep text-lg font-bold leading-tight tracking-tight sm:text-2xl">{lesson.title}</h1>
           <div className="mt-1 flex items-start gap-1.5 sm:mt-1.5">
-            <p className={`min-w-0 flex-1 max-w-[68ch] break-keep text-xs leading-relaxed text-[#59483B] sm:text-sm ${introExpanded ? '' : 'line-clamp-1'}`}>
+            <p
+              ref={introRef}
+              className={`min-w-0 flex-1 max-w-[68ch] break-keep text-xs leading-relaxed text-[#59483B] sm:text-sm ${introExpanded ? '' : 'line-clamp-1'}`}
+            >
               {introText}
             </p>
-            <button
-              type="button"
-              onClick={() => setIntroExpanded((open) => !open)}
-              aria-expanded={introExpanded}
-              className="min-h-6 shrink-0 px-1 text-xs font-semibold text-[#166447] underline"
-            >
-              {introExpanded ? '접기' : '더 보기'}
-            </button>
+            {showIntroToggle && (
+              <button
+                type="button"
+                data-testid="lesson-intro-toggle"
+                onClick={() => setIntroExpanded((open) => !open)}
+                aria-expanded={introExpanded}
+                className="min-h-6 shrink-0 px-1 text-xs font-semibold text-[#166447] underline"
+              >
+                {introExpanded ? '접기' : '더 보기'}
+              </button>
+            )}
           </div>
-          {true && (
-            <p className={`${introExpanded ? 'mt-1 block' : 'hidden'} text-xs text-[#715A43]`}>
-              이 브라우저 안의 가상 실습이에요. 실제 GitHub에는 반영되지 않아요.
-            </p>
-          )}
-          {lesson.track === 'advanced' && (
-            <p className={`${introExpanded ? 'mt-1 block' : 'hidden'} text-xs text-[#715A43]`}>
+          <p className="mt-0.5 text-[11px] leading-snug text-[#715A43] sm:mt-1 sm:text-xs">
+            가상 실습이에요. 실제 GitHub에는 반영되지 않아요.
+          </p>
+          {hasAdvancedNote && introExpanded && (
+            <p className="mt-1 text-xs text-[#715A43]">
               선택 심화 과정이에요. 기본 1~4장만 완주해도 팀 협업의 기본은 충분해요.
             </p>
           )}
@@ -230,7 +259,7 @@ export function LessonGuide() {
                         title="이 실습 앱에서만 동작하는 체험용 명령어예요"
                         className="inline-flex items-center rounded-full border border-[#D4B47C] bg-[#F7E7C4] px-2 py-0.5 text-[10px] font-semibold leading-none text-[#79521D]"
                       >
-                        실습 체험용 명령
+                        실습 전용
                       </span>
                     )}
                   </p>
@@ -242,16 +271,24 @@ export function LessonGuide() {
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                data-testid={nextLesson ? 'next-chapter-btn' : 'all-chapters-done-btn'}
+                data-testid={showBasicCertificateCta ? 'basic-certificate-btn' : nextLesson ? 'next-chapter-btn' : 'all-chapters-done-btn'}
                 onClick={() => showCertificateCta ? setCertificateOpen(true) : setStage(nextStage)}
                 className="pixel-btn inline-flex items-center gap-2 rounded-md border-[#116349] bg-[#197957] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#14694F]"
               >
-                {showCertificateCta ? '수료증 보기 · 9장 완주 🎉' : nextLabel}
+                {showAllCertificateCta
+                  ? `수료증 보기 · ${STAGE_SCENARIOS.length}장 완주 🎉`
+                  : showBasicCertificateCta
+                    ? '기본 과정 수료증 보기'
+                    : nextLabel}
                 <ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0" />
               </button>
               {showCertificateCta && (
-                <button type="button" onClick={() => setStage(nextStage)}
-                  className="rounded-md border border-[#CDBCA3] px-3 py-1.5 text-sm font-semibold">
+                <button
+                  type="button"
+                  data-testid="next-chapter-secondary-btn"
+                  onClick={() => setStage(nextStage)}
+                  className="rounded-md border border-[#CDBCA3] px-3 py-1.5 text-sm font-semibold"
+                >
                   {nextLabel}
                 </button>
               )}

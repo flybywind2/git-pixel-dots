@@ -2842,7 +2842,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         state, draft, 'STASH', '작업 임시 보관하기', 'stash@{0}', cmd,
         [{ text: `수정 내용을 보관했어요. 보관 항목 ${stashes.length}개. stash@{0}이 가장 최근 항목이에요.`, tone: 'mint' },
           ...(untracked.length > 0 && !includeUntracked
-            ? [{ text: `추적하지 않는 새 파일(${untracked.map(([path]) => path).join(', ')})은 보관함에 넣지 않고 작업 폴더에 그대로 뒀어요.`, tone: 'muted' as const }]
+            ? [{ text: `아직 한 번도 기록하지 않은 새 파일(${untracked.map(([path]) => path).join(', ')})은 보관함에 넣지 않고 작업 폴더에 그대로 뒀어요.`, tone: 'muted' as const }]
             : [])],
         makeBubble(
           `stash-${seqNext}`,
@@ -2850,7 +2850,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           34,
           54,
           '하던 작업을 잠시 보관했어요',
-          '고치던 파일이 최근 커밋 상태로 돌아왔어요. 새 파일(추적하지 않는 파일)은 작업 폴더에 그대로 남아 있어요.',
+          '고치던 파일이 최근 커밋 상태로 돌아왔어요. 아직 한 번도 기록하지 않은 새 파일은 작업 폴더에 그대로 남아 있어요.',
           state.stageId === 'docs' ? '보관한 수정은 git stash pop으로 다시 꺼낼 수 있어요.' : undefined,
           state.stageId === 'docs' ? [{ label: '보관함에서 꺼내기', command: 'git stash pop', tone: 'primary' }] : undefined,
         ),
@@ -3225,7 +3225,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             state,
             cmd,
             '작업 파일 되돌리기는 이 실습에서 다루지 않아요',
-            '작업 파일 되돌리기는 이 실습에서 다루지 않아요. 원치 않은 수정은 상단의 ‘이전 단계로’로 되돌릴 수 있어요.',
+            '작업 파일 되돌리기는 이 실습에서 다루지 않아요. 원치 않은 수정은 상단의 ‘이전 단계’로 되돌릴 수 있어요.',
             'amber',
           );
         }
@@ -3346,12 +3346,12 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
             state, state, 'IDLE', 'feat/dark를 main에서 시작하지 않았어요', undefined, cmd,
             [
               { text: `${state.headBranch} 브랜치에 이미 ${targetName}의 커밋이 들어 있어 합칠 새 변경이 없어요.`, tone: 'amber' },
-              { text: 'main에서 새 브랜치를 만들어야 두 변경을 합쳐 볼 수 있어요. git switch main으로 이동하거나 상단의 ‘이전 단계로’를 눌러 되돌려 보세요.', tone: 'muted' },
+              { text: 'main에서 새 브랜치를 만들어야 두 변경을 합쳐 볼 수 있어요. git switch main으로 이동하거나 상단의 ‘이전 단계’를 눌러 되돌려 보세요.', tone: 'muted' },
             ],
             makeBubble(
               `merge-noop-ch3-${seqNext}`, 'buddy', 40, 52,
               'feat/dark를 main에서 시작하지 않았어요',
-              `현재 브랜치(${state.headBranch})가 이미 ${targetName}의 기록을 포함하고 있어서 새로 합칠 변경이 없어요. main으로 이동하거나 상단의 ‘이전 단계로’를 눌러 다시 시작해 보세요.`,
+              `현재 브랜치(${state.headBranch})가 이미 ${targetName}의 기록을 포함하고 있어서 새로 합칠 변경이 없어요. main으로 이동하거나 상단의 ‘이전 단계’를 눌러 다시 시작해 보세요.`,
               'git switch main으로 이동해 보세요.',
               [{ label: 'main으로 이동', command: 'git switch main', tone: 'primary' }],
             ),

@@ -1298,11 +1298,26 @@ describe('Utility commands, unknown commands & autocomplete', () => {
     expect(blockedPush.terminal.at(-1)?.lines.some((line) => line.text.includes('GH006') && line.text.includes('보호된 main'))).toBe(true);
   });
 
-  it('Ch4: separates the author approval check from the reviewer approval action', () => {
+  it('Ch4/Ch3/Ch1: uses concise non-dev copy and places CI note on PR creation', () => {
+    const branchStep = STAGE_MAP.ch4.steps.find((step) => step.doneAction === 'BRANCH');
+    const pushStep = STAGE_MAP.ch4.steps.find((step) => step.doneAction === 'PUSH');
+    const prCreateStep = STAGE_MAP.ch4.steps.find((step) => step.doneAction === 'PR_CREATE');
     const reviewStep = STAGE_MAP.ch4.steps.find((step) => step.doneAction === 'PR_REVIEW');
-    expect(reviewStep?.commandNote).toContain('Conversation');
-    expect(reviewStep?.commandNote).toContain('리뷰어(팀원)');
-    expect(reviewStep?.commandNote).toContain('자동');
+    expect(branchStep?.prediction?.explain).toContain('main은 그대로이고, 나만 새 브랜치로 옮겨 가요');
+    expect(pushStep?.commandNote).not.toContain('자동 검사(CI)');
+    expect(prCreateStep?.commandNote).toContain('자동 검사(CI)');
+    expect(reviewStep?.commandNote).toContain('실습에서는 팀원 승인이 바로 도착해요');
+    expect(reviewStep?.commandNote).toContain('실제로는 팀원이 볼 때까지 기다려요');
+    expect(reviewStep?.commandNote).not.toContain('Files changed');
+
+    const stashStep = STAGE_MAP.ch2.steps.find((step) => step.doneAction === 'STASH');
+    expect(stashStep?.commandNote).toContain('아직 한 번도 기록하지 않은 새 파일');
+    expect(stashStep?.commandNote).not.toContain('추적하지 않는');
+    expect(STAGE_MAP.ch2.title).toContain('보관');
+    expect(STAGE_MAP.ch2.title).toContain('취소');
+
+    const docsDiffStep = STAGE_MAP.docs.steps.find((step) => step.id === 'docs-diff');
+    expect(docsDiffStep?.goal).toBe('방금 고친 문서에서 바뀐 줄 찾기');
   });
 
   it('does not point to a missing yellow button after the chapter is complete', () => {

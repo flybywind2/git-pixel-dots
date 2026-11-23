@@ -35,7 +35,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
     ],
     steps: [
       { id: 'docs-edit', label: '문서 편집하기', goal: '회의록.md의 "금요일 저녁 7시"를 다른 시간으로 바꾸고 저장하기', command: 'edit 회의록.md', doneAction: 'EDIT', terms: ['회의록.md'] },
-      { id: 'docs-diff', label: '바뀐 줄 확인하기', goal: '방금 고친 문서와 이전 기준 비교하기', command: working.command, doneAction: working.action, terms: ['diff', '스테이징 영역'], commandNote: '아직 담기 전이라 원래 초안과 비교돼요. -- 뒤에 비교할 파일 이름을 적어요.' },
+      { id: 'docs-diff', label: '바뀐 줄 확인하기', goal: '방금 고친 문서에서 바뀐 줄 찾기', command: working.command, doneAction: working.action, terms: ['diff', '스테이징 영역'], commandNote: '아직 담기 전이라 원래 초안과 비교돼요. -- 뒤에 비교할 파일 이름을 적어요.' },
       { id: 'docs-add', label: '다음 기록에 담기', goal: '검토한 회의록.md를 다음 커밋에 담기', command: 'git add 회의록.md', doneAction: 'ADD', terms: ['스테이징 영역'],
         prediction: {
           question: '다음 기록에 담기(git add)를 누르면 문서는 어디로 갈까요?',
@@ -141,7 +141,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
   ch2: {
     track: 'basic',
     shortTitle: '보관과 취소',
-    title: '작업 도중에 지난 커밋을 취소하려면?',
+    title: '실수로 담은 파일 빼고, 작업 보관·취소하려면?',
     tagline: '실수로 담은 비밀 메모를 장바구니에서 빼고, 잘못 올린 안내를 되돌려요.',
     takeaway: '비밀 메모는 장바구니에서 빼서 커밋에 들어가지 않게 했어요. stash로 하던 일을 보관하고, revert로 지난 변경을 취소하는 커밋을 남겼어요. stash pop으로 중단했던 작업도 되찾고, 취소 커밋을 팀에 공유해 GitHub에서도 임시 안내를 없앴어요.',
     accent: '#fbbf24',
@@ -174,7 +174,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'git stash',
         doneAction: 'STASH',
         terms: ['stash'],
-        commandNote: '되돌리기 작업과 섞이지 않게 작업 폴더를 비워요. 추적하지 않는 새 파일(비밀 메모)은 보관함에 들어가지 않고 작업 폴더에 그대로 남아요.',
+        commandNote: '되돌리기 작업과 섞이지 않게 작업 폴더를 비워요. 아직 한 번도 기록하지 않은 새 파일(비밀 메모)은 보관함에 들어가지 않고 작업 폴더에 그대로 남아요.',
         prediction: {
           question: '작업 임시 보관하기(git stash)를 실행하면 고치던 변경은 어디로 갈까요?',
           choices: ['임시 보관함에 들어가 작업 폴더가 깨끗해져요', '영구 삭제돼요'],
@@ -272,7 +272,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
           question: '새 브랜치 만들기(git switch -c) 뒤 main은 어떻게 될까요?',
           choices: ['그대로 남아 있어요', '새 브랜치로 바뀌어 사라져요'],
           answer: 0,
-          explain: '브랜치는 별도 갈래예요. main은 그대로이고 HEAD만 새 브랜치로 이동해요.',
+          explain: '브랜치는 별도 갈래예요. main은 그대로이고, 나만 새 브랜치로 옮겨 가요.',
         },
       },
       {
@@ -302,7 +302,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: `git push -u origin ${MEETING_PR_BRANCH}`,
         doneAction: 'PUSH',
         terms: ['원격 저장소', 'origin'],
-        commandNote: '-u는 원격 브랜치와 연결해 다음부터 git push만으로 보내게 해요. GitHub에 올라가면 자동 검사(CI)가 PR의 변경을 확인해요.',
+        commandNote: '-u는 원격 브랜치와 연결해 다음부터 git push만으로 보내게 해요.',
         prediction: {
           question: '팀에 공유하기(git push -u origin docs/meeting) 뒤 새 브랜치는 어디에 보일까요?',
           choices: ['내 컴퓨터에만', 'GitHub에도'],
@@ -316,8 +316,8 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         goal: '제목과 본문을 적어 회의록 변경을 검토해 달라는 PR 열기',
         command: `gh pr create --title "${MEETING_PR_TITLE}" --body "장소를 2층 모임방으로 바꿨어요. 검토 부탁해요!"`,
         doneAction: 'PR_CREATE',
-        terms: ['gh', '풀 리퀘스트(PR)'],
-        commandNote: '--title은 제목, --body는 변경 이유를 적는 본문이에요. GitHub 웹에서는 Compare & pull request → Create pull request 버튼과 같아요.',
+        terms: ['gh', '풀 리퀘스트(PR)', '자동 검사(CI)'],
+        commandNote: '--title은 제목, --body는 변경 이유를 적는 본문이에요. PR을 열면 자동 검사(CI)가 변경을 확인해요. GitHub 웹에서는 Compare & pull request → Create pull request 버튼과 같아요.',
       },
       {
         id: 'ch4-review',
@@ -326,7 +326,7 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         command: 'gh pr view --comments',
         doneAction: 'PR_REVIEW',
         terms: ['승인'],
-        commandNote: '--comments를 붙이면 리뷰 의견까지 볼 수 있어요. GitHub 웹에서는 PR의 Conversation 탭에서 팀원 리뷰·승인을 확인해요. Files changed → Review changes → Approve(승인)는 리뷰어(팀원)가 하는 일이에요. 이 실습에서는 이 명령을 실행할 때 팀원 승인이 자동으로 도착해요.',
+        commandNote: '--comments를 붙이면 리뷰 의견까지 볼 수 있어요. 실습에서는 팀원 승인이 바로 도착해요. 실제로는 팀원이 볼 때까지 기다려요.',
       },
       {
         id: 'ch4-pr-merge',

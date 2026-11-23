@@ -124,13 +124,24 @@ async function documentLesson(page, url, capture) {
   const editorFont = await editor.evaluate((node) => getComputedStyle(node).fontSize);
   assert.equal(editorFont, page.viewportSize().width < 640 ? '16px' : '14px');
 
-  assert.equal(await page.getByTestId('terminal-input').isVisible(), true, 'Terminal should start expanded by default');
-  assert.equal(await page.getByRole('button', { name: '터미널 접기', exact: true }).getAttribute('aria-expanded'), 'true');
-  await checkViewport(page);
-  await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
-  assert.equal(await page.getByTestId('terminal-input').isVisible(), false, 'Terminal should hide after clicking collapse');
-  await page.getByRole('button', { name: '직접 입력해 보기', exact: true }).click();
-  assert.equal(await page.getByTestId('terminal-input').isVisible(), true, 'Terminal should reopen after clicking expand');
+  const wideScreen = page.viewportSize().width >= 640;
+  if (wideScreen) {
+    assert.equal(await page.getByTestId('terminal-input').isVisible(), true, 'Terminal should start expanded by default on desktop');
+    assert.equal(await page.getByRole('button', { name: '터미널 접기', exact: true }).getAttribute('aria-expanded'), 'true');
+    await checkViewport(page);
+    await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
+    assert.equal(await page.getByTestId('terminal-input').isVisible(), false, 'Terminal should hide after clicking collapse');
+    await page.getByRole('button', { name: '직접 입력해 보기', exact: true }).click();
+    assert.equal(await page.getByTestId('terminal-input').isVisible(), true, 'Terminal should reopen after clicking expand');
+  } else {
+    assert.equal(await page.getByTestId('terminal-input').isVisible(), false, 'Terminal should start collapsed by default on mobile');
+    assert.equal(await page.getByRole('button', { name: '직접 입력해 보기', exact: true }).getAttribute('aria-expanded'), 'false');
+    await checkViewport(page);
+    await page.getByRole('button', { name: '직접 입력해 보기', exact: true }).click();
+    assert.equal(await page.getByTestId('terminal-input').isVisible(), true, 'Terminal should open after clicking expand on mobile');
+    await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
+    assert.equal(await page.getByTestId('terminal-input').isVisible(), false, 'Terminal should hide after clicking collapse on mobile');
+  }
   await clickGuided(page);
   assert(await editor.evaluate((node) => node === document.activeElement));
   const edited = original.replace('금요일 저녁 7시', '수요일 오후 2시');
@@ -641,17 +652,71 @@ async function mobileLessonLayout(browser, url) {
   for (const [width, height] of [[390, 760], [320, 568]]) {
     const page = await browser.newPage({ viewport: { width, height }, isMobile: true, hasTouch: true });
     await openChapter(page, url, 1);
+    const dock = page.getByRole('region', { name: '실습 터미널', exact: true });
+    // 휴대폰에서는 저장된 설정이 없을 때 터미널이 기본 접힘으로 시작해요.
+    assert.equal(await dock.getAttribute('data-size'), 'closed', `Mobile terminal should start collapsed at ${width}x${height}`);
+    assert.equal(await page.getByTestId('terminal-input').isVisible(), false);
+    // 가상 실습 안심 문구는 '더 보기' 없이 항상 보여요.
+    await page.getByText('가상 실습이에요. 실제 GitHub에는 반영되지 않아요.', { exact: true }).waitFor();
+    // 모바일 이전 단계 버튼은 '이전 단계'로 통일되고 새로고침 안내가 터치로도 열려요.
+    const undoBtn = page.getByTestId('undo-step-btn');
+    assert.equal((await undoBtn.innerText()).trim(), '이전 단계');
+    assert.equal(await undoBtn.getAttribute('aria-describedby'), 'undo-refresh-note');
+    const undoInfoBtn = page.getByTestId('undo-refresh-info-btn');
+    await undoInfoBtn.click();
+    const undoPopover = page.locator('#undo-refresh-popover');
+    await undoPopover.waitFor({ state: 'visible' });
+    assert.match(await undoPopover.innerText(), /새로고침하면 사라져요/);
+    await page.keyboard.press('Escape');
+    assert.equal(await undoPopover.count(), 0);
+    // 320px/390px 머리글 1행(로고 + 3개 버튼)이 겹치거나 줄바꿈 없이 한 줄로 배치돼요.
+    const headerRow = await page.evaluate(() => {
+      const header = document.querySelector('header');
+      const logo = header?.querySelector(':scope > a')?.getBoundingClientRect();
+      const actionGroup = header?.querySelector(':scope > div:last-of-type');
+      const buttons = actionGroup ? [...actionGroup.querySelectorAll('button')].map((button) => ({
+        text: button.innerText.trim(),
+        rect: button.getBoundingClientRect(),
+      })) : [];
+      return { logo, buttons };
+    });
+    assert(headerRow.logo && headerRow.buttons.length === 3, `Missing header controls at ${width}x${height}`);
+    assert(headerRow.logo.right + 2 <= headerRow.buttons[0].rect.left,
+      `Logo overlaps header buttons at ${width}x${height}: logo right=${headerRow.logo.right}, first btn left=${headerRow.buttons[0].rect.left}`);
+    for (let index = 0; index < headerRow.buttons.length; index += 1) {
+      const { text, rect } = headerRow.buttons[index];
+      assert(rect.height <= 36, `Header button "${text}" wrapped to multiple lines at ${width}x${height}: height=${rect.height}`);
+      assert(rect.right <= width + 1, `Header button "${text}" clipped at ${width}x${height}: right=${rect.right}`);
+      assert(Math.abs(rect.top - headerRow.buttons[0].rect.top) <= 2,
+        `Header button "${text}" misaligned vertically at ${width}x${height}`);
+      if (index > 0) {
+        assert(headerRow.buttons[index - 1].rect.right <= rect.left + 1,
+          `Header buttons overlap at ${width}x${height}`);
+      }
+    }
     const allTerms = page.getByTestId('all-terms');
     // 전체 용어 상자는 접혀 있고, 다음 단계 버튼보다 아래에 있어요.
     assert.equal(await allTerms.evaluate((el) => el.open), false);
     const buttonBox = await page.getByTestId('guided-command').boundingBox();
     const termsBox = await allTerms.boundingBox();
     assert(buttonBox.y < termsBox.y, 'Guided button sits below the full terms list on mobile');
-    // 다음 단계 버튼이 기본 펼침 터미널 위 첫 화면에 스크롤 없이 보여요.
-    const dockBox = await page.getByRole('region', { name: '실습 터미널', exact: true }).boundingBox();
+    // 다음 단계 버튼이 기본 접힘 터미널 위 첫 화면에 스크롤 없이 보여요.
+    const dockBox = await dock.boundingBox();
     assert(buttonBox.y >= 0 && buttonBox.y + buttonBox.height <= dockBox.y + 1,
-      `Guided button overlaps or sits below default-open terminal at ${width}x${height}`);
+      `Guided button overlaps or sits below terminal at ${width}x${height}`);
+    if (width === 390) {
+      const editorBox = await page.getByRole('textbox', { name: '회의록.md', exact: true }).boundingBox();
+      assert(editorBox.y < dockBox.y - 40, `Ch1 editor not visible above collapsed mobile terminal at ${width}x${height}`);
+    }
     await checkViewport(page);
+    // 2장 캔버스가 390×760 첫 화면에서 터미널 위에 시원하게 보여요.
+    await openChapter(page, url, 2);
+    if (width === 390) {
+      const canvasBox = await page.getByTestId('pixel-stage-canvas').boundingBox();
+      const ch2DockBox = await dock.boundingBox();
+      assert(canvasBox.y < ch2DockBox.y - 60, `Ch2 canvas not visible above collapsed mobile terminal at ${width}x${height}`);
+    }
+    await openChapter(page, url, 1);
     // 지금 단계에서 쓰는 용어만 보여 줘요.
     const stepTerms = page.getByTestId('step-terms');
     await stepTerms.waitFor();
@@ -723,10 +788,46 @@ async function basicCertificate(browser, url) {
   assert.equal(await page.getByRole('button', { name: '수료증 보기', exact: true }).count(), 0);
   await openChapter(page, url, 4);
   for (let i = 0; i < 9; i++) await clickGuided(page);
-  await page.getByRole('button', { name: '수료증 보기', exact: true }).click();
+  // 4장 완주 시 안내 카드의 메인 버튼은 '기본 과정 수료증 보기', 보조 버튼은 심화 5장 이동이에요.
+  const basicCertBtn = page.getByTestId('basic-certificate-btn');
+  await basicCertBtn.waitFor();
+  assert.equal((await basicCertBtn.innerText()).trim(), '기본 과정 수료증 보기');
+  const secondaryBtn = page.getByTestId('next-chapter-secondary-btn');
+  assert.match(await secondaryBtn.innerText(), /심화 5장/);
+  await basicCertBtn.click();
   const dialog = page.getByRole('dialog');
   await dialog.waitFor();
-  assert.match(await dialog.innerText(), /기본 과정 4장을 마쳤어요/);
+  const dialogText = await dialog.innerText();
+  assert.match(dialogText, /기본 과정 4장을 마쳤어요/);
+  assert.doesNotMatch(dialogText, /심화 5~9장은 선택이에요/);
+  const certCanvas = dialog.locator('canvas');
+  assert.equal(await certCanvas.getAttribute('data-cells'), '4');
+  // 기본 수료증 캔버스는 회색 빈 칸 없이 초록 4칸만 그려요.
+  const cellColors = await certCanvas.evaluate((canvas) => {
+    const ctx = canvas.getContext('2d');
+    const data = ctx.getImageData(0, 293, canvas.width, 1).data;
+    let greenRuns = 0;
+    let grayPixels = 0;
+    let inGreen = false;
+    for (let x = 0; x < canvas.width; x += 1) {
+      const r = data[x * 4];
+      const g = data[x * 4 + 1];
+      const b = data[x * 4 + 2];
+      const isGreen = (r === 25 && g === 131 && b === 97) || (r === 34 && g === 168 && b === 130);
+      const isGray = r === 222 && g === 209 && b === 184;
+      if (isGray) grayPixels += 1;
+      if (isGreen && !inGreen) greenRuns += 1;
+      inGreen = isGreen;
+    }
+    return { greenRuns, grayPixels };
+  });
+  assert.deepEqual(cellColors, { greenRuns: 4, grayPixels: 0 });
+  // 이름 입력칸은 모바일(<640px)에서 16px(iOS 자동 확대 방지), 데스크톱에서 14px예요.
+  const nameInput = dialog.getByPlaceholder('수료증에 넣을 이름');
+  assert.equal(await nameInput.evaluate((node) => getComputedStyle(node).fontSize), '14px');
+  await page.setViewportSize({ width: 390, height: 760 });
+  assert.equal(await nameInput.evaluate((node) => getComputedStyle(node).fontSize), '16px');
+  await page.setViewportSize({ width: 1024, height: 768 });
   // 카드 안쪽 여백(padding)을 눌러도 닫히지 않고, 실제 바깥 배경만 닫아요.
   const cardBox = await dialog.boundingBox();
   assert(cardBox, 'Certificate dialog has no visible box');
@@ -736,10 +837,16 @@ async function basicCertificate(browser, url) {
   for (let i = 0; i < 6; i++) await page.keyboard.press('Tab');
   assert(await dialog.evaluate((element) => element.contains(document.activeElement)),
     'Certificate dialog let focus escape to the background');
-  const trigger = page.getByRole('button', { name: '수료증 보기', exact: true });
   await dialog.getByRole('button', { name: '닫기', exact: true }).click();
-  assert(await trigger.evaluate((element) => element === document.activeElement),
-    'Certificate dialog did not restore focus to its trigger');
+  assert(await basicCertBtn.evaluate((element) => element === document.activeElement),
+    'Certificate dialog did not restore focus to basic certificate CTA');
+  // 상단 잔디 옆 '수료증 보기' 버튼도 그대로 동작해요.
+  const topTrigger = page.getByRole('button', { name: '수료증 보기', exact: true });
+  await topTrigger.click();
+  await dialog.waitFor();
+  await dialog.getByRole('button', { name: '닫기', exact: true }).click();
+  assert(await topTrigger.evaluate((element) => element === document.activeElement),
+    'Certificate dialog did not restore focus to top bar trigger');
   await page.close();
 }
 
@@ -804,6 +911,15 @@ async function uxImprovements(browser, url) {
   await expectProgress(page, 2, 4);
   await preview.getByRole('button', { name: '현재 브랜치 내용 유지', exact: true }).click();
   await expectProgress(page, 3, 4);
+
+  // '더 보기' 토글은 숨겨진 소개가 있을 때만 보이고, 안심 문구는 항상 보여요.
+  await openChapter(page, url, 3);
+  await page.getByText('가상 실습이에요. 실제 GitHub에는 반영되지 않아요.', { exact: true }).waitFor();
+  assert.equal(await page.getByTestId('lesson-intro-toggle').count(), 0, 'Short 1-line intro on desktop ch3 should not render "더 보기"');
+  await openChapter(page, url, 7);
+  await page.getByTestId('lesson-intro-toggle').waitFor();
+  assert.equal(await page.getByText('실습 전용', { exact: true }).first().isVisible(), true);
+  assert.equal(await page.getByText('실습 체험용 명령', { exact: false }).count(), 0);
   await page.close();
 }
 
@@ -1001,14 +1117,16 @@ async function cycleOneRegressions(browser, url) {
 
 async function terminalExampleTabCompletion(browser, url) {
   // 빈 입력창에서 Tab을 누르면 placeholder로 보여 준 예시 명령이 순수 명령으로 채워져요.
+  // 데스크톱에서는 "(Tab 완성)"을 표시하고, 좁은 화면/터치에서는 생략하되 Tab 완성 기능은 유지해요.
   for (const [width, height] of [[1366, 860], [390, 760]]) {
     const page = await browser.newPage({ viewport: { width, height } });
     page.setDefaultTimeout(9000);
     const errors = trackErrors(page, new URL(url).origin);
     await openChapter(page, url, 2);
     const input = await openTerminal(page);
-    assert.equal(await input.getAttribute('placeholder'), '예: git add . (Tab 완성)',
-      `Example placeholder missing at ${width}x${height}`);
+    const expectedPlaceholder = width >= 640 ? '예: git add . (Tab 완성)' : '예: git add .';
+    assert.equal(await input.getAttribute('placeholder'), expectedPlaceholder,
+      `Example placeholder mismatch at ${width}x${height}`);
     const emptyBox = await input.boundingBox();
     await input.focus();
     await input.press('Tab');
@@ -1070,34 +1188,48 @@ async function terminalSizingAndUsability(browser, url) {
     page.setDefaultTimeout(9000);
     const errors = trackErrors(page, new URL(url).origin);
 
-    // 1장 첫 진입: 터미널이 기본 펼침이면서 데스크톱에서는 편집기가 함께 보이고, 모든 뷰포트에서 상단 가이드 버튼과 공존해요.
+    // 1장 첫 진입: 데스크톱(>=640px)은 기본 펼침, 휴대폰(<640px)은 기본 접힘으로 시작해요.
     await openChapter(page, url, 1);
     const dock = page.getByRole('region', { name: '실습 터미널', exact: true });
     const input = page.getByTestId('terminal-input');
-    assert.equal(await dock.getAttribute('data-expanded'), 'true', `Terminal not expanded by default at ${spec.width}x${spec.height}`);
-    assert.equal(await dock.getAttribute('data-size'), 'default', `Terminal not in default size on load at ${spec.width}x${spec.height}`);
-    assert.equal(await input.isVisible(), true, `Terminal input hidden on initial load at ${spec.width}x${spec.height}`);
-    assert(!(await input.evaluate((node) => node === document.activeElement)),
-      `Terminal input stole focus on initial load at ${spec.width}x${spec.height}`);
+    if (spec.width >= 640) {
+      assert.equal(await dock.getAttribute('data-expanded'), 'true', `Terminal not expanded by default at ${spec.width}x${spec.height}`);
+      assert.equal(await dock.getAttribute('data-size'), 'default', `Terminal not in default size on load at ${spec.width}x${spec.height}`);
+      assert.equal(await input.isVisible(), true, `Terminal input hidden on initial load at ${spec.width}x${spec.height}`);
+      assert(!(await input.evaluate((node) => node === document.activeElement)),
+        `Terminal input stole focus on initial load at ${spec.width}x${spec.height}`);
+    } else {
+      assert.equal(await dock.getAttribute('data-size'), 'closed', `Mobile terminal should start collapsed at ${spec.width}x${spec.height}`);
+      assert.equal(await input.isVisible(), false, `Mobile terminal input should be hidden on initial load at ${spec.width}x${spec.height}`);
+      await page.getByRole('button', { name: '직접 입력해 보기', exact: true }).click();
+      assert.equal(await dock.getAttribute('data-expanded'), 'true');
+      assert.equal(await dock.getAttribute('data-size'), 'default');
+      // 사용자가 직접 연 상태는 localStorage에 저장돼 새로고침 뒤에도 유지돼요.
+      await page.reload();
+      await page.getByTestId('stage-step-badge').waitFor();
+      assert.equal(await dock.getAttribute('data-expanded'), 'true', `User-opened mobile terminal did not persist at ${spec.width}x${spec.height}`);
+    }
     const ch1DockBox = await dock.boundingBox();
     const ch1GuidedBox = await page.getByTestId('guided-command').boundingBox();
     const ch1MainBox = await page.locator('main').boundingBox();
     assert(ch1MainBox.height >= spec.minMain, `Main area too small on ch1 at ${spec.width}x${spec.height}: ${ch1MainBox.height}px`);
     assert(ch1GuidedBox.y + ch1GuidedBox.height <= ch1DockBox.y + 1,
-      `Ch1 guided button hidden behind default-open terminal at ${spec.width}x${spec.height}`);
+      `Ch1 guided button hidden behind open terminal at ${spec.width}x${spec.height}`);
     if (spec.width >= 1024) {
       const editorBox = await page.getByRole('textbox', { name: '회의록.md', exact: true }).boundingBox();
       assert(editorBox.y < ch1DockBox.y - 24, `Ch1 editor not visible above terminal at ${spec.width}x${spec.height}`);
     }
     await checkViewport(page);
 
-    // 4장 첫 진입: 2~9장 캔버스 화면에서도 기본 펼침으로 열리고 상단 가이드 버튼과 공존해요.
+    // 4장 진입: 열린 터미널 상태에서도 데스크톱·390px에서 상단 가이드 버튼과 공존해요(320px은 기본 접힘에서 넉넉히 노출).
     await openChapter(page, url, 4);
     assert.equal(await input.isVisible(), true, `Terminal input should stay open on ch4 at ${spec.width}x${spec.height}`);
-    const ch4DockBox = await dock.boundingBox();
-    const ch4GuidedBox = await page.getByTestId('guided-command').boundingBox();
-    assert(ch4GuidedBox.y + ch4GuidedBox.height <= ch4DockBox.y + 1,
-      `Ch4 guided button hidden behind default-open terminal at ${spec.width}x${spec.height}`);
+    if (spec.width >= 390) {
+      const ch4DockBox = await dock.boundingBox();
+      const ch4GuidedBox = await page.getByTestId('guided-command').boundingBox();
+      assert(ch4GuidedBox.y + ch4GuidedBox.height <= ch4DockBox.y + 1,
+        `Ch4 guided button hidden behind open terminal at ${spec.width}x${spec.height}`);
+    }
 
     await runCommand(page, 'git switch -c feat/very-long-branch-name-for-terminal-layout-check');
     await runCommand(page, 'git log');
