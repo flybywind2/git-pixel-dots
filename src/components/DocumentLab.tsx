@@ -43,12 +43,21 @@ export function DocumentLab() {
   const comparison = getDocumentComparison(sim, mode);
   const tabRefs = useRef<Partial<Record<DocumentComparison, HTMLButtonElement | null>>>({});
   const focusTabAfterCompare = useRef<DocumentComparison | null>(null);
+  const focusAfterAction = useRef(false);
+  const bubbleRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const target = focusTabAfterCompare.current;
     if (!target || unsaved) return;
     focusTabAfterCompare.current = null;
     tabRefs.current[target]?.focus();
   }, [unsaved, mode]);
+  useEffect(() => {
+    if (!focusAfterAction.current) return;
+    focusAfterAction.current = false;
+    if (document.activeElement && document.activeElement !== document.body) return;
+    const guided = document.querySelector<HTMLButtonElement>('[data-testid="guided-command"]');
+    (guided && !guided.disabled ? guided : bubbleRef.current)?.focus({ preventScroll: true });
+  }, [sim.lastAnim.seq]);
   const before = comparison?.before;
   const after = comparison?.after;
   const lines = useMemo(
@@ -73,6 +82,7 @@ export function DocumentLab() {
       return;
     }
     setPendingCompare(null);
+    focusTabAfterCompare.current = item;
     runCommand(DOCUMENT_COMPARISONS[item].command);
   }
 
@@ -91,12 +101,19 @@ export function DocumentLab() {
       return;
     }
     setPendingCompare(null);
+    focusTabAfterCompare.current = 'working';
     runCommand(DOCUMENT_COMPARISONS.working.command);
   }
 
   function addToNextCommit() {
+    focusAfterAction.current = true;
     if (unsaved) saveDocument();
     runCommand(`git add ${DOCUMENT_PATH}`);
+  }
+
+  function runBubbleOrCardAction(command: string) {
+    focusAfterAction.current = true;
+    runCommand(command);
   }
 
   // 충돌 안내 영역이 이미 제공하는 버튼은 말풍선에서 중복해서 보여 주지 않아요.
@@ -108,10 +125,12 @@ export function DocumentLab() {
       <div className="mx-auto grid w-full max-w-[1440px] min-w-0 items-start gap-4 px-4 py-5 sm:px-6 lg:grid-cols-2">
         {sim.bubbles.length > 0 && (
           <section
+            ref={bubbleRef}
+            tabIndex={-1}
             aria-live="polite"
             data-testid="speech-bubble"
             style={{ borderColor: SPEAKER_THEMES[sim.bubbles[0].speaker].border }}
-            className="rounded-xl border bg-[#FFFDF8] px-4 py-3 lg:col-span-2"
+            className="rounded-xl border bg-[#FFFDF8] px-4 py-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#80613B] lg:col-span-2"
           >
             <div className="flex items-center gap-2">
               <span
@@ -132,7 +151,7 @@ export function DocumentLab() {
             {bubbleActions.length > 0 && (
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 {bubbleActions.map((act) => (
-                  <button key={`${act.label}-${act.command}`} type="button" onClick={() => runCommand(act.command)}
+                  <button key={`${act.label}-${act.command}`} type="button" onClick={() => runBubbleOrCardAction(act.command)}
                     className="pixel-btn cursor-pointer rounded-md border border-[#CDBCA3] bg-[#FAF4E8] px-2.5 py-1 text-xs font-semibold hover:bg-[#F0E5CF]">
                     {act.label}
                   </button>
@@ -149,12 +168,12 @@ export function DocumentLab() {
               {(conflict.resolvedChoice === 'none' ? [
                 ['현재 버전 유지', 'resolve ours'], ['이전 버전 사용', 'resolve theirs'],
               ] : [['취소 커밋 기록하기', 'git revert --continue']]).map(([label, command]) => (
-                <button key={command} type="button" onClick={() => runCommand(command)}
+                <button key={command} type="button" onClick={() => runBubbleOrCardAction(command)}
                   className="rounded-md border border-[#BF8B29] bg-[#F4B942] px-3 py-1.5 text-sm font-semibold">
                   {label}
                 </button>
               ))}
-              <button type="button" onClick={() => runCommand('git revert --abort')}
+              <button type="button" onClick={() => runBubbleOrCardAction('git revert --abort')}
                 className="rounded-md border border-[#CDBCA3] bg-[#FFFDF8] px-3 py-1.5 text-sm font-semibold">
                 취소 작업 중단
               </button>
@@ -170,8 +189,20 @@ export function DocumentLab() {
               <FileText aria-hidden="true" className="h-4 w-4 text-[#886237]" />
               <code className="font-mono-code text-sm">{DOCUMENT_PATH}</code>
             </label>
-            <span role="status" id="document-file-status" className="text-xs font-medium text-[#705638]">{fileStatus}</span>
+            <span id="document-file-status" className="text-xs font-medium text-[#705638]">{fileStatus}</span>
           </header>
+          {sim.stashes.length > 0 && (
+            <div data-testid="document-stash-banner" className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E3D5BE] bg-[#F8F3FD] px-4 py-2 text-xs text-[#5B3E9E]">
+              <span className="font-semibold">임시 보관함: {sim.stashes.length}개</span>
+              <button
+                type="button"
+                onClick={() => runBubbleOrCardAction('git stash pop')}
+                className="rounded-md border border-[#B69AD9] bg-[#FFFDF8] px-2.5 py-1 text-xs font-semibold text-[#5B3E9E] hover:bg-[#EFE6FA]"
+              >
+                꺼내기
+              </button>
+            </div>
+          )}
           <textarea
             id="practice-document-editor"
             aria-describedby="document-file-status"
@@ -248,7 +279,7 @@ export function DocumentLab() {
             <p className="text-sm font-semibold">{beforeLabel} 기준으로 {view.after} 비교</p>
             <code className="font-mono-code break-words text-xs text-[#705638]">{view.command}</code>
           </div>
-          <div role="status" className="px-4 py-2.5 text-sm text-[#59483B]">
+          <div className="px-4 py-2.5 text-sm text-[#59483B]">
             <p className="font-semibold text-[#715A43]">‘{view.label}’ 비교 기준: {beforeLabel} → {view.after}</p>
             <p className="mt-0.5">
               {!comparison

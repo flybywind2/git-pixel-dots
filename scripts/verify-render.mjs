@@ -295,7 +295,7 @@ async function practiceTracks(page, url) {
   await runCommand(page, 'git show HEAD:회의록.md');
   await page.getByRole('log').getByText(/장소는 2층 모임방이에요\./).last().waitFor();
 
-  // GitHub 웹 안내는 장을 완료한 뒤에만 보여요.
+  // GitHub 웹 안내는 1·4장에서 언제나 펼쳐 볼 수 있어요.
   await page.getByText('GitHub 웹에서 이어 하기', { exact: false }).click();
   await page.getByText('Create pull request', { exact: true }).waitFor();
   const webGuideText = await page.getByTestId('github-web-guide').innerText();
@@ -389,10 +389,11 @@ async function storageRecovery(page, url) {
   await page.reload();
   await expectProgress(page, 0, 4);
 
-  // docs는 v2 레거시에서 조용히 마이그레이션돼요.
+  // docs는 v2 레거시에서 조용히 마이그레이션되고, 구버전 키는 정리돼요.
   await openChapter(page, url, 1);
   assert.equal(await editor.inputValue(), latest);
   assert(await page.evaluate(() => JSON.parse(localStorage.getItem('gitdots.practice.v4.docs')).sim.bubbles.length > 0));
+  assert.equal(await page.evaluate(() => localStorage.getItem('gitdots.practice.v2.docs')), null);
 }
 
 async function mobileCanvasAndKeyboard(browser, url) {
@@ -1195,6 +1196,107 @@ async function compactTerminalToggle(browser, url) {
   await page.close();
 }
 
+async function laptopCanvasAndReviewRegressions(browser, url) {
+  // M-4: 기본 펼침 터미널 상태에서도 1280×800·1366×768에서 2~9장 캔버스 윗변이 첫 화면에 보여요.
+  for (const [width, height] of [[1280, 800], [1366, 768]]) {
+    const page = await browser.newPage({ viewport: { width, height } });
+    page.setDefaultTimeout(9000);
+    const errors = trackErrors(page, new URL(url).origin);
+    for (let chapter = 2; chapter <= 9; chapter++) {
+      await openChapter(page, url, chapter);
+      const canvasBox = await page.getByTestId('pixel-stage-canvas').boundingBox();
+      const dockBox = await page.getByRole('region', { name: '실습 터미널', exact: true }).boundingBox();
+      assert(canvasBox && dockBox, `Missing canvas or dock on ch${chapter} at ${width}x${height}`);
+      assert(canvasBox.y < dockBox.y - 24,
+        `Canvas top (${canvasBox.y}px) is not visible above terminal (${dockBox.y}px) on chapter ${chapter} at ${width}x${height}`);
+    }
+    assert.deepEqual(errors, []);
+    await page.close();
+  }
+
+  // L-9: 터미널 접힘/크게 보기 선택 저장 + 위로 스크롤 시 '새 결과 ↓' 버튼 동작
+  const prefPage = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  prefPage.setDefaultTimeout(9000);
+  await openChapter(prefPage, url, 2);
+  await prefPage.getByTestId('terminal-size-toggle').click();
+  await prefPage.reload();
+  assert.equal(await prefPage.getByRole('region', { name: '실습 터미널', exact: true }).getAttribute('data-size'), 'tall');
+  await prefPage.getByRole('button', { name: '터미널 접기', exact: true }).click();
+  await prefPage.reload();
+  assert.equal(await prefPage.getByTestId('terminal-input').isVisible(), false);
+  await prefPage.getByRole('button', { name: '직접 입력해 보기', exact: true }).click();
+  await prefPage.getByTestId('terminal-size-toggle').click();
+  for (let i = 0; i < 6; i++) await runCommand(prefPage, 'git log');
+  const log = prefPage.getByRole('log', { name: '명령 실행 결과', exact: true });
+  await log.evaluate((node) => { node.scrollTop = 0; node.dispatchEvent(new Event('scroll')); });
+  await runCommand(prefPage, 'git status');
+  const newOutputBtn = prefPage.getByTestId('terminal-new-output');
+  await newOutputBtn.waitFor();
+  assert.equal(await log.evaluate((node) => node.scrollTop), 0);
+  await newOutputBtn.click();
+  assert.equal(await newOutputBtn.count(), 0);
+  await prefPage.close();
+
+  // H-1, L-5, L-11, M-1~M-5, L-3 브라우저 회귀 확인
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  page.setDefaultTimeout(9000);
+  const errors = trackErrors(page, new URL(url).origin);
+
+  // H-1 & L-5 & L-11: 1장 stash 배너 + 비교 건너뛴 담기→기록 복구 + 탭 이동 포커스 유지
+  await openChapter(page, url, 1);
+  const editor = page.getByRole('textbox', { name: '회의록.md', exact: true });
+  const original = await editor.inputValue();
+  await editor.fill(original.replace('금요일 저녁 7시', '수요일 오후 3시'));
+  await clickGuided(page);
+  await runCommand(page, 'git stash');
+  await page.getByTestId('document-stash-banner').getByRole('button', { name: '꺼내기', exact: true }).click();
+  await runCommand(page, 'git add 회의록.md');
+  await runCommand(page, 'git commit -m "건너뛴 기록"');
+  await clickGuided(page);
+  await page.getByTestId('speech-bubble').getByRole('button', { name: '이전 기록 보기', exact: true }).click();
+  await expectProgress(page, 6, 6);
+  assert.notEqual(await page.evaluate(() => document.activeElement?.tagName), 'BODY', 'Focus fell to body after bubble action');
+
+  // L-11: DocumentLab '담아 둔 변경 탭으로 이동' 버튼 클릭 시 포커스 이동
+  await openChapter(page, url, 1);
+  await runCommand(page, 'reset');
+  await page.getByRole('dialog').getByRole('button', { name: '현재 장 초기화', exact: true }).click();
+  await editor.fill(original.replace('금요일 저녁 7시', '목요일 오후 3시'));
+  await clickGuided(page);
+  await runCommand(page, 'git add 회의록.md');
+  await page.getByRole('button', { name: '담아 둔 변경 탭으로 이동', exact: true }).click();
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-pressed')), 'true');
+
+  // M-1 & M-2: 현재 브랜치 삭제 거절, 병합 후 로컬만 삭제 & 해시 출력
+  await openChapter(page, url, 4);
+  for (let i = 0; i < 9; i++) await clickGuided(page);
+  await runCommand(page, 'git branch -d docs/meeting');
+  assert.match(await page.getByRole('log').innerText(), /Deleted branch docs\/meeting \(was [0-9a-f]{7}\)/);
+  await runCommand(page, 'git log --all');
+  assert.match(await page.getByRole('log').innerText(), /origin\/docs\/meeting/);
+  await runCommand(page, 'git switch -c temp/stay');
+  await runCommand(page, 'git branch -d temp/stay');
+  assert.match(await page.getByTestId('speech-bubble').innerText(), /지금 서 있는 브랜치는 지울 수 없어요/);
+
+  // M-3: 7장 token fine으로 유출 차단 해제 안 됨
+  await openChapter(page, url, 7);
+  await runCommand(page, 'token leak-test');
+  await runCommand(page, 'token fine');
+  await runCommand(page, 'git push');
+  assert.match(await page.getByTestId('speech-bubble').innerText(), /막혔어요/);
+
+  // L-3: 9장 pull 후에도 고치기 전(main) 패널에 원래 버그 코드 표시
+  await openChapter(page, url, 9);
+  for (let i = 0; i < 6; i++) await clickGuided(page);
+  await runCommand(page, 'git pull origin main');
+  const aiDiffText = await page.getByTestId('ai-diff').innerText();
+  assert.match(aiDiffText, /a - b/);
+  assert.match(aiDiffText, /a \+ b/);
+
+  assert.deepEqual(errors, []);
+  await page.close();
+}
+
 async function main() {
   fs.mkdirSync(out, { recursive: true });
   const local = publicUrl ? undefined : await startServer();
@@ -1261,6 +1363,8 @@ async function main() {
     console.log('[QA] Empty-input Tab fills the example command and never traps keyboard focus');
     await compactTerminalToggle(browser, url);
     console.log('[QA] Compact (<420px) terminal tall toggle passed');
+    await laptopCanvasAndReviewRegressions(browser, url);
+    console.log('[QA] Laptop canvas visibility (1280x800, 1366x768), terminal persistence/scroll lock, and GLM-5.4 regressions passed');
 
     const link = await browser.newPage();
     await link.goto(url + 'docs/deeper/');

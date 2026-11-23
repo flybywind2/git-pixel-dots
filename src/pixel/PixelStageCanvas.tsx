@@ -63,6 +63,7 @@ export function PixelStageCanvas() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const fileButtons = useRef<Record<string, HTMLButtonElement | null>>({});
   const focusGuidedAfterResolve = useRef(false);
+  const focusAfterBubbleAction = useRef(false);
 
   useEffect(() => {
     setSelectedFile(null);
@@ -76,6 +77,15 @@ export function PixelStageCanvas() {
     focusGuidedAfterResolve.current = false;
     document.querySelector<HTMLButtonElement>('[data-testid="guided-command"]')?.focus();
   }, [sim.conflict]);
+
+  useEffect(() => {
+    if (!focusAfterBubbleAction.current) return;
+    focusAfterBubbleAction.current = false;
+    if (document.activeElement && document.activeElement !== document.body) return;
+    const guided = document.querySelector<HTMLButtonElement>('[data-testid="guided-command"]');
+    const bubble = document.querySelector<HTMLElement>('[data-testid="speech-bubble"]');
+    (guided && !guided.disabled ? guided : bubble)?.focus({ preventScroll: true });
+  }, [sim.bubbles]);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -270,12 +280,17 @@ export function PixelStageCanvas() {
     focusGuidedAfterResolve.current = true;
     runCommand(command);
   }
+
+  function runBubbleAction(command: string) {
+    focusAfterBubbleAction.current = true;
+    runCommand(command);
+  }
   const canvasMinHeight = stageId === 'ch2' ? 'min-h-[215px] sm:min-h-[245px]'
     : stageId === 'ch3' ? 'min-h-[192px] sm:min-h-[245px]' : 'min-h-[225px] sm:min-h-[260px]';
 
   return (
     <div className="relative flex flex-1 flex-col bg-[#F6EFE2]">
-      <div className="px-3 pt-2.5 sm:px-6 sm:pt-3" aria-live="polite">
+      <div className="px-3 pt-2 sm:px-6 sm:pt-2.5" aria-live="polite">
         {sim.bubbles.map((bubble) => {
           const theme = SPEAKER_THEMES[bubble.speaker];
           const actions = bubble.actions?.filter((action) => {
@@ -295,9 +310,10 @@ export function PixelStageCanvas() {
           return (
             <div
               key={bubble.id}
+              tabIndex={-1}
               data-testid="speech-bubble"
               style={{ borderColor: theme.border } as CSSProperties}
-              className="scene-bubble pixel-bubble mx-auto max-w-[70ch] rounded-xl bg-[#FFFDF8] px-3.5 py-2.5 text-left"
+              className="scene-bubble pixel-bubble mx-auto max-w-[70ch] rounded-xl bg-[#FFFDF8] px-3.5 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#80613B]"
             >
               {/* Speaker Pill + Title */}
               <div className="flex items-center gap-2 mb-1">
@@ -335,7 +351,7 @@ export function PixelStageCanvas() {
                       <button
                         key={`${act.label}-${act.command}`}
                         type="button"
-                        onClick={() => runCommand(act.command)}
+                        onClick={() => runBubbleAction(act.command)}
                         className={`pixel-btn cursor-pointer rounded-md px-2.5 py-1 text-xs font-semibold ${toneCls}`}
                       >
                         {act.label}
@@ -399,7 +415,7 @@ export function PixelStageCanvas() {
         </div>
       )}
       {stageId === 'ch2' || stageId === 'ch1' ? shareRelation && (
-        <div className="mx-auto mt-1.5 w-full max-w-3xl px-3 sm:px-6" data-testid="stage-sync-status" role="status">
+        <div className="mx-auto mt-1.5 w-full max-w-3xl px-3 sm:px-6" data-testid="stage-sync-status">
           <p className="break-keep rounded-md border border-[#D8C9B0] bg-[#FAF4E8] px-2.5 py-1 text-xs font-semibold text-[#59483B]">
             팀 저장소: {SHARE_STATUS_TEXT[shareRelation]}
           </p>
@@ -439,26 +455,36 @@ export function PixelStageCanvas() {
         </div>
       )}
       {stageId === 'ch7' && (
-        <div className="mx-auto mt-3 grid w-full max-w-3xl gap-2 px-3 sm:px-6" data-testid="ghes-status">
+        <div className="mx-auto mt-1.5 grid w-full max-w-3xl gap-1.5 px-3 sm:px-6" data-testid="ghes-status">
           {sim.ghes.mode === 'cloud' && (
-            <div className="rounded-xl border border-[#3292CE] bg-[#F0F8FE] px-3 py-2">
+            <div className="rounded-xl border border-[#3292CE] bg-[#F0F8FE] px-3 py-1.5">
               <h2 className="break-keep text-sm font-bold text-[#174669]">공용 클라우드와 사내 GHES 비교</h2>
-              <ul className="mt-1 space-y-0.5 break-keep text-xs text-[#2F4B63]">
+              <ul className="mt-0.5 space-y-0.5 break-keep text-xs text-[#2F4B63]">
                 <li>· GitHub.com(클라우드): 주소 github.com · API api.github.com · GitHub-hosted runner</li>
                 <li>· 사내 GHES: 주소 {sim.ghes.host} · API /api/v3 · 사내 Private Runner</li>
               </ul>
             </div>
           )}
-          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] px-3 py-2">
+          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] px-3 py-1.5">
             <h2 className="break-keep text-sm font-bold text-[#2F241D]">사내 보안 로그 (최근 기록)</h2>
-            <ul className="font-mono-code mt-1 space-y-0.5 break-keep text-[11px] text-[#59483B]">
+            <ul className="font-mono-code mt-0.5 space-y-0.5 break-keep text-[11px] text-[#59483B]">
               {sim.ghes.auditLogs.slice(-3).map((log, index) => <li key={index}>· {log}</li>)}
             </ul>
           </div>
         </div>
       )}
-      {stageId === 'ch8' && sim.ai.codeWritten && (
-        <div className="mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="ai-diff">
+      {stageId === 'ch8' && sim.ai.codeWritten && (() => {
+        const mainCommit = sim.commits.find((commit) => commit.id === sim.branches.main);
+        const aiCommit = sim.commits.find((commit) => commit.id === sim.branches[sim.ai.worktreeBranch]);
+        const beforeCommitId = mainCommit?.isMerge
+          ? mainCommit.parents[0]
+          : mainCommit?.id === aiCommit?.id
+            ? aiCommit?.parents[0]
+            : mainCommit?.id;
+        const beforeCode = sim.commits.find((commit) => commit.id === beforeCommitId)?.tree['buggy.ts']
+          ?? 'export const sum = (a: number, b: number) => a - b;';
+        return (
+        <div className="mx-auto mt-1.5 w-full max-w-3xl px-3 sm:px-6" data-testid="ai-diff">
           <div className="rounded-xl border border-[#8BB9D9] bg-[#EEF7FD] px-3 py-2">
             <h2 className="break-keep text-sm font-bold text-[#174669]">사람이 검토할 코드 변경</h2>
             <p className="mt-1 break-keep text-xs text-[#2F4B63]">버그: 2 + 3을 -1로 계산했어요. AI가 아래처럼 고쳤어요.</p>
@@ -466,66 +492,67 @@ export function PixelStageCanvas() {
               <div className="rounded-md border border-[#E08A95] bg-[#FDE9E8] px-2 py-1.5">
                 <p className="text-xs font-semibold text-[#8C2630]">고치기 전 (main)</p>
                 <code className="font-mono-code mt-0.5 block whitespace-pre-wrap text-xs text-[#2F241D]">
-                  {sim.commits.find((commit) => commit.id === sim.branches.main)?.tree['buggy.ts'] ?? 'export const sum = (a, b) => a - b;'}
+                  {beforeCode}
                 </code>
               </div>
               <div className="rounded-md border border-[#22A882] bg-[#E0F4E9] px-2 py-1.5">
                 <p className="text-xs font-semibold text-[#115843]">고친 후 ({sim.ai.worktreeBranch})</p>
                 <code className="font-mono-code mt-0.5 block whitespace-pre-wrap text-xs text-[#2F241D]">
-                  {sim.commits.find((commit) => commit.id === sim.branches[sim.ai.worktreeBranch])?.tree['buggy.ts'] ?? ''}
+                  {aiCommit?.tree['buggy.ts'] ?? ''}
                 </code>
               </div>
             </div>
             <p className="mt-1 break-keep text-xs text-[#2F4B63]">터미널에서 git diff main {sim.ai.worktreeBranch}로 같은 변경을 직접 비교할 수 있어요.</p>
           </div>
         </div>
-      )}
+        );
+      })()}
       {stageId === 'ch6' && (
-        <div className="mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="token-scopes">
-          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] p-3">
-            <h2 className="break-keep text-sm font-bold text-[#2F241D]">지금 토큰에 준 권한</h2>
-            <p className="mt-1 break-keep text-xs leading-relaxed text-[#59483B]">
+        <div className="mx-auto mt-1.5 w-full max-w-3xl px-3 sm:px-6" data-testid="token-scopes">
+          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] px-3 py-1.5">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+              <h2 className="break-keep text-sm font-bold text-[#2F241D]">지금 토큰에 준 권한</h2>
+              <p className="break-keep text-xs font-semibold text-[#59483B]">
+                위험도 {sim.token.riskScore}/100 {sim.token.riskScore < 30 ? '— 안전한 최소 권한' : '— 넓은 권한'}
+              </p>
+            </div>
+            <p className="mt-0.5 break-keep text-xs leading-snug text-[#59483B]">
               {sim.token.mode === 'fine-grained'
                 ? 'Fine-grained 토큰은 고른 저장소에만 필요한 권한을 줘요.'
                 : 'Classic 토큰은 계정에 넓은 권한을 줘요. 저장소 삭제 권한도 포함될 수 있어요.'}
             </p>
-            <ul className="mt-2 space-y-1 break-keep text-xs leading-relaxed text-[#59483B]">
+            <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 break-keep text-xs leading-snug text-[#59483B]">
               {sim.token.scopes.map((scope) => (
                 <li key={scope}>· {scope}{SCOPE_LABELS[scope] ? ` — ${SCOPE_LABELS[scope]}` : ''}</li>
               ))}
+              {sim.token.expires && (
+                <li>· 만료: {sim.token.expires} (권한이 아니라 토큰 속성이에요)</li>
+              )}
             </ul>
-            {sim.token.expires && (
-              <p className="mt-1 break-keep text-xs text-[#59483B]">· 만료: {sim.token.expires} (권한이 아니라 토큰 속성이에요)</p>
-            )}
-            <div className="mt-2">
-              <p className="break-keep text-xs font-semibold text-[#59483B]">
-                위험도 {sim.token.riskScore}/100 {sim.token.riskScore < 30 ? '— 안전한 최소 권한' : '— 넓은 권한'}
-              </p>
-              <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#E7DCCB]">
-                <div
-                  className={`h-full ${sim.token.riskScore < 30 ? 'bg-[#22A882]' : 'bg-[#E05666]'}`}
-                  style={{ width: `${sim.token.riskScore}%` }}
-                />
-              </div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#E7DCCB]">
+              <div
+                className={`h-full ${sim.token.riskScore < 30 ? 'bg-[#22A882]' : 'bg-[#E05666]'}`}
+                style={{ width: `${sim.token.riskScore}%` }}
+              />
             </div>
           </div>
         </div>
       )}
       {stageId === 'ch8' && sim.ai.codeWritten && (
-        <div className="mx-auto mt-3 w-full max-w-3xl px-3 sm:px-6" data-testid="ai-tests">
-          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] p-3">
+        <div className="mx-auto mt-1.5 w-full max-w-3xl px-3 sm:px-6" data-testid="ai-tests">
+          <div className="rounded-xl border border-[#D8C9B0] bg-[#FFFDF8] px-3 py-2">
             <h2 className="break-keep text-sm font-bold text-[#2F241D]">자동 테스트 결과</h2>
-            <p className="mt-1 break-keep text-xs leading-relaxed text-[#59483B]">2와 3을 더한 결과가 5인지 자동으로 확인했고, 통과했어요.</p>
-            <ul className="font-mono-code mt-2 space-y-1 text-xs text-[#147A5B]">
+            <p className="mt-0.5 break-keep text-xs leading-relaxed text-[#59483B]">2와 3을 더한 결과가 5인지 자동으로 확인했고, 통과했어요.</p>
+            <ul className="font-mono-code mt-1 space-y-0.5 text-xs text-[#147A5B]">
               <li>✓ unit test: sum(2, 3) === 5 PASS</li>
               {sim.ai.prNumber !== null && <li>✓ PR #{sim.ai.prNumber} 자동 검사: 코드 형식(Lint) · 단위 테스트(Unit Test) · 비밀키 검사(Secret Scan) 통과</li>}
             </ul>
-            <p className="mt-2 break-keep text-xs leading-relaxed text-[#59483B]">buggy.ts 변경: a - b → a + b (빼기를 더하기로 고침)</p>
+            <p className="mt-1 break-keep text-xs leading-relaxed text-[#59483B]">buggy.ts 변경: a - b → a + b (빼기를 더하기로 고침)</p>
           </div>
         </div>
       )}
       {visibleHistory && (
-        <ol aria-label="최근 커밋" className="mx-auto mt-3 flex w-full max-w-5xl flex-wrap justify-center gap-2 px-3 pb-2 text-sm">
+        <ol aria-label="최근 커밋" className="mx-auto mt-1.5 flex w-full max-w-5xl flex-wrap justify-center gap-1.5 px-3 pb-1 text-xs sm:text-sm">
           {visibleHistory.map(({ commit, rewound }) => (
             <li key={commit.id} className="max-w-full rounded-md border border-[#D8C9B0] bg-[#FFFDF8] px-2.5 py-1.5 [overflow-wrap:anywhere]">
               {commit.id === head && <strong className="mr-2 text-[#79521D]">HEAD · {sim.headBranch}</strong>}

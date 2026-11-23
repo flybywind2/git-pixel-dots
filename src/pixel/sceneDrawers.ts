@@ -39,6 +39,7 @@ import {
   drawDottedTrack,
   drawPixelBadge,
   drawZonePad,
+  traceRoundRect,
 } from './dotMatrixRenderer';
 
 export interface SceneMotionState {
@@ -1179,14 +1180,12 @@ function drawCh6Scene(
     // Door frame
     ctx.save();
     ctx.fillStyle = door.open ? withAlpha(accent, 0.16) : PALETTE.woodDark;
-    ctx.beginPath();
-    ctx.roundRect(door.x - doorW * 0.5, doorTopY, doorW, doorH, 8);
+    traceRoundRect(ctx, door.x - doorW * 0.5, doorTopY, doorW, doorH, 8);
     ctx.fill();
 
     ctx.strokeStyle = accent;
     ctx.lineWidth = door.danger ? 2.4 : 1.8;
-    ctx.beginPath();
-    ctx.roundRect(door.x - doorW * 0.5, doorTopY, doorW, doorH, 8);
+    traceRoundRect(ctx, door.x - doorW * 0.5, doorTopY, doorW, doorH, 8);
     ctx.stroke();
     ctx.restore();
 
@@ -1296,13 +1295,11 @@ function drawCh7Scene(
 
   ctx.save();
   ctx.fillStyle = PALETTE.woodDark;
-  ctx.beginPath();
-  ctx.roundRect(wallX - wallW * 0.5, wallTop, wallW, wallBot - wallTop, 5);
+  traceRoundRect(ctx, wallX - wallW * 0.5, wallTop, wallW, wallBot - wallTop, 5);
   ctx.fill();
   ctx.strokeStyle = PALETTE.coral;
   ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.roundRect(wallX - wallW * 0.5, wallTop, wallW, wallBot - wallTop, 5);
+  traceRoundRect(ctx, wallX - wallW * 0.5, wallTop, wallW, wallBot - wallTop, 5);
   ctx.stroke();
 
   // Glowing coral firewall barrier LED dots
@@ -1489,8 +1486,7 @@ function drawCh8Scene(
     ctx.strokeStyle = PALETTE.lavender;
     ctx.lineWidth = 2;
     ctx.fillStyle = withAlpha(PALETTE.lavender, 0.08);
-    ctx.beginPath();
-    ctx.roundRect(wtX - padW * 0.58, wtY - dot * 14, padW * 1.16, dot * 17, 10);
+    traceRoundRect(ctx, wtX - padW * 0.58, wtY - dot * 14, padW * 1.16, dot * 17, 10);
     ctx.fill();
     ctx.stroke();
     ctx.restore();

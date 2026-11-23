@@ -3,6 +3,37 @@ import { CONFETTI_COLORS, PALETTE, withAlpha } from './palette';
 export const PIXEL_FONT = '"GitDots Pixel", system-ui, sans-serif';
 const MONO_FONT = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
+/** 구형 Safari(15.4~15.8)처럼 ctx.roundRect가 없는 환경에서도 안전하게 둥근 사각형을 그려요. */
+export function traceRoundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+): void {
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y, width, height, radius);
+    return;
+  }
+  const r = Math.max(0, Math.min(radius, width * 0.5, height * 0.5));
+  if (r === 0) {
+    ctx.rect(x, y, width, height);
+    return;
+  }
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
 function setLabelFont(ctx: CanvasRenderingContext2D, size: number, mono = false): number {
   const dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
   const sceneScale = ctx.getTransform().a / dpr;
@@ -179,13 +210,8 @@ export function drawDottedTrack(
         : withAlpha(color, 0.36);
 
     const half = dotSz * 0.5;
-    if (typeof ctx.roundRect === 'function') {
-      ctx.beginPath();
-      ctx.roundRect(px - half, py - half, dotSz, dotSz, dotSz * 0.35);
-      ctx.fill();
-    } else {
-      ctx.fillRect(px - half, py - half, dotSz, dotSz);
-    }
+    traceRoundRect(ctx, px - half, py - half, dotSz, dotSz, dotSz * 0.35);
+    ctx.fill();
   }
 }
 
@@ -222,27 +248,23 @@ export function drawZonePad(
 
   // Deep drop shadow
   ctx.fillStyle = PALETTE.woodShadow;
-  ctx.beginPath();
-  ctx.roundRect(x + 2, y + 6, width, padH, 7);
+  traceRoundRect(ctx, x + 2, y + 6, width, padH, 7);
   ctx.fill();
 
   // Bottom 3D platform bevel
   ctx.fillStyle = PALETTE.woodDark;
-  ctx.beginPath();
-  ctx.roundRect(x, y + 4, width, padH, 7);
+  traceRoundRect(ctx, x, y + 4, width, padH, 7);
   ctx.fill();
 
   // Top cozy platform deck
   ctx.fillStyle = highlighted ? withAlpha(accentColor, 0.16) : PALETTE.woodLight;
-  ctx.beginPath();
-  ctx.roundRect(x, y, width, padH, 7);
+  traceRoundRect(ctx, x, y, width, padH, 7);
   ctx.fill();
 
   // Crisp border
   ctx.strokeStyle = highlighted ? accentColor : PALETTE.woodBorder;
   ctx.lineWidth = highlighted ? 2.2 : 1.6;
-  ctx.beginPath();
-  ctx.roundRect(x, y, width, padH, 7);
+  traceRoundRect(ctx, x, y, width, padH, 7);
   ctx.stroke();
 
   // Tiny LED pixel dots inlaid across top rim
@@ -295,19 +317,16 @@ export function drawPixelBadge(
 
   // Soft warm pixel drop shadow
   ctx.fillStyle = 'rgba(104, 82, 58, 0.24)';
-  ctx.beginPath();
-  ctx.roundRect(x, y + 2, boxW, boxH, 5);
+  traceRoundRect(ctx, x, y + 2, boxW, boxH, 5);
   ctx.fill();
 
   ctx.fillStyle = bgColor;
-  ctx.beginPath();
-  ctx.roundRect(x, y, boxW, boxH, 5);
+  traceRoundRect(ctx, x, y, boxW, boxH, 5);
   ctx.fill();
 
   ctx.strokeStyle = borderColor;
   ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.roundRect(x, y, boxW, boxH, 5);
+  traceRoundRect(ctx, x, y, boxW, boxH, 5);
   ctx.stroke();
 
   ctx.fillStyle = textColor;
@@ -541,8 +560,7 @@ export class PixelParticlePool {
           const ty = p.y0 + (p.y1 - p.y0) * ease - Math.sin(trailT * Math.PI) * p.arcHeight;
           const sz = Math.max(2.5, p.size - k * 1.2);
           ctx.fillStyle = k === 0 ? PALETTE.cream : withAlpha(p.color, 0.85 - k * 0.22);
-          ctx.beginPath();
-          ctx.roundRect(tx - sz * 0.5, ty - sz * 0.5, sz, sz, sz * 0.35);
+          traceRoundRect(ctx, tx - sz * 0.5, ty - sz * 0.5, sz, sz, sz * 0.35);
           ctx.fill();
         }
         continue;
@@ -563,8 +581,7 @@ export class PixelParticlePool {
       // confetti / sweat / smoke
       ctx.fillStyle = withAlpha(p.color, alpha * (p.kind === 'smoke' ? 0.55 : 0.95));
       const sz = p.kind === 'smoke' ? p.size * (1 + t * 0.6) : p.size;
-      ctx.beginPath();
-      ctx.roundRect(p.x - sz * 0.5, p.y - sz * 0.5, sz, sz, sz * 0.35);
+      traceRoundRect(ctx, p.x - sz * 0.5, p.y - sz * 0.5, sz, sz, sz * 0.35);
       ctx.fill();
     }
     ctx.restore();

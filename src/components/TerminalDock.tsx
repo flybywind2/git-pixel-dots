@@ -56,22 +56,50 @@ export function resolveTabCompletion(
   return example.toLowerCase().startsWith(typed.toLowerCase()) ? example : null;
 }
 
+const TERMINAL_OPEN_KEY = 'gitdots.terminal.open';
+const TERMINAL_TALL_KEY = 'gitdots.terminal.tall';
+
+function readStoredFlag(key: string, fallback: boolean): boolean {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const value = window.localStorage.getItem(key);
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+  } catch {
+    // 저장소 접근이 제한된 환경에서는 기본값을 써요.
+  }
+  return fallback;
+}
+
+function writeStoredFlag(key: string, value: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, String(value));
+  } catch {
+    // 저장소 쓰기가 막혀도 현재 세션에서는 상태를 유지해요.
+  }
+}
+
 export function TerminalDock() {
   const sim = usePixelStore((state) => state.sim);
   const history = usePixelStore((state) => state.history);
   const runCommand = usePixelStore((state) => state.runCommand);
   const notice = usePixelStore((state) => state.notice);
-  const [open, setOpen] = useState(true);
-  const [tall, setTall] = useState(false);
+  const [open, setOpen] = useState(() => readStoredFlag(TERMINAL_OPEN_KEY, true));
+  const [tall, setTall] = useState(() => readStoredFlag(TERMINAL_TALL_KEY, false));
   const [input, setInput] = useState('');
   const [focused, setFocused] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [cycle, setCycle] = useState<{ options: Suggestion[]; index: number } | null>(null);
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [draftInput, setDraftInput] = useState('');
+  const [hasNewOutput, setHasNewOutput] = useState(false);
   const prompt = useRef<HTMLInputElement>(null);
   const log = useRef<HTMLDivElement>(null);
   const wasOpen = useRef(open);
+  const pinnedToBottom = useRef(true);
+  const prevLogCount = useRef(sim.terminal.length);
+  const prevLastLogId = useRef(sim.terminal.at(-1)?.id);
 
   const scenario = STAGE_MAP[sim.stageId];
   const next = scenario.steps.find((step) => !isStepCompleted(sim, step));
@@ -93,6 +121,8 @@ export function TerminalDock() {
     setDismissed(false);
     setCycle(null);
     setHistoryIndex(null);
+    pinnedToBottom.current = true;
+    setHasNewOutput(false);
   }, [sim.stageId]);
 
   useEffect(() => {
@@ -104,16 +134,58 @@ export function TerminalDock() {
   }, [open]);
 
   useEffect(() => {
-    if (log.current) log.current.scrollTop = log.current.scrollHeight;
+    const lastId = sim.terminal.at(-1)?.id;
+    const appended = sim.terminal.length !== prevLogCount.current || lastId !== prevLastLogId.current;
+    prevLogCount.current = sim.terminal.length;
+    prevLastLogId.current = lastId;
+    if (!log.current) return;
+    if (pinnedToBottom.current) {
+      log.current.scrollTop = log.current.scrollHeight;
+      setHasNewOutput(false);
+    } else if (appended && open) {
+      setHasNewOutput(true);
+    }
   }, [open, sim.terminal]);
 
   useEffect(() => {
     const element = log.current;
     if (!open || !element) return;
-    const observer = new ResizeObserver(() => { element.scrollTop = element.scrollHeight; });
+    const observer = new ResizeObserver(() => {
+      if (pinnedToBottom.current) element.scrollTop = element.scrollHeight;
+    });
     observer.observe(element);
     return () => observer.disconnect();
   }, [open]);
+
+  function handleLogScroll() {
+    const element = log.current;
+    if (!element) return;
+    const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight <= 8;
+    pinnedToBottom.current = atBottom;
+    if (atBottom) setHasNewOutput(false);
+  }
+
+  function jumpToLatestOutput() {
+    pinnedToBottom.current = true;
+    setHasNewOutput(false);
+    if (log.current) log.current.scrollTop = log.current.scrollHeight;
+  }
+
+  function toggleOpen() {
+    setOpen((current) => {
+      const next = !current;
+      writeStoredFlag(TERMINAL_OPEN_KEY, next);
+      return next;
+    });
+  }
+
+  function toggleTall() {
+    setTall((current) => {
+      const next = !current;
+      writeStoredFlag(TERMINAL_TALL_KEY, next);
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (showOptions && active !== undefined) {
@@ -191,7 +263,7 @@ export function TerminalDock() {
             type="button"
             aria-expanded={open}
             aria-controls="terminal-content"
-            onClick={() => setOpen(!open)}
+            onClick={toggleOpen}
             className={`terminal-toggle flex min-w-0 flex-1 items-center gap-2 px-3 text-left text-sm font-bold text-[#3A2D24] hover:bg-[#F4EADB] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#166447] sm:px-4 ${open ? 'min-h-9 sm:min-h-10' : 'min-h-11'}`}
           >
             <Terminal aria-hidden="true" className="h-4 w-4 shrink-0 text-[#126549]" />
@@ -205,7 +277,7 @@ export function TerminalDock() {
               data-testid="terminal-size-toggle"
               aria-pressed={tall}
               title={tall ? '터미널을 기본 크기로 되돌리기' : '터미널 출력 창 크게 보기'}
-              onClick={() => setTall((current) => !current)}
+              onClick={toggleTall}
               className="terminal-size-btn inline-flex shrink-0 items-center gap-1 rounded-md border border-[#C7B394] bg-[#FFFDF8] px-2.5 py-1 text-xs font-semibold text-[#3A2D24] hover:bg-[#FFF3D6] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#166447]"
             >
               {tall ? <Minimize2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-[#126549]" /> : <Maximize2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-[#126549]" />}
@@ -241,25 +313,38 @@ export function TerminalDock() {
               );
             })}
           </div>
-          <div
-            ref={log}
-            role="log"
-            aria-label="명령 실행 결과"
-            aria-live="polite"
-            tabIndex={0}
-            className="terminal-log font-mono-code min-h-0 flex-1 space-y-2 overflow-y-auto bg-[#FFFDF8]/70 px-3 py-1.5 text-[13px] leading-snug focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#166447] sm:space-y-2.5 sm:px-4 sm:py-3 sm:text-sm sm:leading-6"
-          >
-            {sim.terminal.map((entry) => (
-              <div key={entry.id}>
-                <p className="break-words font-semibold">
-                  {entry.command === 'welcome' ? '연습 저장소'
-                    : entry.command === DOCUMENT_SAVE_LABEL ? entry.command : '$ ' + entry.command}
-                </p>
-                {entry.lines.map((line, index) => (
-                  <p key={index} className={`whitespace-pre-wrap pl-3 [overflow-wrap:anywhere] ${TONE_CLASS[line.tone]}`}>{line.text}</p>
-                ))}
-              </div>
-            ))}
+          <div className="relative min-h-0 flex-1">
+            <div
+              ref={log}
+              role="log"
+              aria-label="명령 실행 결과"
+              aria-live="off"
+              tabIndex={0}
+              onScroll={handleLogScroll}
+              className="terminal-log font-mono-code h-full space-y-2 overflow-y-auto bg-[#FFFDF8]/70 px-3 py-1.5 text-[13px] leading-snug focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#166447] sm:space-y-2.5 sm:px-4 sm:py-3 sm:text-sm sm:leading-6"
+            >
+              {sim.terminal.map((entry) => (
+                <div key={entry.id}>
+                  <p className="break-words font-semibold">
+                    {entry.command === 'welcome' ? '연습 저장소'
+                      : entry.command === DOCUMENT_SAVE_LABEL ? entry.command : '$ ' + entry.command}
+                  </p>
+                  {entry.lines.map((line, index) => (
+                    <p key={index} className={`whitespace-pre-wrap pl-3 [overflow-wrap:anywhere] ${TONE_CLASS[line.tone]}`}>{line.text}</p>
+                  ))}
+                </div>
+              ))}
+            </div>
+            {hasNewOutput && (
+              <button
+                type="button"
+                data-testid="terminal-new-output"
+                onClick={jumpToLatestOutput}
+                className="pixel-btn absolute bottom-2 right-3 z-10 rounded-full border-[#C78B1E] bg-[#FFE7A8] px-2.5 py-1 text-xs font-bold text-[#362711] hover:bg-[#FFD97D]"
+              >
+                새 결과 ↓
+              </button>
+            )}
           </div>
           <form
             onSubmit={(event) => { event.preventDefault(); submit(); }}
@@ -323,7 +408,7 @@ export function TerminalDock() {
                 autoCapitalize="off"
                 spellCheck={false}
                 placeholder={examplePlaceholder(exampleCommand)}
-                className="terminal-input font-mono-code min-h-10 min-w-0 flex-1 rounded-md border border-[#CBB38E] bg-[#FFFDF8] px-3 py-2 text-base text-[#2F241D] placeholder:text-[#8A7560] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#166447] sm:min-h-11 sm:px-3.5 sm:text-[15px]"
+                className="terminal-input font-mono-code min-h-10 min-w-0 flex-1 rounded-md border border-[#CBB38E] bg-[#FFFDF8] px-3 py-2 text-base text-[#2F241D] placeholder:text-[#715D49] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#166447] sm:min-h-11 sm:px-3.5 sm:text-[15px]"
               />
               <span id="terminal-keys" className="sr-only">입력창이 비어 있으면 Tab으로 예시 명령을 채우고, 입력 중에는 Tab으로 추천 명령을 순환해요. Shift+Tab은 다음 항목으로 이동하며 Esc로 목록을 닫아요.</span>
               <button

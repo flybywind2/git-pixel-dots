@@ -115,36 +115,36 @@ export function LessonGuide() {
 
   return (
     <section aria-labelledby="lesson-title" className="shrink-0 border-b border-[#D7C7AE] bg-[#FFFDF8]">
-      <div className="mx-auto grid max-w-[1440px] gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3.5 lg:grid-cols-[1.35fr_1fr] lg:items-center lg:gap-8 lg:py-5">
-        <div>
+      <div className="mx-auto grid max-w-[1440px] gap-2 px-3 py-2 sm:gap-2.5 sm:px-6 sm:py-2.5 lg:grid-cols-[1.35fr_1fr] lg:items-start lg:gap-x-8 lg:gap-y-1.5 lg:py-2.5">
+        <div className="min-w-0">
           <p className="mb-0.5 text-xs font-semibold text-[#80613B] sm:mb-1">{track.label} · {lesson.number}장</p>
           <h1 id="lesson-title" className="break-keep text-lg font-bold leading-tight tracking-tight sm:text-2xl">{lesson.title}</h1>
-          <div className="mt-1 flex items-start gap-1.5 sm:mt-1.5 sm:block">
-            <p className={`min-w-0 flex-1 max-w-[68ch] break-keep text-xs leading-relaxed text-[#59483B] sm:text-sm ${introExpanded ? '' : 'line-clamp-1 sm:line-clamp-none'}`}>
+          <div className="mt-1 flex items-start gap-1.5 sm:mt-1.5">
+            <p className={`min-w-0 flex-1 max-w-[68ch] break-keep text-xs leading-relaxed text-[#59483B] sm:text-sm ${introExpanded ? '' : 'line-clamp-1'}`}>
               {introText}
             </p>
             <button
               type="button"
               onClick={() => setIntroExpanded((open) => !open)}
               aria-expanded={introExpanded}
-              className="shrink-0 text-xs font-semibold text-[#166447] underline sm:hidden"
+              className="min-h-6 shrink-0 px-1 text-xs font-semibold text-[#166447] underline"
             >
               {introExpanded ? '접기' : '더 보기'}
             </button>
           </div>
           {true && (
-            <p className={`${introExpanded ? 'mt-1 block' : 'hidden sm:mt-1.5 sm:block'} text-xs text-[#715A43]`}>
+            <p className={`${introExpanded ? 'mt-1 block' : 'hidden'} text-xs text-[#715A43]`}>
               이 브라우저 안의 가상 실습이에요. 실제 GitHub에는 반영되지 않아요.
             </p>
           )}
           {lesson.track === 'advanced' && (
-            <p className={`${introExpanded ? 'mt-1 block' : 'hidden sm:mt-1 sm:block'} text-xs text-[#715A43]`}>
+            <p className={`${introExpanded ? 'mt-1 block' : 'hidden'} text-xs text-[#715A43]`}>
               선택 심화 과정이에요. 기본 1~4장만 완주해도 팀 협업의 기본은 충분해요.
             </p>
           )}
         </div>
-        <div className="min-w-0 border-l-[3px] border-[#D69724] pl-3 sm:pl-3.5">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-[#715A43]" aria-live="polite">
+        <div className="min-w-0 border-l-[3px] border-[#D69724] pl-3 sm:pl-3.5 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-[#715A43]">
             {phaseGroups ? (
               <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 {phaseGroups.map((group) => (
@@ -172,7 +172,7 @@ export function LessonGuide() {
             <>
               {nextStep && !saveDraft && <p className="mt-1 break-keep text-sm sm:mt-1.5 [overflow-wrap:anywhere]">{nextStep.goal}</p>}
               {docDiffDone && (
-                <p role="status" className="mt-1 text-xs font-semibold text-[#196446]">
+                <p className="mt-1 text-xs font-semibold text-[#196446]">
                   {docRemoved + docAdded > 0
                     ? `비교 결과 · ${docModeLabel}: 빠진 줄 ${docRemoved}개 · 들어간 줄 ${docAdded}개`
                     : sim.staged.length > 0 && sim.document?.comparison === 'working'
@@ -197,7 +197,7 @@ export function LessonGuide() {
                           {index === 0 ? '①' : '②'} {choice}
                         </button>
                       ))}
-                      <button type="button" onClick={() => { setQuiz(null); runNow(); }} className="text-[#715A43] underline">
+                      <button type="button" onClick={() => { setQuiz(null); runNow(); }} className="min-h-6 px-1 text-[#715A43] underline">
                         건너뛰고 실행하기
                       </button>
                     </div>
@@ -237,16 +237,6 @@ export function LessonGuide() {
                   {effectiveNote && <p className="mt-1 break-keep leading-relaxed">{effectiveNote}</p>}
                 </div>
               )}
-              {stepTerms.length > 0 && (
-                <dl data-testid="step-terms" className="mt-1.5 space-y-1 rounded-md border border-[#E3D5BE] bg-[#F9F3E8] px-2.5 py-1.5 text-xs leading-relaxed text-[#59483B] sm:mt-2">
-                  {stepTerms.map(({ name, meaning }) => (
-                    <div key={name} className="break-keep">
-                      <dt className="inline font-semibold text-[#14694F]">{name}</dt>
-                      <dd className="inline"> — {meaning}</dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
             </>
           ) : (
             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -274,9 +264,19 @@ export function LessonGuide() {
             </div>
           )}
         </div>
+        {stepTerms.length > 0 && (
+          <dl data-testid="step-terms" className="space-y-0.5 rounded-md border border-[#E3D5BE] bg-[#F9F3E8] px-2.5 py-1 text-xs leading-snug text-[#59483B] lg:col-start-1 lg:row-start-2">
+            {stepTerms.map(({ name, meaning }) => (
+              <div key={name} className="break-keep">
+                <dt className="inline font-semibold text-[#14694F]">{name}</dt>
+                <dd className="inline"> — {meaning}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
       </div>
       {(lesson.terms.length > 0 || lesson.id === 'docs' || lesson.id === 'ch4') && (
-        <div className="mx-auto flex max-w-[1440px] flex-wrap items-start gap-x-5 gap-y-1.5 px-3 pb-2 sm:px-6 sm:pb-3">
+        <div className="mx-auto flex max-w-[1440px] flex-wrap items-start gap-x-5 gap-y-1.5 px-3 pb-1.5 sm:px-6 sm:pb-2">
           {lesson.terms.length > 0 && (
             <details data-testid="all-terms">
               <summary className="cursor-pointer text-xs font-semibold text-[#166447]">이 장에서 쓰는 용어 전체 보기</summary>

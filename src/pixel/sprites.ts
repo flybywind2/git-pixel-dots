@@ -1,4 +1,5 @@
 import { PALETTE } from './palette';
+import { traceRoundRect } from './dotMatrixRenderer';
 
 export type SpriteGrid = readonly string[];
 export type SpriteColorMap = Readonly<Record<string, string>>;
@@ -505,13 +506,8 @@ function fillRoundedDot(
   size: number,
   radius: number,
 ): void {
-  if (typeof ctx.roundRect === 'function') {
-    ctx.beginPath();
-    ctx.roundRect(x, y, size, size, radius);
-    ctx.fill();
-  } else {
-    ctx.fillRect(x, y, size, size);
-  }
+  traceRoundRect(ctx, x, y, size, size, radius);
+  ctx.fill();
 }
 
 /**
