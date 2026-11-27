@@ -28,8 +28,8 @@ describe('TerminalDock initial state', () => {
 
     expect(html).toContain('placeholder="예: edit 회의록.md (Tab 완성)"');
     expect(html).toContain('Tab으로 예시 명령을 채우고');
-    expect(html).toContain('Shift+Tab은 이전 항목으로 이동하며');
-    expect(html).not.toContain('Shift+Tab은 다음 항목으로 이동하며');
+    expect(html).toContain('Esc를 누른 뒤 Tab을 누르면 실행 버튼으로 이동해요.');
+    expect(html).toContain('Shift+Tab은 이전 항목으로 이동해요.');
   });
 });
 

@@ -336,6 +336,20 @@ export function LessonGuide() {
               </dl>
             </details>
           )}
+          {lesson.id !== 'docs' && (
+            <button
+              type="button"
+              aria-controls="practice-graph"
+              onClick={() => {
+                const graph = document.getElementById('practice-graph');
+                graph?.focus({ preventScroll: true });
+                graph?.scrollIntoView({ block: 'center' });
+              }}
+              className="inline-flex min-h-9 items-center text-xs font-semibold text-[#166447] underline sm:hidden"
+            >
+              그래프 보기
+            </button>
+          )}
           {(lesson.id === 'docs' || lesson.id === 'ch4') && <GitHubWebGuide />}
         </div>
       )}

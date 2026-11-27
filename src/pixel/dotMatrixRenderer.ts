@@ -307,11 +307,24 @@ export function drawPixelBadge(
 ): void {
   ctx.save();
   const labelSize = setLabelFont(ctx, fontSize, useMono);
-  const metrics = ctx.measureText(text);
   const padX = 8;
-  const boxW = Math.ceil(metrics.width + padX * 2);
-  const boxH = labelSize + 9;
   const width = ctx.canvas.width / ctx.getTransform().a;
+  const maxTextWidth = Math.min(width - 10, width * 0.48) - padX * 2;
+  let label = text;
+  if (ctx.measureText(text).width > maxTextWidth) {
+    const characters = Array.from(text);
+    let start = 0;
+    let end = characters.length;
+    while (start < end) {
+      const middle = Math.ceil((start + end) / 2);
+      const sample = characters.slice(0, middle).join('') + '…';
+      if (ctx.measureText(sample).width <= maxTextWidth) start = middle;
+      else end = middle - 1;
+    }
+    label = characters.slice(0, start).join('') + '…';
+  }
+  const boxW = Math.ceil(ctx.measureText(label).width + padX * 2);
+  const boxH = labelSize + 9;
   const x = Math.max(4, Math.min(cx - boxW * 0.5, width - boxW - 4));
   const y = cy - boxH * 0.5;
 
@@ -332,7 +345,7 @@ export function drawPixelBadge(
   ctx.fillStyle = textColor;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, x + boxW * 0.5, cy + 0.5);
+  ctx.fillText(label, x + boxW * 0.5, cy + 0.5);
   ctx.restore();
 }
 

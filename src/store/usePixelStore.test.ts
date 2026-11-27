@@ -100,6 +100,29 @@ describe('practice store undo safety', () => {
   });
 });
 
+describe('practice store lesson reset', () => {
+  it('signals a reset only after confirmation and keeps another chapter intact', () => {
+    seed('docs');
+    const other = sessionFor(executePixelCommand(createStageState('ch1'), 'git add .'));
+    usePixelStore.setState((state) => ({
+      sessions: { ...state.sessions, ch1: other },
+      saveIssues: { docs: 'invalid' },
+    }));
+    const initialCount = usePixelStore.getState().lessonResetCount;
+    usePixelStore.getState().resetStage();
+    usePixelStore.getState().resolveConfirmation(false);
+    expect(usePixelStore.getState().lessonResetCount).toBe(initialCount);
+    expect(usePixelStore.getState().saveIssues.docs).toBe('invalid');
+
+    usePixelStore.getState().resetStage();
+    usePixelStore.getState().resolveConfirmation(true);
+    expect(usePixelStore.getState().lessonResetCount).toBe(initialCount + 1);
+    expect(usePixelStore.getState().saveIssues.docs).toBeUndefined();
+    expect(usePixelStore.getState().sim).toEqual(createStageState('docs'));
+    expect(usePixelStore.getState().sessions.ch1).toBe(other);
+  });
+});
+
 describe('practice store external tab adoption', () => {
   beforeEach(() => {
     seed('ch1');

@@ -1,4 +1,4 @@
-import { resumePracticeBubbles, STAGE_MAP } from '../engine';
+import { resumePracticeBubbles } from '../engine';
 import { getDocumentWorkingText } from '../engine/documentDiff';
 import {
   ALL_STAGE_IDS, LESSON_ACTIONS,
@@ -170,10 +170,7 @@ function decodeSession(raw: string, id: StageId, legacy: LegacyVersion | null): 
       lines: [{ text: '저장한 작업과 진행 상태를 불러왔어요.', tone: 'muted' }],
     }],
   };
-  sim.bubbles = resumePracticeBubbles(sim).map((bubble) => (
-    legacy === 'v1' && /^\d+장 실습 완료$/.test(bubble.title)
-      ? { ...bubble, title: `${STAGE_MAP[id].number}장 실습 완료` } : bubble
-  ));
+  sim.bubbles = resumePracticeBubbles(sim);
   return { sim, documentDraft: stored.documentDraft };
 }
 

@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react';
+import { STAGE_MAP } from '../engine';
 import { usePixelStore } from '../store/usePixelStore';
 
 export function PracticeConfirmation() {
   const confirmation = usePixelStore((state) => state.confirmation);
   const resolve = usePixelStore((state) => state.resolveConfirmation);
+  const chapter = usePixelStore((state) => STAGE_MAP[state.stageId].number);
   const dialog = useRef<HTMLDialogElement>(null);
   const cancelButton = useRef<HTMLButtonElement>(null);
 
@@ -39,7 +41,7 @@ export function PracticeConfirmation() {
           ? '작업 파일과 스테이징 영역을 대상 커밋에 맞춰요. 커밋하지 않은 변경이 사라질 수 있어요.'
           : replaceDraft ? '저장하지 않은 수정이 예시 문장으로 바뀌어요.'
             : undoDraft ? '되돌리면 편집기에 입력 중인 저장하지 않은 초안이 바뀔 수 있어요. 초안을 지키려면 취소하고 먼저 문서를 저장하세요.'
-              : '작성 중인 문서와 이 장에서 진행한 실습을 시작 상태로 돌려요.'}
+              : `${chapter}장의 진행 상태와 파일 변경, 작성 중인 초안이 지워져요. 다른 장의 기록은 유지돼요.`}
       </p>
       {hardReset && <code className="mt-2 block break-all text-sm">{confirmation.command}</code>}
       <div className="mt-5 flex flex-wrap justify-end gap-2">

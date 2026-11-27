@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { syncChapterLocation, usePixelStore } from './store/usePixelStore';
+import { chapterHash, syncChapterLocation, usePixelStore } from './store/usePixelStore';
+import { STAGE_MAP } from './engine';
 import { TopStageBar } from './components/TopStageBar';
 import { PixelStageCanvas } from './pixel/PixelStageCanvas';
 import { TerminalDock } from './components/TerminalDock';
@@ -106,21 +107,36 @@ export function App() {
 }
 
 function PracticeRecovery({ issue }: { issue: PracticeSaveIssue }) {
-  const resetStageImmediately = usePixelStore((state) => state.resetStageImmediately);
+  const lesson = usePixelStore((state) => STAGE_MAP[state.stageId]);
+  const resetStage = usePixelStore((state) => state.resetStage);
   const updated = issue === 'example-updated';
+  const updateReason = lesson.id === 'ch2' ? '임시 보관과 취소를 배우는 예제에 비밀 메모를 빼는 실습이 추가됐어요.'
+    : lesson.id === 'ch5' ? '글꼴 수정 PR을 합치는 데 필요한 fix/font 브랜치가 예제에 추가됐어요.'
+      : '이 장의 시작 파일이나 브랜치가 바뀌었어요.';
 
   return (
     <section aria-labelledby="practice-recovery-title" className="mx-auto mt-6 w-[calc(100%-2rem)] max-w-xl rounded-xl border border-[#CDBCA3] bg-[#FFFDF8] p-5 sm:p-6">
       <h1 id="practice-recovery-title" className="break-keep text-xl font-bold">
-        {updated ? '이 장의 실습 예제가 바뀌었어요' : '이 장의 저장 내용을 읽을 수 없어요'}
+        {lesson.number}장 · {lesson.shortTitle}
       </h1>
+      <h2 className="mt-2 break-keep font-bold">
+        {updated ? '이 장의 실습 예제가 바뀌었어요' : '이 장의 저장 내용을 읽을 수 없어요'}
+      </h2>
       <p className="mt-2 break-keep text-sm leading-relaxed text-[#59483B]">
-        {updated ? '이 장을 초기화하면 새 예제로 처음부터 실습할 수 있어요.'
-          : '현재 장을 초기화하면 처음부터 다시 실습할 수 있어요.'}
+        {updated ? `${updateReason} 이전 저장본을 초기화하면 새 예제로 시작할 수 있어요.`
+          : '이 장의 저장본을 초기화하면 처음부터 다시 실습할 수 있어요.'}
+        {' '}초기화하면 이 장의 진행 상태와 파일 변경, 작성 중인 초안이 지워져요. 다른 장은 그대로 저장돼요.
       </p>
-      <button type="button" onClick={resetStageImmediately} className="pixel-btn mt-4 rounded-md border-[#C78B1E] bg-[#F4B942] px-3 py-2 text-sm font-bold">
-        현재 장 초기화
-      </button>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button type="button" onClick={resetStage} className="pixel-btn rounded-md border-[#C78B1E] bg-[#F4B942] px-3 py-2 text-sm font-bold">
+          현재 장 초기화
+        </button>
+        {lesson.id !== 'docs' && (
+          <a href={chapterHash('docs')} className="rounded-md px-2 py-2 text-sm font-semibold text-[#14694F] underline">
+            1장으로 이동
+          </a>
+        )}
+      </div>
     </section>
   );
 }

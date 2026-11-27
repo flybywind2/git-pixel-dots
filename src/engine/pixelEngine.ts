@@ -122,12 +122,28 @@ function mergeConflictBubble(file: string, seq: number): SpeechBubble {
     ]);
 }
 
+function revertConflictBubble(seq: number): SpeechBubble {
+  return makeBubble(`revert-conflict-${seq}`, 'buddy', 48, 52, '취소하려는 줄에 충돌이 있어요',
+    '현재 버전과 취소하려는 변경이 같은 부분에 있어요. 남길 버전을 골라 주세요.', undefined, [
+      { label: '현재 버전 유지', command: 'resolve ours', tone: 'primary' },
+      { label: '이전 버전 사용', command: 'resolve theirs', tone: 'mint' },
+      { label: '취소 작업 중단', command: 'git revert --abort', tone: 'amber' },
+    ]);
+}
+
 export function resumePracticeBubbles(state: PixelSimState): SpeechBubble[] {
-  if (Array.isArray(state.bubbles) && state.bubbles.length > 0) return state.bubbles;
-  if (state.conflict && !state.conflict.revert && state.conflict.resolvedChoice === 'none') {
-    return [mergeConflictBubble(state.conflict.file, state.lastAnim.seq)];
+  const { conflict, lastAnim: { seq } } = state;
+  if (conflict?.resolvedChoice === 'none') {
+    return [conflict.revert ? revertConflictBubble(seq) : mergeConflictBubble(conflict.file, seq)];
   }
-  if (state.lastAnim.seq === 0) return createStageState(state.stageId).bubbles;
+  if (conflict?.revert) {
+    return [makeBubble('resume-revert', 'buddy', 48, 52, '충돌에서 남길 내용을 골랐어요',
+      '취소 커밋을 기록해 마무리하세요.', undefined, [
+        { label: '취소 커밋 기록하기', command: 'git revert --continue', tone: 'mint' },
+        { label: '취소 작업 중단', command: 'git revert --abort', tone: 'amber' },
+      ])];
+  }
+  if (seq === 0) return createStageState(state.stageId).bubbles;
   const next = getNextPendingStep(state);
   return [makeBubble('resume', 'system', 50, 50,
     next ? '하던 실습을 이어 가요' : '이 장의 실습을 마쳤어요',
@@ -3102,12 +3118,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
         return finalizeTransition(
           state, draft, 'CONFLICT', '커밋 취소 충돌', file, cmd,
           [{ text: `CONFLICT (content): ${file}. 해결한 뒤 git revert --continue를 실행하세요.`, tone: 'coral' }],
-          makeBubble(`revert-conflict-${seqNext}`, 'buddy', 48, 52, '취소하려는 줄에 충돌이 있어요',
-            '현재 버전과 취소하려는 변경이 같은 부분에 있어요. 남길 버전을 골라 주세요.', undefined, [
-              { label: '현재 버전 유지', command: 'resolve ours', tone: 'primary' },
-              { label: '이전 버전 사용', command: 'resolve theirs', tone: 'mint' },
-              { label: '취소 작업 중단', command: 'git revert --abort', tone: 'amber' },
-            ]),
+          revertConflictBubble(seqNext),
         );
       }
 

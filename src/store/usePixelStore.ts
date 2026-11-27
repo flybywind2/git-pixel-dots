@@ -37,6 +37,7 @@ export interface PixelStore extends PracticeSession {
   sessions: Partial<Record<StageId, PracticeSession>>;
   undoStacks: Partial<Record<StageId, PracticeSession[]>>;
   saveIssues: Partial<Record<StageId, PracticeSaveIssue>>;
+  lessonResetCount: number;
   history: string[];
   helpOpen: boolean;
   certificateOpen: boolean;
@@ -48,7 +49,6 @@ export interface PixelStore extends PracticeSession {
   runCommand: (cmd: string) => void;
   undoStep: () => void;
   resetStage: () => void;
-  resetStageImmediately: () => void;
   setDocumentDraft: (text: string) => void;
   loadExampleDocument: () => void;
   saveDocument: () => void;
@@ -167,6 +167,7 @@ export const usePixelStore = create<PixelStore>((set) => ({
   sessions,
   undoStacks: {},
   saveIssues,
+  lessonResetCount: 0,
   history: [],
   helpOpen: false,
   certificateOpen: false,
@@ -217,24 +218,18 @@ export const usePixelStore = create<PixelStore>((set) => ({
 
   resetStage: () => set({ confirmation: { kind: 'lesson-reset' } }),
 
-  resetStageImmediately: () => set((state) => {
-    clearLegacyPracticeSessions(state.stageId);
-    draftResaveSignatures.delete(state.stageId);
-    return {
-      ...applySession(state, createStageState(state.stageId), null),
-      undoStacks: clearUndoStack(state),
-    };
-  }),
-
   resolveConfirmation: (confirmed) => set((state) => {
     if (!confirmed || !state.confirmation) return { confirmation: null };
     if (state.confirmation.kind === 'hard-reset') return execute(state, state.confirmation.command);
     if (state.confirmation.kind === 'replace-draft') return applyDocumentDraft(state, EXAMPLE_DOCUMENT);
     if (state.confirmation.kind === 'undo-draft') return applyUndo({ ...state, confirmation: null });
+    const reset = applySession(state, createStageState(state.stageId), null);
+    draftResaveSignatures.delete(state.stageId);
     clearLegacyPracticeSessions(state.stageId);
     return {
-      ...applySession(state, createStageState(state.stageId), null),
+      ...reset,
       undoStacks: clearUndoStack(state),
+      lessonResetCount: state.lessonResetCount + 1,
     };
   }),
 

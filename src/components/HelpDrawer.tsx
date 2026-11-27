@@ -30,7 +30,12 @@ export function HelpDrawer() {
     <dialog
       ref={dialogRef}
       aria-labelledby="dictionary-title"
-      onCancel={() => setHelpOpen(false)}
+      onCancel={(event) => { event.preventDefault(); setHelpOpen(false); }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || event.nativeEvent.isComposing) return;
+        event.preventDefault();
+        setHelpOpen(false);
+      }}
       onClick={(event) => { if (event.target === event.currentTarget) setHelpOpen(false); }}
       className="fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none bg-transparent text-[#2F241D] backdrop:bg-[#2F241D]/30"
     >

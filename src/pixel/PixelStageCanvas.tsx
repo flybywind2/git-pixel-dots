@@ -285,8 +285,8 @@ export function PixelStageCanvas() {
     focusAfterBubbleAction.current = true;
     runCommand(command);
   }
-  const canvasMinHeight = stageId === 'ch2' ? 'min-h-[215px] sm:min-h-[245px]'
-    : stageId === 'ch3' ? 'min-h-[192px] sm:min-h-[245px]' : 'min-h-[225px] sm:min-h-[260px]';
+  const canvasMinHeight = stageId === 'ch2' || stageId === 'ch3' ? 'min-h-[270px] sm:min-h-[245px]'
+    : 'min-h-[260px]';
 
   return (
     <div className="relative flex flex-1 flex-col bg-[#F6EFE2]">
@@ -568,8 +568,10 @@ export function PixelStageCanvas() {
       <div ref={containerRef} className={`relative flex-1 ${canvasMinHeight}`}>
         <canvas
           ref={canvasRef}
+          id="practice-graph"
+          tabIndex={-1}
           data-testid="pixel-stage-canvas"
-          className="absolute inset-0 block h-full w-full"
+          className="absolute inset-0 block h-full w-full focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#166447]"
           role="img"
           aria-label={`${scenario.title} · 현재 브랜치 ${sim.headBranch} · ${sim.prs.length > 0 ? `PR ${sim.prs.length}건` : 'PR 없음'} · ${sim.lastAnim.label}`}
         />

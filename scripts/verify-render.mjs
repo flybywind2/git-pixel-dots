@@ -39,7 +39,9 @@ async function startServer() {
 function trackErrors(page, origin) {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+  page.on('console', (message) => {
+    if (['error', 'warning'].includes(message.type())) errors.push(message.text());
+  });
   page.on('response', (response) => {
     if (new URL(response.url()).origin === origin && response.status() >= 400) {
       errors.push(`${response.status()} ${response.url()}`);
@@ -63,6 +65,7 @@ async function checkViewport(page) {
   });
   assert(overflow.page <= 1, `Page overflows horizontally by ${overflow.page}px (${overflow.wide.join(' | ')})`);
   assert(overflow.main <= 1, `Main area overflows horizontally by ${overflow.main}px (${overflow.wide.join(' | ')})`);
+  return [overflow.page, overflow.main];
 }
 
 async function checkCardOverflow(page) {
@@ -385,8 +388,13 @@ async function storageRecovery(page, url) {
   const reset = page.getByRole('main').getByRole('button', { name: '현재 장 초기화', exact: true });
   const updated = page.getByRole('heading', { name: '이 장의 실습 예제가 바뀌었어요' });
   await updated.waitFor();
-  // 복구 화면의 초기화는 확인 창 없이 바로 동작하고, 옛 v2 저장본은 지워져요.
-  await reset.click();
+  // 복구 화면도 확인해야 옛 v2 저장본을 지워요.
+  const confirmRecoveryReset = async () => {
+    await reset.click();
+    const dialog = page.getByRole('dialog', { name: '현재 장을 초기화할까요?' });
+    await dialog.getByRole('button', { name: '현재 장 초기화', exact: true }).click();
+  };
+  await confirmRecoveryReset();
   await expectProgress(page, 0, 9);
   assert(await page.evaluate(() => !localStorage.getItem('gitdots.practice.v2.ch4') && localStorage.getItem('gitdots.practice.v4.ch3')));
   await page.reload();
@@ -396,7 +404,7 @@ async function storageRecovery(page, url) {
   await page.goto(`${url}#/chapter/5`);
   const unreadable = page.getByRole('heading', { name: '이 장의 저장 내용을 읽을 수 없어요' });
   await unreadable.waitFor();
-  await reset.click();
+  await confirmRecoveryReset();
   await expectProgress(page, 0, 4);
   await page.reload();
   await expectProgress(page, 0, 4);
@@ -501,6 +509,9 @@ async function revertConflict(page) {
   await runCommand(page, 'git revert HEAD~1');
   await page.getByRole('heading', { name: '커밋 취소 중 변경이 겹쳤어요', exact: true }).waitFor();
   assert((await editor.inputValue()).includes('<<<<<<< HEAD'));
+  await runCommand(page, 'git stats');
+  await page.reload();
+  assert.match(await page.getByTestId('speech-bubble').innerText(), /취소하려는 줄에 충돌이 있어요/);
   await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
   await page.getByRole('button', { name: '취소 작업 중단', exact: true }).click();
   assert.equal(await editor.inputValue(), second);
@@ -508,6 +519,7 @@ async function revertConflict(page) {
   await runCommand(page, 'git revert HEAD~1');
   await page.getByRole('button', { name: '터미널 접기', exact: true }).click();
   await page.getByRole('button', { name: '이전 버전 사용', exact: true }).click();
+  await page.reload();
   await page.getByRole('button', { name: '취소 커밋 기록하기', exact: true }).click();
   assert.equal(await editor.inputValue(), original);
 }
@@ -713,7 +725,7 @@ async function mobileLessonLayout(browser, url) {
     await undoInfoBtn.click();
     const undoPopover = page.locator('#undo-refresh-popover');
     await undoPopover.waitFor({ state: 'visible' });
-    assert.match(await undoPopover.innerText(), /새로고침하면 사라져요/);
+    assert.match(await undoPopover.innerText(), /새로고침하면 되돌리기 이력과 터미널 출력이 초기화돼요/);
     await page.keyboard.press('Escape');
     assert.equal(await undoPopover.count(), 0);
     // 320px/390px 머리글 1행(로고 + 3개 버튼)이 겹치거나 줄바꿈 없이 한 줄로 배치돼요.
@@ -1480,6 +1492,216 @@ async function laptopCanvasAndReviewRegressions(browser, url) {
   await page.close();
 }
 
+async function checkChangedExampleRecovery(page, url) {
+  await openChapter(page, url, 3);
+  await clickGuided(page);
+  await openChapter(page, url, 6);
+  await clickGuided(page);
+  await clickGuided(page);
+  await page.getByTestId('guided-command').click();
+  await page.getByTestId('prediction-choice-0').click();
+  assert.match(await page.getByTestId('prediction-quiz').innerText(), /이 예제에서는.+실제 GitHub Actions는 설정에 따라 이슈 등록/);
+  const examples = [
+    { chapter: 6, title: 'GitHub CLI', reason: /fix\/font/, steps: 4, key: 'gitdots.practice.v4.ch5' },
+    { chapter: 3, title: '보관과 취소', reason: /비밀 메모를 빼는 실습/, steps: 5, key: 'gitdots.practice.v3.ch2' },
+  ];
+  await page.evaluate(() => {
+    const ch3 = 'gitdots.practice.v4.ch2';
+    localStorage.setItem('gitdots.practice.v3.ch2', localStorage.getItem(ch3));
+    localStorage.removeItem(ch3);
+    const ch6 = 'gitdots.practice.v4.ch5';
+    const stale = JSON.parse(localStorage.getItem(ch6));
+    delete stale.sim.branches['fix/font'];
+    delete stale.sim.remoteBranches['fix/font'];
+    localStorage.setItem(ch6, JSON.stringify(stale));
+  });
+  const saved = (key) => page.evaluate((key) => localStorage.getItem(key), key);
+  const otherChapter = await saved('gitdots.practice.v4.docs');
+  await page.reload();
+  for (const { chapter, title, reason, steps, key } of examples) {
+    await page.goto(url + '#/chapter/' + chapter);
+    const main = page.getByRole('main');
+    await main.getByRole('heading', { name: chapter + '장 · ' + title }).waitFor();
+    assert.match(await main.innerText(), reason);
+    assert.match(await main.innerText(), /이 장의 진행 상태와 파일 변경.+다른 장은 그대로 저장/);
+    const oldSave = await saved(key);
+    const reset = main.getByRole('button', { name: '현재 장 초기화', exact: true });
+    const dialog = page.getByRole('dialog', { name: '현재 장을 초기화할까요?' });
+    await reset.click();
+    const cancel = dialog.getByRole('button', { name: '취소', exact: true });
+    await cancel.waitFor();
+    assert(await cancel.evaluate((node) => document.activeElement === node));
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'hidden' });
+    assert(await reset.evaluate((node) => document.activeElement === node));
+    assert.equal(await saved(key), oldSave);
+    await main.getByRole('link', { name: '1장으로 이동' }).click();
+    await page.waitForURL('**/#/chapter/1');
+    await page.goBack();
+    await reset.waitFor();
+    assert.equal(await saved(key), oldSave);
+    await reset.click();
+    await dialog.getByRole('button', { name: '현재 장 초기화', exact: true }).click();
+    await expectProgress(page, 0, steps);
+    assert.notEqual(await saved(key), oldSave);
+    await page.reload();
+    await expectProgress(page, 0, steps);
+    assert.equal(await saved('gitdots.practice.v4.docs'), otherChapter);
+    await checkViewport(page);
+  }
+}
+
+async function reviewedUxAcrossViewports(browser, url) {
+  for (const [width, height] of [[1920, 1080], [1280, 649], [1024, 768], [768, 1024], [390, 844]]) {
+    const mobile = width === 390;
+    const page = await browser.newPage({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile, reducedMotion: 'reduce' });
+    const errors = trackErrors(page, new URL(url).origin);
+    await openChapter(page, url, 1);
+    await page.evaluate(() => document.fonts.ready);
+    const header = page.locator('header').first();
+    const reset = header.getByRole('button', { name: '현재 장 초기화', exact: true });
+    const dictionary = header.getByRole('button', { name: '명령어 사전', exact: true });
+    const undo = page.getByTestId('undo-step-btn');
+    const dock = page.getByRole('region', { name: '실습 터미널', exact: true });
+    const editor = page.getByRole('textbox', { name: '회의록.md', exact: true });
+    const menu = header.getByRole('combobox', { name: '학습할 장 선택' });
+    const logoBox = await header.getByRole('link', { name: 'GitDots' }).boundingBox();
+    const navBox = await (width >= 1152 ? page.getByTestId('stage-pill-docs') : menu).boundingBox();
+    const dockBox = await dock.boundingBox();
+    const editorBox = await editor.boundingBox();
+    const editorVisible = Math.min(editorBox.y + editorBox.height, dockBox.y) - editorBox.y;
+    const metrics = { dock: Math.round(dockBox.height), editorVisible: Math.round(editorVisible) };
+    if (width === 1024) {
+      assert(navBox.y >= logoBox.y + logoBox.height, 'Chapter menu overlaps the logo');
+      metrics.logoNavGap = Math.round(navBox.y - logoBox.y - logoBox.height);
+    } else if (width >= 1152) {
+      assert(navBox.x >= logoBox.x + logoBox.width, 'Chapter pills overlap the logo');
+    }
+    if (height === 649) {
+      assert(dockBox.height <= 160 && editorVisible >= 60, 'Short desktop leaves too little space for the editor');
+    }
+    await checkViewport(page);
+    const note = /진행 상태와 파일은 자동 저장돼요.+되돌리기 이력과 터미널 출력이 초기화돼요/;
+    if (mobile) {
+      const info = page.getByTestId('undo-refresh-info-btn');
+      metrics.targets = [];
+      for (const target of [undo, reset, dictionary, info, menu]) {
+        const box = await target.boundingBox();
+        assert(box.width >= 36 && box.height >= 36 && box.x + box.width <= width, 'Mobile header target is too small or clipped');
+        metrics.targets.push([Math.round(box.width), Math.round(box.height)]);
+      }
+      assert.equal(await reset.innerText(), '초기화');
+      assert.equal(await dictionary.innerText(), '사전');
+      await info.click();
+      assert.match(await page.locator('#undo-refresh-popover').innerText(), note);
+      await page.keyboard.press('Escape');
+    } else {
+      assert.match(await page.locator('#undo-refresh-note').innerText(), note);
+    }
+
+    await clickGuided(page);
+    const edited = (await editor.inputValue()).replace('금요일 저녁 7시', '수요일 오후 2시');
+    await editor.fill(edited);
+    for (let step = 0; step < 6; step += 1) await clickGuided(page);
+    const next = page.getByTestId('next-chapter-btn');
+    assert.equal(await next.innerText(), '다음 장 · 변경 기록과 공유');
+    await runCommand(page, 'git stats');
+    assert.match(await page.getByTestId('speech-bubble').innerText(), /모르는 명령어/);
+    assert(await undo.isEnabled());
+    assert.match(await dock.getByRole('log').innerText(), /git stats/);
+    await page.reload();
+    await expectProgress(page, 6, 6);
+    assert.equal(await editor.inputValue(), edited);
+    assert.equal(await next.innerText(), '다음 장 · 변경 기록과 공유');
+    assert(await undo.isDisabled());
+    assert.doesNotMatch(await dock.getByRole('log').innerText(), /git stats/);
+    assert.doesNotMatch(await page.getByTestId('speech-bubble').innerText(), /모르는 명령어/);
+    await next.click();
+    await page.waitForURL('**/#/chapter/2');
+    await page.getByRole('heading', { name: '변경 사항을 커밋하고 공유하기', exact: true }).waitFor();
+    if (await menu.isVisible()) assert.equal(await menu.inputValue(), 'ch1');
+    else assert.equal(await page.getByTestId('stage-pill-ch1').getAttribute('aria-current'), 'page');
+
+    for (const query of ['', 'git']) {
+      await dictionary.click();
+      const drawer = page.getByRole('dialog', { name: '명령어 사전', exact: true });
+      const search = drawer.getByRole('searchbox');
+      await search.fill(query);
+      await search.press('Escape');
+      await drawer.waitFor({ state: 'hidden' });
+      assert(await dictionary.evaluate((node) => document.activeElement === node));
+    }
+    const input = await openTerminal(page);
+    const execute = dock.getByRole('button', { name: '실행', exact: true });
+    for (const value of ['git', '']) {
+      await input.fill(value);
+      if (value) await page.getByRole('listbox').waitFor();
+      await input.press('Escape');
+      assert.equal(await input.getAttribute('aria-expanded'), 'false');
+      await input.press('Tab');
+      assert(await execute.evaluate((node) => document.activeElement === node));
+      assert.equal(await input.inputValue(), value);
+    }
+    await input.fill('git unsubmitted');
+    const dialog = page.getByRole('dialog', { name: '현재 장을 초기화할까요?' });
+    await reset.click();
+    await dialog.getByRole('button', { name: '취소', exact: true }).click();
+    assert.equal(await input.inputValue(), 'git unsubmitted');
+    await reset.click();
+    await dialog.getByRole('button', { name: '현재 장 초기화', exact: true }).click();
+    await dialog.waitFor({ state: 'hidden' });
+    await page.waitForFunction(() => document.querySelector('[data-testid="terminal-input"]')?.value === '');
+    await checkViewport(page);
+
+    if (width === 768) {
+      await openChapter(page, url, 4);
+      await page.getByRole('heading', { name: '팀에 회의록 수정 제안하기', exact: true }).waitFor();
+      metrics.chips = await dock.getByRole('group', { name: '빠른 실행' }).evaluate((node) => ({
+        rows: new Set([...node.querySelectorAll('button')].map((button) => button.offsetTop)).size,
+        overflow: node.scrollWidth - node.clientWidth,
+      }));
+      assert(metrics.chips.rows >= 2 && metrics.chips.overflow === 0, 'Tablet quick actions are clipped');
+    }
+    if (mobile) {
+      await openChapter(page, url, 5);
+      await page.getByTestId('pixel-stage-canvas').waitFor();
+      const branch = 'feat/' + 'very-long-branch-name-'.repeat(8) + 'end';
+      await page.evaluate(() => {
+        const drawText = CanvasRenderingContext2D.prototype.fillText;
+        CanvasRenderingContext2D.prototype.fillText = function (text, x, y) {
+          if (text.startsWith('HEAD · feat/')) {
+            const scale = this.getTransform().a / Math.min(devicePixelRatio, 2);
+            const { width } = this.measureText(text);
+            window.sampledBranchLabel = { text, left: (x - width / 2) * scale, right: (x + width / 2) * scale };
+          }
+          return drawText.apply(this, arguments);
+        };
+      });
+      await runCommand(page, 'git switch -c ' + branch);
+      await page.waitForFunction(() => window.sampledBranchLabel);
+      const canvas = page.getByTestId('pixel-stage-canvas');
+      await dock.getByRole('button', { name: '터미널 접기', exact: true }).click();
+      await page.getByRole('button', { name: '그래프 보기', exact: true }).click();
+      const box = await canvas.boundingBox();
+      const mainBox = await page.getByRole('main').boundingBox();
+      const label = await page.evaluate(() => window.sampledBranchLabel);
+      assert(box.height >= 260);
+      assert(box.y >= mainBox.y - 1 && box.y + box.height <= mainBox.y + mainBox.height + 1);
+      assert(await canvas.evaluate((node) => document.activeElement === node));
+      assert(label.text.endsWith('…') && label.left >= 0 && label.right <= width);
+      assert.match(await canvas.getAttribute('aria-label'), new RegExp(branch));
+      metrics.graph = { height: Math.round(box.height), labelLeft: Math.round(label.left), labelRight: Math.round(label.right) };
+      await openTerminal(page);
+    }
+    await checkChangedExampleRecovery(page, url);
+    const overflow = await checkViewport(page);
+    assert.deepEqual(overflow, [0, 0]);
+    assert.deepEqual(errors, []);
+    console.log('[QA] External UX review', width + '×' + height, JSON.stringify({ ...metrics, overflow, errors: errors.length }));
+    await page.close();
+  }
+}
+
 async function main() {
   fs.mkdirSync(out, { recursive: true });
   const local = publicUrl ? undefined : await startServer();
@@ -1492,6 +1714,7 @@ async function main() {
       headless: true,
       args: ['--no-sandbox', '--disable-dev-shm-usage'],
     });
+    await reviewedUxAcrossViewports(browser, url);
     for (const [width, height] of [[1366, 860], [390, 760], [320, 568]]) {
       const page = await browser.newPage({ viewport: { width, height } });
       page.setDefaultTimeout(9000);
@@ -1504,7 +1727,7 @@ async function main() {
       await page.close();
     }
 
-    const trackPage = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+    const trackPage = await browser.newPage({ viewport: { width: 1280, height: 768 } });
     await practiceTracks(trackPage, url);
     await trackPage.close();
     await basicCertificate(browser, url);

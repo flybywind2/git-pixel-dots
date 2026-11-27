@@ -116,6 +116,7 @@ function detectShowTabHint(): boolean {
 
 export function TerminalDock() {
   const sim = usePixelStore((state) => state.sim);
+  const lessonResetCount = usePixelStore((state) => state.lessonResetCount);
   const history = usePixelStore((state) => state.history);
   const runCommand = usePixelStore((state) => state.runCommand);
   const notice = usePixelStore((state) => state.notice);
@@ -156,9 +157,10 @@ export function TerminalDock() {
     setDismissed(false);
     setCycle(null);
     setHistoryIndex(null);
+    setDraftInput('');
     pinnedToBottom.current = true;
     setHasNewOutput(false);
-  }, [sim.stageId]);
+  }, [sim.stageId, lessonResetCount]);
 
   useEffect(() => {
     const update = () => setShowTabHint(detectShowTabHint());
@@ -261,6 +263,7 @@ export function TerminalDock() {
       setCycle(null);
       return;
     }
+    if (event.key === 'Tab' && dismissed) return;
     if (showOptions && ((event.key === 'Tab' && !event.shiftKey) || event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
       event.preventDefault();
       const direction = event.key === 'ArrowUp' ? -1 : 1;
@@ -300,7 +303,7 @@ export function TerminalDock() {
         open
           ? tall
             ? 'h-[min(72%,40rem)] lg:h-[min(72%,44rem)]'
-            : 'h-[min(38%,15.5rem)] sm:h-[min(34%,17rem)] lg:h-[min(31%,17rem)]'
+            : 'h-[min(36%,15.5rem)] sm:h-[min(34%,17rem)] lg:h-[min(31%,17rem)]'
           : ''
       }`}
     >
@@ -395,7 +398,7 @@ export function TerminalDock() {
           </div>
           <form
             onSubmit={(event) => { event.preventDefault(); submit(); }}
-            className="terminal-form relative shrink-0 border-t border-[#DFCEB3] bg-[#F1E8D8] px-3 py-1.5 sm:px-4 sm:py-2.5"
+            className="terminal-form relative shrink-0 border-t border-[#DFCEB3] bg-[#F1E8D8] px-3 py-0.5 min-[360px]:py-1.5 sm:px-4 sm:py-2.5"
           >
             {showOptions && (
               <ul
@@ -449,7 +452,7 @@ export function TerminalDock() {
                   setDismissed(false);
                 }}
                 onFocus={() => setFocused(true)}
-                onBlur={() => { setFocused(false); setCycle(null); }}
+                onBlur={() => { setFocused(false); setCycle(null); setDismissed(false); }}
                 onKeyDown={handleKeyDown}
                 autoComplete="off"
                 autoCapitalize="off"
@@ -457,7 +460,7 @@ export function TerminalDock() {
                 placeholder={examplePlaceholder(exampleCommand, showTabHint)}
                 className="terminal-input font-mono-code min-h-10 min-w-0 flex-1 rounded-md border border-[#CBB38E] bg-[#FFFDF8] px-3 py-2 text-base text-[#2F241D] placeholder:text-[#715D49] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#166447] sm:min-h-11 sm:px-3.5 sm:pointer-fine:text-[15px]"
               />
-              <span id="terminal-keys" className="sr-only">입력창이 비어 있으면 Tab으로 예시 명령을 채우고, 입력 중에는 Tab으로 추천 명령을 순환해요. Shift+Tab은 이전 항목으로 이동하며 Esc로 목록을 닫아요.</span>
+              <span id="terminal-keys" className="sr-only">입력창이 비어 있으면 Tab으로 예시 명령을 채우고, 입력 중에는 Tab으로 추천 명령을 순환해요. Esc를 누른 뒤 Tab을 누르면 실행 버튼으로 이동해요. Shift+Tab은 이전 항목으로 이동해요.</span>
               <button
                 type="submit"
                 className="terminal-submit min-h-10 shrink-0 rounded-md border border-[#BF8B29] bg-[#F4B942] px-3.5 py-2 text-sm font-bold text-[#362711] hover:bg-[#F7C55D] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#166447] sm:min-h-11 sm:px-4"

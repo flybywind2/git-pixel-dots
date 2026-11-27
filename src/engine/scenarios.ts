@@ -516,10 +516,10 @@ const LESSON_CONTENT: Record<StageId, LessonContent> = {
         terms: ['자동 검사(CI)'],
         commandNote: '이슈와는 별개로, 이미 올라간 feat/darkmode 브랜치의 코드 변경 검사예요.',
         prediction: {
-          question: '자동 검사(CI)는 언제 돌까요?',
+          question: '이 예제에서 자동 검사(CI)는 언제 돌까요?',
           choices: ['이슈를 등록하면 바로', '코드 변경이 GitHub에 올라간 뒤'],
           answer: 1,
-          explain: 'CI는 올라간 코드 변경을 빌드·테스트해요. 이슈 등록만으로는 코드가 바뀌지 않아 검사가 돌지 않아요.',
+          explain: '이 예제에서는 코드 변경이 올라올 때 자동 검사가 실행돼요. 실제 GitHub Actions는 설정에 따라 이슈 등록 같은 다른 이벤트에도 실행될 수 있어요.',
         },
       },
       {

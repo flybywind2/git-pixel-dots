@@ -34,17 +34,32 @@
   font-family: var(--font-mono);
 }
 
-.practice-shell[data-compact] .terminal-dock[data-expanded] {
-  height: min(58%, 11.5rem);
-  min-height: min(58%, 9.5rem);
+@media (min-width: 640px) and (max-width: 1023px) and (min-height: 700px) {
+  .terminal-quick-actions {
+    flex-wrap: wrap;
+  }
 }
 
-/* 컴팩트(높이 <420px)에서도 '크게 보기'가 실제로 커지도록 별도 규칙을 둬요.
-   헤더가 여러 줄로 높아지는 좁은 화면에서는 flex-shrink로 화면 안에 맞춰요. */
+@media (min-width: 1024px) and (max-height: 699px) {
+  .terminal-dock[data-size="default"] {
+    height: min(28%, 10rem);
+  }
+}
+
+.practice-shell[data-compact] > header {
+  row-gap: 0.25rem;
+  padding-block: 0.25rem;
+}
+
+.practice-shell[data-compact] .terminal-dock[data-expanded] {
+  height: min(58%, 11.5rem);
+  min-height: min(50%, 9rem);
+  flex-shrink: 1;
+}
+
+/* 컴팩트(높이 <420px)에서도 '크게 보기'가 실제로 커지도록 별도 규칙을 둬요. */
 .practice-shell[data-compact] .terminal-dock[data-expanded][data-size="tall"] {
   height: min(72%, 16rem);
-  min-height: min(58%, 9.5rem);
-  flex-shrink: 1;
 }
 
 .practice-shell[data-compact] .terminal-toggle {

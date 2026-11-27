@@ -399,14 +399,15 @@ function drawCh2Scene(
   motion: SceneMotionState,
 ): void {
   const dot = computeDotSize(w, h);
-  const railY = h * 0.76;
+  const narrow = w <= 520;
+  const railY = h * (narrow ? 0.69 : 0.76);
   const railLeft = w * 0.12;
   const railRight = w * 0.88;
   const topY = h * 0.31;
   const padW = clamp(w * 0.21, 108, 154);
   const stashX = w * 0.18;
   const workX = w * 0.2;
-  const workY = h * 0.9;
+  const workY = h * (narrow ? 0.86 : 0.9);
   const stageX = w * 0.5;
   const remoteX = w * 0.83;
   const kind = sim.lastAnim.kind;
@@ -730,7 +731,7 @@ function drawCh3Scene(
     PALETTE.cream, PALETTE.skyDark, PALETTE.sky, 12, true);
   // 새 브랜치로 이동해도 main이 사라지지 않았음을 같은 보석 옆에 함께 표시해요.
   if (lowerBranch !== 'main' && sim.branches.main === sim.branches[lowerBranch]) {
-    drawPixelBadge(ctx, lowerLabelX, lowerLabelY + dot * 4.5, 'main (같은 커밋)',
+    drawPixelBadge(ctx, lowerLabelX, lowerLabelY + Math.max(32, dot * 4.5), 'main (같은 커밋)',
       PALETTE.cream, PALETTE.skyDark, PALETTE.sky, 11, false);
   }
   if (featureName && (featureTip || fork)) {
@@ -795,8 +796,10 @@ function drawCh3Scene(
 
   // Buddy hops cleanly between main & feature railways!
   const headOnUpper = sim.headBranch === featureName;
-  const targetX = hasConflict ? 0.58 : headOnUpper ? 0.72 : hasMerged ? 0.82 : 0.55;
-  const targetY = hasConflict ? 0.43 : headOnUpper ? 0.33 : hasMerged ? 0.66 : 0.62;
+  const narrow = w <= 520;
+  const targetX = narrow ? (hasConflict ? 0.43 : headOnUpper ? 0.26 : 0.14)
+    : hasConflict ? 0.58 : headOnUpper ? 0.72 : hasMerged ? 0.82 : 0.55;
+  const targetY = narrow ? 0.45 : hasConflict ? 0.43 : headOnUpper ? 0.33 : hasMerged ? 0.66 : 0.62;
   const b = moveBuddySmooth(motion, 'ch3', targetX, targetY);
   const pose: BuddyPose = hasConflict
     ? 'shocked'
@@ -1243,11 +1246,13 @@ function drawCh7Scene(
   motion: SceneMotionState,
 ): void {
   const dot = computeDotSize(w, h);
+  const narrow = w <= 520;
   const publicX = w * 0.2;
   const myX = w * 0.1;
   const wallX = w * 0.47;
   const castleX = w * 0.76;
   const baseY = h * 0.71;
+  const publicY = narrow ? h * 0.67 : baseY;
   const kind = sim.lastAnim.kind;
   const connected = sim.ghes.connected;
   const cloudCompare = sim.ghes.mode === 'cloud';
@@ -1257,7 +1262,7 @@ function drawCh7Scene(
   drawZonePad(
     ctx,
     myX,
-    h * 0.9,
+    h * (narrow ? 0.93 : 0.9),
     clamp(w * 0.16, 88, 128),
     '내 컴퓨터',
     '회사 내부',
@@ -1272,14 +1277,14 @@ function drawCh7Scene(
     CLOUD_CASTLE,
     CLOUD_CASTLE_COLORS,
     publicX,
-    h * 0.58 + Math.sin(time * 2) * 3,
+    publicY - h * 0.13 + Math.sin(time * 2) * 3,
     dot * 0.9,
     'dot',
   );
   drawZonePad(
     ctx,
     publicX,
-    baseY,
+    publicY,
     clamp(w * 0.19, 104, 152),
     '공용 GitHub',
     cloudCompare ? '비교: 클라우드 관점' : 'github.com',
@@ -1413,7 +1418,7 @@ function drawCh7Scene(
 
   // Cloud comparison: highlight the public side so the toggle is visible on canvas.
   if (cloudCompare) {
-    drawPixelBadge(ctx, publicX, baseY - dot * 9, '클라우드 비교 중', PALETTE.cream, PALETTE.skyDark, PALETTE.sky, 11);
+    drawPixelBadge(ctx, publicX, publicY - dot * 9, '클라우드 비교 중', PALETTE.cream, PALETTE.skyDark, PALETTE.sky, 11);
   }
 
   // Encrypted /api/v3 packet cruising through lower VPN tunnel!
@@ -1432,8 +1437,8 @@ function drawCh7Scene(
   }
 
   // Buddy puts on hardhat & walks through the VPN tunnel into the GHES Castle!
-  const targetX = connected ? 0.64 : 0.3;
-  const targetY = connected ? 0.72 : 0.69;
+  const targetX = narrow ? (connected ? 0.62 : 0.31) : connected ? 0.64 : 0.3;
+  const targetY = narrow ? 0.48 : connected ? 0.72 : 0.69;
   const b = moveBuddySmooth(motion, 'ch7', targetX, targetY);
   const pose: BuddyPose =
     kind === 'GHES_BLOCK' && animProgress < 0.85 && !unauth

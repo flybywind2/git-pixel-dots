@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createStageState } from '../engine';
+import { createStageState, executePixelCommand, getNextPendingStep } from '../engine';
 import type { PixelSimState } from '../types/sim';
 import { readPracticeSessions } from './practiceStorage';
 
@@ -57,6 +57,22 @@ describe('practice storage seed migration', () => {
     expect(saved.has(SESSION_KEY)).toBe(true);
     expect(issues.ch5).toBe('example-updated');
     expect(sessions.ch5).toBeUndefined();
+  });
+
+  it('restores the next goal and work without the previous command error or output', () => {
+    const progressed = executePixelCommand(createStageState('ch5'), 'gh auth status');
+    const command = 'unknown-test-command';
+    const failed = executePixelCommand(progressed, command);
+    expect(failed.bubbles[0].title).toMatch(/모르는 명령어/);
+    expect(failed.terminal.at(-1)?.command).toBe(command);
+    storeSession(failed, saved);
+
+    const resumed = readPracticeSessions().sessions.ch5?.sim;
+    expect(resumed?.bubbles[0].title).toBe('하던 실습을 이어 가요');
+    expect(resumed?.bubbles[0].message).toBe(getNextPendingStep(progressed)?.goal);
+    expect(resumed?.files).toEqual(progressed.files);
+    expect(resumed?.completedActions).toEqual(progressed.completedActions);
+    expect(resumed?.terminal.map((entry) => entry.command)).toEqual(['welcome']);
   });
 
   it('removes legacy keys after migrating a valid older session into v4', () => {
