@@ -8,6 +8,7 @@ export function PracticeConfirmation() {
   const chapter = usePixelStore((state) => STAGE_MAP[state.stageId].number);
   const dialog = useRef<HTMLDialogElement>(null);
   const cancelButton = useRef<HTMLButtonElement>(null);
+  const confirmButton = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const element = dialog.current;
@@ -29,6 +30,14 @@ export function PracticeConfirmation() {
       aria-labelledby="practice-confirm-title"
       aria-describedby="practice-confirm-description"
       onCancel={(event) => { event.preventDefault(); resolve(false); }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Tab') return;
+        const from = event.shiftKey ? cancelButton.current : confirmButton.current;
+        const to = event.shiftKey ? confirmButton.current : cancelButton.current;
+        if (event.target !== from) return;
+        event.preventDefault();
+        to?.focus();
+      }}
       className="m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border border-[#CDBCA3] bg-[#FFFDF8] p-5 text-[#2F241D] shadow-xl backdrop:bg-[#2F241D]/45"
     >
       <h2 id="practice-confirm-title" className="text-lg font-bold">
@@ -48,7 +57,7 @@ export function PracticeConfirmation() {
         <button ref={cancelButton} type="button" onClick={() => resolve(false)} className="rounded-md border border-[#CDBCA3] px-3 py-2 text-sm font-semibold">
           취소
         </button>
-        <button type="button" onClick={() => resolve(true)} className="rounded-md bg-[#A9303F] px-3 py-2 text-sm font-bold text-white">
+        <button ref={confirmButton} type="button" onClick={() => resolve(true)} className="rounded-md bg-[#A9303F] px-3 py-2 text-sm font-bold text-white">
           {hardReset ? '대상 커밋으로 복원' : replaceDraft ? '예시로 바꾸기' : undoDraft ? '초안 버리고 되돌리기' : '현재 장 초기화'}
         </button>
       </div>

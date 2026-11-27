@@ -40,9 +40,37 @@
   }
 }
 
-@media (min-width: 1024px) and (max-height: 699px) {
+@media (min-width: 1024px) and (min-height: 420px) and (max-height: 699px) {
   .terminal-dock[data-size="default"] {
-    height: min(28%, 10rem);
+    height: clamp(10rem, 30%, 10.5rem);
+  }
+
+  .terminal-dock[data-size="default"] .terminal-toggle {
+    min-height: 1.875rem;
+  }
+
+  .terminal-dock[data-size="default"] .terminal-quick-actions,
+  .terminal-dock[data-size="default"] .terminal-quick-actions button {
+    padding-block: 0.125rem;
+  }
+
+  .terminal-dock[data-size="default"] .terminal-log {
+    padding-block: 0.25rem;
+    line-height: 1.25rem;
+  }
+
+  .terminal-dock[data-size="default"] .terminal-form {
+    padding-block: 0.125rem;
+  }
+
+  .terminal-dock[data-size="default"] .terminal-input,
+  .terminal-dock[data-size="default"] .terminal-submit {
+    min-height: 2.25rem;
+    padding-block: 0.25rem;
+  }
+
+  .document-lab-grid {
+    padding-top: 0.75rem;
   }
 }
 

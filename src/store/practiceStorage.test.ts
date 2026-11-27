@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStageState, executePixelCommand, getNextPendingStep } from '../engine';
 import type { PixelSimState } from '../types/sim';
-import { readPracticeSessions } from './practiceStorage';
+import { readExternalSession, readPracticeSessions, writePracticeSession } from './practiceStorage';
 
 const SESSION_KEY = 'gitdots.practice.v4.ch5';
 
@@ -22,9 +22,11 @@ function installStorage() {
   return saved;
 }
 
-function storeSession(sim: PixelSimState, saved: Map<string, string>) {
+function storeSession(sim: PixelSimState, saved: Map<string, string>, exampleVersion?: number) {
   const { lastAnim, terminal: _terminal, ...snapshot } = sim;
-  saved.set(SESSION_KEY, JSON.stringify({ sim: snapshot, seq: lastAnim.seq, documentDraft: null }));
+  saved.set(`gitdots.practice.v4.${sim.stageId}`, JSON.stringify({
+    sim: snapshot, seq: lastAnim.seq, documentDraft: null, exampleVersion,
+  }));
 }
 
 describe('practice storage seed migration', () => {
@@ -38,25 +40,58 @@ describe('practice storage seed migration', () => {
     vi.unstubAllGlobals();
   });
 
-  it('accepts a current ch5 session that includes the fix/font example branch', () => {
-    storeSession(createStageState('ch5'), saved);
+  it('accepts an unversioned ch5 session with the current seed after local branch cleanup', () => {
+    const sim = createStageState('ch5');
+    delete sim.branches['fix/font'];
+    storeSession(sim, saved);
     const { sessions, issues } = readPracticeSessions();
     expect(sessions.ch5).toBeDefined();
     expect(issues.ch5).toBeUndefined();
   });
 
-  it('flags an older ch5 session without fix/font as example-updated', () => {
+  it('flags an older ch5 session without the fix/font example commit as example-updated', () => {
     const old = createStageState('ch5');
     const branches = { ...old.branches };
     const remoteBranches = { ...old.remoteBranches };
     delete branches['fix/font'];
     delete remoteBranches['fix/font'];
-    storeSession({ ...old, branches, remoteBranches }, saved);
+    storeSession({ ...old, branches, remoteBranches, commits: old.commits.filter(({ id }) => id !== 'c0') }, saved);
 
     const { sessions, issues } = readPracticeSessions();
     expect(saved.has(SESSION_KEY)).toBe(true);
     expect(issues.ch5).toBe('example-updated');
     expect(sessions.ch5).toBeUndefined();
+  });
+
+  it('restores a user-created feature/ui branch from both unversioned and newly saved ch3 snapshots', () => {
+    const sim = executePixelCommand(createStageState('ch3'), 'git switch -c feature/ui');
+    const key = 'gitdots.practice.v4.ch3';
+    storeSession(sim, saved);
+    expect(readPracticeSessions().issues.ch3).toBeUndefined();
+    expect(readPracticeSessions().sessions.ch3?.sim.headBranch).toBe('feature/ui');
+
+    writePracticeSession({ sim, documentDraft: null });
+    const raw = saved.get(key)!;
+    expect(JSON.parse(raw).exampleVersion).toBe(2);
+    expect(readPracticeSessions().sessions.ch3?.sim.branches['feature/ui']).toBe(sim.branches['feature/ui']);
+    expect(readExternalSession(key, raw)?.session.sim.headBranch).toBe('feature/ui');
+  });
+
+  it('flags the old ch3 seed even when the user has deleted its original local branch', () => {
+    const sim = createStageState('ch3');
+    sim.commits = sim.commits.map((commit) => commit.id === 'c3'
+      ? { ...commit, branch: 'feature/ui', message: 'UI 버튼 색상 변경' } : commit);
+    sim.branches = { main: 'c2' };
+    sim.remoteBranches = { main: 'c2', 'feature/ui': 'c3' };
+    storeSession(sim, saved);
+    const key = 'gitdots.practice.v4.ch3';
+    expect(readPracticeSessions().issues.ch3).toBe('example-updated');
+    expect(readExternalSession(key, saved.get(key)!)).toBeNull();
+  });
+
+  it('uses the explicit ch3 example version even when the snapshot has the current seed', () => {
+    storeSession(createStageState('ch3'), saved, 1);
+    expect(readPracticeSessions()).toEqual({ sessions: {}, issues: { ch3: 'example-updated' } });
   });
 
   it('restores the next goal and work without the previous command error or output', () => {

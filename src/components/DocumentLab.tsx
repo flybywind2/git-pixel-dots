@@ -123,7 +123,7 @@ export function DocumentLab() {
 
   return (
     <div className="dot-bg flex flex-1 bg-[#F6EFE2]">
-      <div className="mx-auto grid w-full max-w-[1440px] min-w-0 items-start gap-4 px-4 py-5 sm:px-6 lg:grid-cols-2">
+      <div className="document-lab-grid mx-auto grid w-full max-w-[1440px] min-w-0 items-start gap-4 px-4 py-5 sm:px-6 lg:grid-cols-2">
         {sim.bubbles.length > 0 && (
           <section
             ref={bubbleRef}

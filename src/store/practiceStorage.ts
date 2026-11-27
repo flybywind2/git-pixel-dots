@@ -7,10 +7,10 @@ import {
   type PixelSimState, type PixelStash, type SpeechBubble, type StageId, type TokenWorldState,
 } from '../types/sim';
 
-// Bump the version when changing the saved snapshot shape or replacing a chapter's example.
-// 시드(예제) 변경도 아래 stale* 감지 대상이에요. 저장본 shape가 같아도 새 예제가 필요하면 감지해요.
+// 저장 형식이 바뀌면 저장 키를, 시작 예제가 바뀌면 해당 장의 예제 버전을 올려요.
 const SESSION_KEY = 'gitdots.practice.v4';
 const LEGACY_KEYS = ['gitdots.practice.v3', 'gitdots.practice.v2', 'gitdots.practice.v1'] as const;
+const updatedExampleVersions: Partial<Record<StageId, number>> = { ch3: 2, ch5: 2 };
 const DRAFT_SAVE_DELAY_MS = 250;
 const TAB_DRAFT_KEY = 'gitdots.tab-draft';
 
@@ -154,13 +154,33 @@ function hasValidHistory(sim: SavedProgress): boolean {
     && sim.stashCount === sim.stashes.length;
 }
 
-function decodeSession(raw: string, id: StageId, legacy: LegacyVersion | null): PracticeSession | null {
+function currentExampleVersion(id: StageId): number {
+  return updatedExampleVersions[id] ?? 1;
+}
+
+function matchesUnversionedExample(snapshot: SavedProgress): boolean {
+  // 예제 버전이 없던 저장본은 이력에 남는 시작 커밋으로 판별해요.
+  if (snapshot.stageId === 'ch3') {
+    return !snapshot.commits.some(({ id, hash, branch }) => id === 'c3' && hash === '50ee60f' && branch === 'feature/ui');
+  }
+  if (snapshot.stageId === 'ch5') {
+    return snapshot.commits.some(({ id, hash }) => id === 'c0' && hash === 'f00a11b');
+  }
+  return true;
+}
+
+function decodeSession(raw: string, id: StageId, legacy: LegacyVersion | null): PracticeSession | PracticeSaveIssue {
   const stored: unknown = JSON.parse(raw);
-  if (!isRecord(stored) || !isRecord(stored.sim)) return null;
+  if (!isRecord(stored) || !isRecord(stored.sim)) return 'invalid';
   const seq = legacy === 'v1' && isRecord(stored.sim.lastAnim) ? stored.sim.lastAnim.seq : stored.seq;
   const snapshot = legacy === 'v1' && stored.sim.bubbles === undefined ? { ...stored.sim, bubbles: [] } : stored.sim;
   if (!savedProgress(snapshot) || snapshot.stageId !== id || !hasValidHistory(snapshot) || !isCount(seq)
-    || !nullable(isString)(stored.documentDraft) || (id === 'docs') !== Boolean(snapshot.document)) return null;
+    || !nullable(isString)(stored.documentDraft) || (id === 'docs') !== Boolean(snapshot.document)
+    || !optional(isCount)(stored.exampleVersion)) return 'invalid';
+  const matchesExample = stored.exampleVersion === undefined
+    ? !(legacy && replacedExamples[legacy].has(id)) && matchesUnversionedExample(snapshot)
+    : stored.exampleVersion === currentExampleVersion(id);
+  if (!matchesExample) return 'example-updated';
 
   const sim: PixelSimState = {
     ...snapshot,
@@ -211,15 +231,8 @@ export function readPracticeSessions() {
     if (raw === null) continue;
     try {
       const session = decodeSession(raw, id, legacyVersion);
-      // 이미 v3으로 옮겨졌더라도 옛 브랜치 이름이 남아 있으면 새 예제로 안내해요.
-      const staleExample = id === 'ch3' && session !== null && 'feature/ui' in session.sim.branches;
-      // 6장(ch5)도 시드 변경 대상이에요. fix/font 브랜치가 없는 옛 저장본은
-      // PR #12를 병합할 브랜치가 없어 막히므로 새 예제로 안내해요.
-      const staleCh5 = id === 'ch5' && session !== null && !('fix/font' in session.sim.branches);
-      if (!session) {
-        issues[id] = 'invalid';
-      } else if (staleExample || staleCh5 || (legacyVersion !== null && replacedExamples[legacyVersion].has(id))) {
-        issues[id] = 'example-updated';
+      if (typeof session === 'string') {
+        issues[id] = session;
       } else {
         const tabDraft = id === 'docs' ? readTabDraft() : null;
         sessions[id] = tabDraft ? { ...session, documentDraft: tabDraft.text } : session;
@@ -258,7 +271,9 @@ function writeNow({ sim, documentDraft }: PracticeSession): boolean {
     return false;
   }
   try {
-    storage.setItem(`${SESSION_KEY}.${sim.stageId}`, JSON.stringify({ sim: snapshot, seq: lastAnim.seq, documentDraft }));
+    storage.setItem(`${SESSION_KEY}.${sim.stageId}`, JSON.stringify({
+      sim: snapshot, seq: lastAnim.seq, documentDraft, exampleVersion: currentExampleVersion(sim.stageId),
+    }));
     return true;
   } catch {
     // The page keeps the latest work in memory when browser storage is unavailable.
@@ -295,7 +310,7 @@ export function readExternalSession(key: string, raw: string): { id: StageId; se
   if (!ALL_STAGE_IDS.includes(id)) return null;
   try {
     const session = decodeSession(raw, id, null);
-    return session ? { id, session } : null;
+    return typeof session === 'string' ? null : { id, session };
   } catch {
     return null;
   }

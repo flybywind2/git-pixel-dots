@@ -263,8 +263,8 @@ export function TerminalDock() {
       setCycle(null);
       return;
     }
-    if (event.key === 'Tab' && dismissed) return;
-    if (showOptions && ((event.key === 'Tab' && !event.shiftKey) || event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+    if (event.key === 'Tab' && (dismissed || event.shiftKey || (cycle === null && input.trim() === exampleCommand))) return;
+    if (showOptions && (event.key === 'Tab' || event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
       event.preventDefault();
       const direction = event.key === 'ArrowUp' ? -1 : 1;
       const from = active ?? (direction > 0 ? -1 : 0);
@@ -274,7 +274,7 @@ export function TerminalDock() {
       return;
     }
     if (event.key === 'Tab') {
-      const completion = resolveTabCompletion(input, exampleCommand, options, event.shiftKey);
+      const completion = resolveTabCompletion(input, exampleCommand, options);
       if (completion === null) return;
       event.preventDefault();
       setInput(completion);
@@ -348,7 +348,7 @@ export function TerminalDock() {
                   key={chip.command}
                   id={recommended ? 'quick-action-recommended' : undefined}
                   type="button"
-                  onClick={() => { runCommand(chip.command); setDismissed(true); }}
+                  onClick={() => runCommand(chip.command)}
                   title={chip.command}
                   className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-2.5 py-1 text-left text-xs ${recommended ? 'border-[#BF8B29] bg-[#FFE7A8] font-bold' : 'border-[#D7C7AE] bg-[#FFFDF8]'}`}
                 >
@@ -457,10 +457,10 @@ export function TerminalDock() {
                 autoComplete="off"
                 autoCapitalize="off"
                 spellCheck={false}
-                placeholder={examplePlaceholder(exampleCommand, showTabHint)}
+                placeholder={examplePlaceholder(exampleCommand, showTabHint && !dismissed)}
                 className="terminal-input font-mono-code min-h-10 min-w-0 flex-1 rounded-md border border-[#CBB38E] bg-[#FFFDF8] px-3 py-2 text-base text-[#2F241D] placeholder:text-[#715D49] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#166447] sm:min-h-11 sm:px-3.5 sm:pointer-fine:text-[15px]"
               />
-              <span id="terminal-keys" className="sr-only">입력창이 비어 있으면 Tab으로 예시 명령을 채우고, 입력 중에는 Tab으로 추천 명령을 순환해요. Esc를 누른 뒤 Tab을 누르면 실행 버튼으로 이동해요. Shift+Tab은 이전 항목으로 이동해요.</span>
+              <span id="terminal-keys" className="sr-only">예시가 표시된 빈 입력창에서 Tab으로 예시 명령을 채워요. 예시를 채운 뒤 Tab을 다시 누르거나 Esc를 누른 뒤 Tab을 누르면 실행 버튼으로 이동해요. 입력 중 추천 목록이 열려 있으면 Tab으로 후보를 순환해요. Shift+Tab은 이전 항목으로 이동해요.</span>
               <button
                 type="submit"
                 className="terminal-submit min-h-10 shrink-0 rounded-md border border-[#BF8B29] bg-[#F4B942] px-3.5 py-2 text-sm font-bold text-[#362711] hover:bg-[#F7C55D] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#166447] sm:min-h-11 sm:px-4"

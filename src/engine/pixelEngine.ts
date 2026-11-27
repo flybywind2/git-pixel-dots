@@ -19,6 +19,7 @@ import type {
   TokenWorldState,
 } from '../types/sim';
 import { STAGE_MAP } from './scenarios';
+import { objectParticle } from './koreanParticles';
 import {
   diffDocumentLines,
   DOCUMENT_COMPARISONS,
@@ -858,13 +859,6 @@ function closestCommand(sub: string, candidates: Iterable<string>): string | nul
     }
   }
   return best;
-}
-
-// 파일명·변수명 뒤 조사(을/를)는 마지막 글자의 받침 여부로 골라요.
-function objectParticle(word: string): string {
-  const last = word.charCodeAt(word.length - 1);
-  if (last >= 0xac00 && last <= 0xd7a3) return (last - 0xac00) % 28 > 0 ? '을' : '를';
-  return '를';
 }
 
 function commandNotice(
@@ -3220,7 +3214,7 @@ export function executePixelCommand(state: PixelSimState, rawCmd: string): Pixel
           'buddy',
           42,
           52,
-          `새 길 ${newName}을 만들었어요! 🌿`,
+          `새 길 ${newName}${objectParticle(newName)} 만들었어요! 🌿`,
           `${newName} 브랜치는 만들어졌지만 아직 ${state.headBranch}에 서 있어요. 이동해야 새 기록이 이 브랜치에 쌓여요.`,
           `git switch ${newName}로 이동해 보세요.`,
           [{ label: `${newName}로 이동`, command: `git switch ${newName}`, tone: 'primary' }],

@@ -373,7 +373,9 @@ async function storageRecovery(page, url) {
     // docs와 ch4의 v4 저장본을 v2 레거시로 돌려 예제 변경 마이그레이션을 검증해요.
     for (const id of ['docs', 'ch4']) {
       const key = `gitdots.practice.v4.${id}`;
-      localStorage.setItem(`gitdots.practice.v2.${id}`, localStorage.getItem(key));
+      const legacy = JSON.parse(localStorage.getItem(key));
+      delete legacy.exampleVersion;
+      localStorage.setItem(`gitdots.practice.v2.${id}`, JSON.stringify(legacy));
       localStorage.removeItem(key);
     }
     // ch3 저장본의 커밋 부모를 깨뜨려 읽기 불가 복구를 검증해요.
@@ -828,6 +830,24 @@ async function advancedGuidedCompletion(browser, url) {
   }
   // 심화만 완료한 상태에서는 수료증 버튼이 없어요.
   assert.equal(await page.getByRole('button', { name: '수료증 보기', exact: true }).count(), 0);
+  await openChapter(page, url, 1);
+  await runCommand(page, 'edit 회의록.md');
+  for (let i = 0; i < 5; i++) await clickGuided(page);
+  await openChapter(page, url, 5);
+  const sixCompleted = page.getByRole('img', { name: '잔디 진행: 6/9장 완료', exact: true });
+  await sixCompleted.waitFor();
+  await runCommand(page, 'git branch feature/ui');
+  assert.match(await page.getByTestId('speech-bubble').innerText(), /새 길 feature\/ui를 만들었어요/);
+  await openChapter(page, url, 6);
+  await openChapter(page, url, 5);
+  await expectProgress(page, 4, 4);
+  await sixCompleted.waitFor();
+  await page.reload();
+  await expectProgress(page, 4, 4);
+  await sixCompleted.waitFor();
+  await runCommand(page, 'git branch');
+  assert.match(await page.getByRole('log', { name: '명령 실행 결과' }).innerText(), /feature\/ui/);
+  console.log('[QA] Chapter 5 user branch feature/ui persisted after chapter navigation and reload, grass 6/9');
   await page.close();
 }
 
@@ -1507,12 +1527,16 @@ async function checkChangedExampleRecovery(page, url) {
   ];
   await page.evaluate(() => {
     const ch3 = 'gitdots.practice.v4.ch2';
-    localStorage.setItem('gitdots.practice.v3.ch2', localStorage.getItem(ch3));
+    const legacy = JSON.parse(localStorage.getItem(ch3));
+    delete legacy.exampleVersion;
+    localStorage.setItem('gitdots.practice.v3.ch2', JSON.stringify(legacy));
     localStorage.removeItem(ch3);
     const ch6 = 'gitdots.practice.v4.ch5';
     const stale = JSON.parse(localStorage.getItem(ch6));
+    delete stale.exampleVersion;
     delete stale.sim.branches['fix/font'];
     delete stale.sim.remoteBranches['fix/font'];
+    stale.sim.commits = stale.sim.commits.filter(({ id }) => id !== 'c0');
     localStorage.setItem(ch6, JSON.stringify(stale));
   });
   const saved = (key) => page.evaluate((key) => localStorage.getItem(key), key);
@@ -1551,6 +1575,65 @@ async function checkChangedExampleRecovery(page, url) {
   }
 }
 
+async function shortDesktopCli(page, url, dock) {
+  await openChapter(page, url, 6);
+  assert.equal(await dock.getAttribute('data-size'), 'default');
+  const log = dock.getByRole('log');
+  const latestOutput = log.locator(':scope > div').last();
+  const visibleLines = () => log.evaluate((node) => {
+    const { top, bottom } = node.getBoundingClientRect();
+    return [...node.lastElementChild.querySelectorAll('p')].filter((line) => {
+      const rect = line.getBoundingClientRect();
+      return rect.top >= top && rect.bottom <= bottom;
+    }).length;
+  });
+
+  const quickActions = dock.getByRole('group', { name: '빠른 실행', exact: true });
+  await quickActions.getByRole('button', { name: /로그인 상태/ }).click();
+  assert.match(await latestOutput.innerText(), /\$ gh auth status[\s\S]+Logged in to github.com/);
+  const authLines = await visibleLines();
+  assert(authLines >= 3, `Only ${authLines} full lines of gh auth status are visible`);
+
+  const input = page.getByTestId('terminal-input');
+  const submit = dock.getByRole('button', { name: '실행', exact: true });
+  const expected = 'gh issue create --title "다크 모드에서 글자가 안 보여요"';
+  assert.equal(await input.inputValue(), '');
+  assert.equal(await input.getAttribute('placeholder'), `예: ${expected} (Tab 완성)`);
+  await input.focus();
+  await page.keyboard.press('Escape');
+  assert.equal(await input.getAttribute('placeholder'), `예: ${expected}`);
+  await page.keyboard.press('Tab');
+  assert(await submit.evaluate((node) => document.activeElement === node));
+  assert.equal(await input.inputValue(), '');
+  await input.focus();
+  await page.keyboard.press('Tab');
+  assert.equal(await input.inputValue(), expected);
+  assert(await input.evaluate((node) => document.activeElement === node));
+  await page.keyboard.press('Tab');
+  assert(await submit.evaluate((node) => document.activeElement === node));
+  await page.keyboard.press('Enter');
+
+  assert.match(await latestOutput.innerText(), /Creating issue[\s\S]+github.com\/gitdots\/app\/issues\/13/);
+  const issueLines = await visibleLines();
+  assert.equal(issueLines, 3, 'The issue command and both output lines must be fully visible');
+  const logHeight = () => log.evaluate((node) => node.clientHeight);
+  const logSize = await logHeight();
+  assert(logSize >= 68, `Default log is only ${logSize}px high`);
+  const size = dock.getByTestId('terminal-size-toggle');
+  await size.click();
+  assert.equal(await size.innerText(), '기본 크기');
+  const tallLog = await logHeight();
+  assert(tallLog > logSize);
+  await size.click();
+  assert.equal(await logHeight(), logSize);
+  await dock.getByRole('button', { name: '터미널 접기', exact: true }).click();
+  assert.equal(await log.isVisible(), false);
+  await openTerminal(page);
+  assert.equal(await logHeight(), logSize);
+  await checkViewport(page);
+  return { log: logSize, tallLog, authLines, issueLines };
+}
+
 async function reviewedUxAcrossViewports(browser, url) {
   for (const [width, height] of [[1920, 1080], [1280, 649], [1024, 768], [768, 1024], [390, 844]]) {
     const mobile = width === 390;
@@ -1578,7 +1661,12 @@ async function reviewedUxAcrossViewports(browser, url) {
       assert(navBox.x >= logoBox.x + logoBox.width, 'Chapter pills overlap the logo');
     }
     if (height === 649) {
-      assert(dockBox.height <= 160 && editorVisible >= 60, 'Short desktop leaves too little space for the editor');
+      const mainBox = await page.getByRole('main').boundingBox();
+      const comparisonBox = await page.getByRole('region', { name: '변경 비교', exact: true }).boundingBox();
+      assert(dockBox.y >= mainBox.y + mainBox.height && dockBox.height <= 168 && editorVisible >= 60,
+        'Short desktop leaves too little space for the editor');
+      assert(comparisonBox.y <= dockBox.y - 60, 'Short desktop hides the comparison panel');
+      metrics.comparisonVisible = Math.round(Math.min(comparisonBox.height, dockBox.y - comparisonBox.y));
     }
     await checkViewport(page);
     const note = /진행 상태와 파일은 자동 저장돼요.+되돌리기 이력과 터미널 출력이 초기화돼요/;
@@ -1644,11 +1732,23 @@ async function reviewedUxAcrossViewports(browser, url) {
     }
     await input.fill('git unsubmitted');
     const dialog = page.getByRole('dialog', { name: '현재 장을 초기화할까요?' });
+    const cancel = dialog.getByRole('button', { name: '취소', exact: true });
+    const confirm = dialog.getByRole('button', { name: '현재 장 초기화', exact: true });
+    const isFocused = (button) => button.evaluate((node) => document.activeElement === node);
     await reset.click();
-    await dialog.getByRole('button', { name: '취소', exact: true }).click();
+    await cancel.waitFor();
+    assert(await isFocused(cancel));
+    for (const [key, focused] of [['Tab', confirm], ['Tab', cancel], ['Shift+Tab', confirm], ['Shift+Tab', cancel]]) {
+      await page.keyboard.press(key);
+      assert(await isFocused(focused), `Confirmation focus escaped after ${key}`);
+    }
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'hidden' });
+    assert(await isFocused(reset));
+    metrics.modalFocusEscapes = 0;
     assert.equal(await input.inputValue(), 'git unsubmitted');
     await reset.click();
-    await dialog.getByRole('button', { name: '현재 장 초기화', exact: true }).click();
+    await confirm.click();
     await dialog.waitFor({ state: 'hidden' });
     await page.waitForFunction(() => document.querySelector('[data-testid="terminal-input"]')?.value === '');
     await checkViewport(page);
@@ -1694,6 +1794,7 @@ async function reviewedUxAcrossViewports(browser, url) {
       await openTerminal(page);
     }
     await checkChangedExampleRecovery(page, url);
+    if (height === 649) Object.assign(metrics, await shortDesktopCli(page, url, dock));
     const overflow = await checkViewport(page);
     assert.deepEqual(overflow, [0, 0]);
     assert.deepEqual(errors, []);
